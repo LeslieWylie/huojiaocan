@@ -50,3 +50,47 @@ test('teacher-facing copy does not expose internal feature version numbers', asy
   const app = await source(appPath);
   assert.doesNotMatch(app, /活教参\s+\d+\.\d+\s*·/u);
 });
+
+test('URL lesson identity normalization is consistent with tree matching normalization', async () => {
+  const app = await source(appPath);
+
+  // App.jsx must import normalizeLessonIdentity from reader-target.js with an
+  // alias (normalizeReaderLessonIdentity) for the initial URL-correction step.
+  // The reader-target.js version strips leading digits ("21 标题" → "标题"),
+  // so both "21 标题" and "标题" normalise to the same key and match the same
+  // tree node.
+  const readerTargetImport = "import { buildPdfPageUrl, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity as normalizeReaderLessonIdentity, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveCrossDocTarget, resolveReaderReturn } from './reader-target.js';";
+  assert.ok(
+    app.includes(readerTargetImport),
+    'App.jsx must import normalizeLessonIdentity as normalizeReaderLessonIdentity from reader-target.js'
+  );
+
+  // App.jsx must keep the shared normalizeLessonIdentity import from
+  // same-lesson-comparison.js for教研资产 comparison (the shared version
+  // does NOT strip leading digits, so it preserves the full lesson key for
+  // asset matching).
+  const sameLessonImport = "import { emptySameLessonComparison, normalizeLessonIdentity, normalizeSameLessonComparison } from '../shared/same-lesson-comparison.js';";
+  assert.ok(
+    app.includes(sameLessonImport),
+    'App.jsx must keep normalizeLessonIdentity import from same-lesson-comparison.js for教研资产 comparison'
+  );
+
+  // The URL lesson normalization call site must use the reader-target alias
+  // (normalizeReaderLessonIdentity), not the shared variant.
+  assert.ok(
+    app.includes('const normalized = normalizeReaderLessonIdentity(urlLesson)'),
+    'The address-correction effect must call normalizeReaderLessonIdentity(urlLesson) ' +
+    'with the reader-target normalizer, which strips leading digits so that ' +
+    '"21 标题" and "标题" match the same tree node.'
+  );
+
+  // Behaviour assertion: the reader-target normalizer strips leading digits,
+  // so both "21 标题" and "标题" produce the same normalised key.
+  // (This is a white-box check on the normalizer's contract.)
+  const { normalizeLessonIdentity } = await import('./reader-target.js');
+  assert.equal(
+    normalizeLessonIdentity('21 你是人间的四月天'),
+    normalizeLessonIdentity('你是人间的四月天'),
+    'normalizeLessonIdentity must strip leading digits so that "21 标题" and "标题" match the same tree node'
+  );
+});

@@ -12,7 +12,7 @@ import { normalizeAskAction } from './ask-actions.js';
 import { buildAskContext, buildConversationHistory } from './conversation-context.js';
 import { clearConversationSnapshot, readConversationSnapshot, readRecentConversationSnapshots, saveConversationSnapshot } from './conversation-recovery.js';
 import { withAskRetry } from './ask-retry.js';
-import { buildPdfPageUrl, buildReaderHref, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveReaderReturn } from './reader-target.js';
+import { buildPdfPageUrl, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity as normalizeReaderLessonIdentity, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveCrossDocTarget, resolveReaderReturn } from './reader-target.js';
 import { evidenceShelfKey, mergeEvidenceShelf, removeEvidenceShelfItem } from './evidence-shelf.js';
 import { checklistProgress, deriveWorkflowChecklist } from './workflow-checklist.js';
 import { analyzeTeachingPlanQuality } from './lesson-quality.js';
@@ -3213,26 +3213,135 @@ function Tree({ nodes, current, onPick, error, retry, loading }) {
 function LibraryPage() {
   const params = useMemo(() => queryParams(), []);
   const [doc,setDoc]=useState(canonicalDocumentId(params.get('doc')) || '');
-  const [docs,setDocs]=useState([]); const [docsError,setDocsError]=useState(''); const [tree,setTree]=useState([]); const [treeError,setTreeError]=useState(''); const [treeBusy,setTreeBusy]=useState(false); const [selectedNode,setSelectedNode]=useState(params.get('node')||''); const [selectedLessonTitle,setSelectedLessonTitle]=useState(params.get('lesson') || ''); const [page,setPage]=useState(null); const [pageNo,setPageNo]=useState(Number(params.get('page'))||1); const [query,setQuery]=useState(params.get('q')||''); const rawRequestedScope=params.get('scope'); const requestedScope=canonicalDocumentId(rawRequestedScope); const [scope,setScope]=useState(rawRequestedScope==='all'||rawRequestedScope==='both'?rawRequestedScope:requestedScope==='teacher-guide'||requestedScope==='textbook'||requestedScope==='curriculum-standard'?requestedScope:'both'); const [results,setResults]=useState([]); const [visibleResults,setVisibleResults]=useState(6); const [searched,setSearched]=useState(Boolean(params.get('q'))); const [searchError,setSearchError]=useState(''); const [busy,setBusy]=useState(false); const initialSearch=useRef(Boolean(params.get('q')));
+  const [docs,setDocs]=useState([]); const [docsError,setDocsError]=useState(''); const [tree,setTree]=useState([]); const [treeError,setTreeError]=useState(''); const [treeBusy,setTreeBusy]=useState(false); const [treeDocumentId,setTreeDocumentId]=useState(''); const [selectedNode,setSelectedNode]=useState(params.get('node')||''); const [selectedLessonTitle,setSelectedLessonTitle]=useState(params.get('lesson') || ''); const [page,setPage]=useState(null); const [pageNo,setPageNo]=useState(Number(params.get('page'))||1); const [query,setQuery]=useState(params.get('q')||''); const rawRequestedScope=params.get('scope'); const requestedScope=canonicalDocumentId(rawRequestedScope); const [scope,setScope]=useState(rawRequestedScope==='all'||rawRequestedScope==='both'?rawRequestedScope:requestedScope==='teacher-guide'||requestedScope==='textbook'||requestedScope==='curriculum-standard'?requestedScope:'both'); const [results,setResults]=useState([]); const [visibleResults,setVisibleResults]=useState(6); const [searched,setSearched]=useState(Boolean(params.get('q'))); const [searchError,setSearchError]=useState(''); const [busy,setBusy]=useState(false); const initialSearch=useRef(Boolean(params.get('q')));
+  const treeRequestRef = useRef(0);
+  const initialAddressCorrected = useRef({});
+  const treesCache = useRef({});
+  const treePromises = useRef({});
   const currentDoc = docs.find(item => item.id === doc) || docs[0] || null;
   const loadDocs = async()=>{ setDocsError(''); try { const data=await request('/documents'); const list=(data.documents||[]).map(normalizeCatalogItem).filter(Boolean); setDocs(list); const selected=list.find(item=>item.id===doc)||list[0]; if (selected && selected.id!==doc) setDoc(selected.id); } catch(error) { setDocs([]); setDocsError('教材目录暂时无法读取，请重试。'); } };
   useEffect(()=>{loadDocs();},[]);
-  const loadTree=async()=>{ if(!doc)return; setTreeBusy(true); setTreeError(''); try { const data=await request(`/documents/${encodeURIComponent(doc)}/tree`); setTree(normalizeTree(data)); } catch(error) { setTree([]); setTreeError('目录暂时无法读取，请重试。'); } finally { setTreeBusy(false); } };
+  const ensureTree = async (docId) => {
+    const id = String(docId || '').trim();
+    if (!id) return null;
+    const cached = treesCache.current[id];
+    if (cached) return cached;
+    // Deduplicate concurrent requests for the same document
+    if (treePromises.current[id]) return treePromises.current[id];
+    const promise = (async () => {
+      const data = await request(`/documents/${encodeURIComponent(id)}/tree`);
+      const normalized = normalizeTree(data);
+      treesCache.current[id] = normalized;
+      delete treePromises.current[id];
+      return normalized;
+    })();
+    treePromises.current[id] = promise;
+    try {
+      return await promise;
+    } catch (error) {
+      delete treePromises.current[id];
+      throw error;
+    }
+  };
+  const loadTree=async()=>{ if(!doc)return; const requestId=++treeRequestRef.current; setTree([]); setTreeDocumentId(''); setTreeBusy(true); setTreeError(''); try { const normalized = await ensureTree(doc); if(requestId!==treeRequestRef.current)return; setTree(normalized || []); setTreeDocumentId(doc); } catch(error) { if(requestId!==treeRequestRef.current)return; setTree([]); setTreeDocumentId(''); setTreeError('目录暂时无法读取，请重试。'); } finally { if(requestId===treeRequestRef.current)setTreeBusy(false); } };
   useEffect(()=>{loadTree();},[doc]);
   useEffect(()=>{ if(!currentDoc)return; const max=Math.max(1,currentDoc.pageCount||1); setPageNo(value=>Math.min(max,Math.max(1,value))); },[currentDoc?.id,currentDoc?.pageCount]);
   useEffect(()=>{ if(!doc)return; let cancelled=false; setPage(null); request(`/documents/${encodeURIComponent(doc)}/pages/${pageNo}`).then(data=>{if(!cancelled)setPage(data.page||data)}).catch(()=>{if(!cancelled)setPage(null)}); return()=>{cancelled=true}; },[doc,pageNo]);
-  useEffect(()=>{
-    if (!tree.length || !pageNo) return;
-    // A directory click is an explicit teacher choice. Keep that node
-    // selected while the PDF page changes inside its range; otherwise the
-    // generic page matcher would immediately replace a unit/lesson with a
-    // deeper child node and make the highlight appear to jump elsewhere.
+  // 目录 / URL 同步：首次地址校正 + 普通翻页节点匹配，合并为单一确定性效果。
+  // 首次必须处理显式 node/lesson 意图并 return，防止普通按页匹配先覆盖 selectedLesson。
+  useEffect(() => {
+    if (!tree.length || !pageNo || treeDocumentId !== doc) return;
+    const docId = doc;
+
+    // ---- Phase 1: 首次地址校正 ------------------------------------------
+    // 旧分享链接的 node/lesson 与 page 可能矛盾，以显式意图（node/lesson）为准。
+    if (!initialAddressCorrected.current[docId]) {
+      // 每次读取当前地址，而非 useMemo 初始 params，避免切换教材后读到旧参数
+      const currentParams = new URLSearchParams(location.search);
+      const urlNode = currentParams.get('node');
+      const urlLesson = currentParams.get('lesson');
+      const urlPage = Number(currentParams.get('page'));
+
+      if (!urlNode && !urlLesson) {
+        // 没有显式意图——标记为已校正，交给 Phase 2 做普通页匹配
+        initialAddressCorrected.current[docId] = true;
+      } else {
+        // 先在当前树中按 nodeId 查找
+        let intendedNode = urlNode ? findTreeNodeById(tree, urlNode) : null;
+        // nodeId 未命中时，按规范化篇名兜底匹配
+        if (!intendedNode && urlLesson) {
+          const normalized = normalizeReaderLessonIdentity(urlLesson);
+          if (normalized) {
+            intendedNode = findTreeNodeByNormalizedTitle(tree, normalized);
+          }
+        }
+        if (intendedNode && intendedNode.startPage) {
+          if (Number.isInteger(urlPage) && urlPage > 0 && nodeContainsPage(intendedNode, urlPage)) {
+            // urlPage 在节点范围内——保留精确页，只同步 node/lesson
+            setSelectedNode(intendedNode.id);
+            setSelectedLessonTitle(intendedNode.title);
+            updateUrl({
+              documentId: doc,
+              pageNumber: urlPage,
+              nodeId: intendedNode.id,
+              lessonTitle: intendedNode.title,
+              keepSearch: true
+            });
+          } else {
+            // urlPage 不在节点范围内或不是正整数——校正到 startPage
+            setSelectedNode(intendedNode.id);
+            setSelectedLessonTitle(intendedNode.title);
+            setPageNo(intendedNode.startPage);
+            updateUrl({
+              documentId: doc,
+              pageNumber: intendedNode.startPage,
+              nodeId: intendedNode.id,
+              lessonTitle: intendedNode.title,
+              keepSearch: true
+            });
+          }
+        }
+        initialAddressCorrected.current[docId] = true;
+        // 首次校正已处理显式意图——跳过 Phase 2，防止普通按页匹配覆盖
+        return;
+      }
+    }
+
+    // ---- Phase 2: 普通翻页节点匹配 ------------------------------------
+    // 目录点击是教师的显式选择；在 PDF 页在该节点范围内变化时保持该节点选中，
+    // 否则普通页匹配会立即用更深的子节点替换选中节点，使高亮跳转到别处。
     const selected = findTreeNodeById(tree, selectedNode);
-    if (selected && nodeContainsPage(selected, pageNo)) return;
+    if (selected && nodeContainsPage(selected, pageNo)) {
+      // 首次地址校正完成后，如果篇名与当前节点不一致，同步篇名与 URL
+      if (initialAddressCorrected.current[doc] && selected.title !== selectedLessonTitle) {
+        setSelectedLessonTitle(selected.title);
+        updateUrl({
+          documentId: doc,
+          pageNumber: pageNo,
+          nodeId: selected.id,
+          lessonTitle: selected.title,
+          keepSearch: true
+        });
+      }
+      return;
+    }
     const located = findTreeNode(tree, pageNo);
-    if (located && located.id !== selectedNode) setSelectedNode(located.id);
-  }, [tree, pageNo, selectedNode]);
-  const updateUrl = ({documentId, pageNumber, nodeId = '', lessonTitle = selectedLessonTitle, keepSearch = true}) => { const url=new URL(location.href); url.pathname='/library/'; url.search=new URLSearchParams({doc:documentId,page:String(pageNumber),...(keepSearch&&query?{q:query}:{}),...(keepSearch&&scope?{scope}:{}),...(nodeId?{node:nodeId}:{}),...(lessonTitle?{lesson:lessonTitle}:{})}).toString(); history.replaceState(null,'',url); };
+    if (located && (located.id !== selectedNode || located.title !== selectedLessonTitle)) {
+      setSelectedNode(located.id);
+      setSelectedLessonTitle(located.title);
+      // 首次地址校正完成后，普通翻页以当前物理页所在节点同步完整 URL
+      if (initialAddressCorrected.current[doc]) {
+        updateUrl({
+          documentId: doc,
+          pageNumber: pageNo,
+          nodeId: located.id,
+          lessonTitle: located.title,
+          keepSearch: true
+        });
+      }
+    }
+  }, [tree, pageNo, selectedNode, selectedLessonTitle, doc, treeDocumentId]);
+  const updateUrl = ({documentId, pageNumber, nodeId = '', lessonTitle = selectedLessonTitle, keepSearch = true}) => { const url=new URL(location.href); url.pathname='/library/'; url.search=new URLSearchParams({doc:documentId,page:String(pageNumber),...(keepSearch&&query?{q:query}:{}),...(scope?{scope}:{}),...(nodeId?{node:nodeId}:{}),...(lessonTitle?{lesson:lessonTitle}:{})}).toString(); history.replaceState(null,'',url); };
   useEffect(() => {
     const syncFromUrl = () => {
       const next = new URLSearchParams(location.search);
@@ -3250,7 +3359,57 @@ function LibraryPage() {
     window.addEventListener('popstate', syncFromUrl);
     return () => window.removeEventListener('popstate', syncFromUrl);
   }, [docs.length]);
-  const openReaderTarget=({documentId=doc,pageNumber=1,nodeId='',lessonTitle='',keepSearch=true,clearSearch=false}={})=>{ const canonicalId=canonicalDocumentId(documentId); const target=docs.find(item=>item.id===canonicalId); const requestedPage=Number(pageNumber); if(!target || !Number.isInteger(requestedPage) || requestedPage < 1)return false; const max=Math.max(1,target.pageCount||1); const safePage=Math.min(max,requestedPage); const explicit=canonicalId===doc ? findTreeNodeById(tree,nodeId) : null; const resolvedPage=explicit && explicit.pageRange?.start && !nodeContainsPage(explicit,safePage) ? explicit.pageRange.start : safePage; const located=explicit || (canonicalId===doc ? findTreeNode(tree,resolvedPage) : null); const resolvedNodeId=explicit?.id || located?.id || (canonicalId!==doc ? nodeId : ''); const nextLessonTitle=lessonTitle || (canonicalId===doc ? selectedLessonTitle : ''); setDoc(target.id);setSelectedNode(resolvedNodeId);setSelectedLessonTitle(nextLessonTitle);setPageNo(Math.min(max,resolvedPage)); if(clearSearch){setQuery('');setResults([]);setVisibleResults(6);setSearched(false);setSearchError('');} updateUrl({documentId:target.id,pageNumber:Math.min(max,resolvedPage),nodeId:resolvedNodeId,lessonTitle:nextLessonTitle,keepSearch:!clearSearch&&keepSearch}); return true; };
+  const openReaderTarget = async ({ documentId = doc, pageNumber = 1, nodeId = '', lessonTitle = '', keepSearch = true, clearSearch = false } = {}) => { const canonicalId = canonicalDocumentId(documentId); const target = docs.find(item => item.id === canonicalId); const requestedPage = Number(pageNumber); if (!target || !Number.isInteger(requestedPage) || requestedPage < 1) return false; const max = Math.max(1, target.pageCount || 1); const safePage = Math.min(max, requestedPage); const explicit = canonicalId === doc ? findTreeNodeById(tree, nodeId) : null; let resolvedPage = explicit && explicit.pageRange?.start && !nodeContainsPage(explicit, safePage) ? explicit.pageRange.start : safePage; let resolvedNodeId = explicit?.id || ''; let nextLessonTitle = lessonTitle || (canonicalId === doc ? selectedLessonTitle : ''); if (canonicalId !== doc && nextLessonTitle) {
+      try {
+        await ensureTree(canonicalId);
+        setTreeError('');
+        const crossDoc = resolveCrossDocTarget({
+          targetDocId: canonicalId,
+          lessonTitle: nextLessonTitle,
+          pageNo: resolvedPage,
+          treesCache: treesCache.current,
+          docs
+        });
+        if (crossDoc) {
+          resolvedPage = crossDoc.page;
+          resolvedNodeId = crossDoc.nodeId || '';
+          nextLessonTitle = crossDoc.lessonTitle || nextLessonTitle;
+        }
+      } catch (error) {
+        setTreeError('目标教材目录暂时无法读取，当前页面未切换。请重试。');
+        return false;
+      }
+    }
+  const located = explicit || (canonicalId === doc ? findTreeNode(tree, resolvedPage) : null);
+  if (!resolvedNodeId) {
+    resolvedNodeId = located?.id || '';
+    // Cross-document: never pass the source document's nodeId into the
+    // target document's URL — the target tree has no matching node.
+    if (canonicalId !== doc) resolvedNodeId = '';
+  }
+  if (!nextLessonTitle) {
+    nextLessonTitle = canonicalId === doc ? selectedLessonTitle : '';
+  }
+  setDoc(target.id);
+  setSelectedNode(resolvedNodeId);
+  setSelectedLessonTitle(nextLessonTitle);
+  setPageNo(Math.min(max, resolvedPage));
+  if (clearSearch) {
+    setQuery('');
+    setResults([]);
+    setVisibleResults(6);
+    setSearched(false);
+    setSearchError('');
+  }
+  updateUrl({
+    documentId: target.id,
+    pageNumber: Math.min(max, resolvedPage),
+    nodeId: resolvedNodeId,
+    lessonTitle: nextLessonTitle,
+    keepSearch: !clearSearch && keepSearch
+  });
+  return true;
+  };
   const searchRequest = useRef(0);
   const search=async e=>{e?.preventDefault(); const text=query.trim(); const requestId=++searchRequest.current; if(!text){setResults([]);setVisibleResults(6);setSearched(false);setSearchError('');return;} if(text.length<2){setResults([]);setVisibleResults(6);setSearched(true);setSearchError('请输入至少两个字符，再开始搜索。');return;} setBusy(true);setSearched(true);setSearchError('');try { const scopes=scope==='all'?docs.map(item=>item.id):scope==='both'?['textbook','teacher-guide']:[scope]; const data=await request('/search',{method:'POST',body:{query:text,scope:scopes,limit:12}}); if(requestId !== searchRequest.current)return; setResults(Array.isArray(data.results)?data.results:[]); setVisibleResults(6); const url=new URL(location.href);url.searchParams.set('q',text);url.searchParams.set('scope',scope);history.replaceState(null,'',url); } catch(error) { if(requestId !== searchRequest.current)return; setResults([]);setVisibleResults(6);setSearchError('搜索暂时不可用，请稍后重试。'); } finally {if(requestId === searchRequest.current)setBusy(false)} };
   useEffect(() => {
@@ -3261,8 +3420,8 @@ function LibraryPage() {
     initialSearch.current = false;
     if (query.trim().length >= 2) search();
   }, [docs.length]);
-  const clearSearch=()=>{searchRequest.current += 1;setBusy(false);setQuery('');setResults([]);setVisibleResults(6);setSearched(false);setSearchError('');const url=new URL(location.href);url.searchParams.delete('q');url.searchParams.delete('scope');history.replaceState(null,'',url)};
-  const switchDocument=id=>openReaderTarget({documentId:id,pageNumber:1,lessonTitle:'',clearSearch:true,keepSearch:false});
+  const clearSearch=()=>{searchRequest.current += 1;setBusy(false);setQuery('');setResults([]);setVisibleResults(6);setSearched(false);setSearchError('');const url=new URL(location.href);url.searchParams.delete('q');if(scope)url.searchParams.set('scope',scope);history.replaceState(null,'',url)};
+  const switchDocument = async id => { return openReaderTarget({ documentId: id, pageNumber: pageNo, nodeId: '', lessonTitle: selectedLessonTitle, clearSearch: true, keepSearch: false }); };
   const pick=node=>{const { start: nextPage }=node.pageRange||nodePageRange(node); if(nextPage>0)openReaderTarget({documentId:doc,pageNumber:nextPage,nodeId:node.id,lessonTitle:node.title});};
   const pagePdf=String(page?.viewer?.pdfUrl||page?.pdfUrl||currentDoc?.pdfUrl||'').split('#')[0];
   const maxPage=currentDoc?.pageCount||1;
@@ -4540,7 +4699,7 @@ function DocumentPage() {
   return <div className="view-stack document-page">
     <section className="panel document-head">
       <div><Badge tone={info?.tone || 'green'}>{info?.short || '教材'}</Badge><h1>{record?.documentTitle || info?.title || '教材页面'}</h1><p>PDF 物理页 {physicalPage} · 印刷页 {printedPage} · {sectionPath}</p></div>
-      <div><a href={returnHref}><ArrowLeft/>{returnLabel}</a>{counterpartId && <button type="button" className={paired ? 'paired-active' : ''} onClick={togglePaired} disabled={!lessonQuery && !paired}><BookOpen/>{paired ? '退出双源对照' : '打开双源对照'}</button>}{rawPdfUrl && <><a href={rawPdfUrl} download><Download/>下载</a><a className="primary" href={`${rawPdfUrl}#page=${page}`} target="_blank" rel="noreferrer"><ExternalLink/>新窗口打开</a></>}</div>
+      <div><a href={returnHref}><ArrowLeft/>{returnLabel}</a>{counterpartId && <button type="button" className={paired ? 'paired-active' : ''} onClick={togglePaired} disabled={!lessonQuery && !paired}><BookOpen/>{paired ? '退出双源对照' : '打开双源对照'}</button>}{rawPdfUrl && <><a href={rawPdfUrl} download><Download/>下载</a><a className="primary" href={buildPdfPageUrl(rawPdfUrl, page)} target="_blank" rel="noreferrer"><ExternalLink/>新窗口打开</a></>}</div>
     </section>
     {paired && <section className="paired-reading-intro"><div><span>双源对照</span><b>{lessonQuery || '当前篇目'}</b></div><p>左边核对学生实际看到的原文，右边查看教师用书的教学处理。系统只负责定位，不把两份材料混写成新的结论。</p></section>}
     {paired && <section className="paired-focus-panel">
@@ -4548,12 +4707,12 @@ function DocumentPage() {
       <form onSubmit={applyPairedFocus}><Search/><label><span className="sr-only">输入需要追踪的句段</span><input value={focusInput} onChange={event => setFocusInput(event.target.value)} maxLength={100} placeholder="例如：先天下之忧而忧，后天下之乐而乐"/></label><button type="submit" disabled={!focusInput.trim() || pairedLoading}>{pairedLoading && pairedFocus ? '正在追踪…' : '追踪这一句'}</button>{pairedFocus && <button type="button" className="quiet" onClick={clearPairedFocus}>回到篇目起点</button>}</form>
       {pairedFocus && <div className="paired-focus-status"><b>当前追踪：</b><span>{pairedFocus}</span><small>{pairedLoading ? '正在搜索对应教学处理…' : pairedResult && pairedPage ? `已定位到${docName(counterpartId)} PDF 第 ${pairedPage} 页` : '暂未找到对应页面'}</small></div>}
     </section>}
-    <section className="pdf-toolbar"><button onClick={() => goto(page - 1)} disabled={page <= 1}>上一页</button><label>PDF 页 <input value={page} onChange={event => goto(event.target.value)}/> / {maxPage}</label><button onClick={() => goto(page + 1)} disabled={page >= maxPage}>下一页</button><i/><button onClick={() => setZoom(value => Math.max(70, value - 10))}><ZoomOut/>缩小</button><span>{zoom}%</span><button onClick={() => setZoom(value => Math.min(160, value + 10))}><ZoomIn/>放大</button><button onClick={() => frame.current?.requestFullscreen?.()}><Maximize2/>全屏</button></section>
+    <section className="pdf-toolbar"><button onClick={() => goto(page - 1)} disabled={page <= 1}>上一页</button><label>PDF 物理页 <input value={page} onChange={event => goto(event.target.value)}/> / {maxPage}</label><button onClick={() => goto(page + 1)} disabled={page >= maxPage}>下一页</button><i/><button onClick={() => setZoom(value => Math.max(70, value - 10))}><ZoomOut/>缩小</button><span>{zoom}%</span><button onClick={() => setZoom(value => Math.min(160, value + 10))}><ZoomIn/>放大</button><button onClick={() => frame.current?.requestFullscreen?.()}><Maximize2/>全屏</button></section>
     <div className={`verification-workbench${paired ? ' paired-reading-workbench' : ''}`}>
-      <section className="pdf-frame" ref={frame}>{rawPdfUrl && !pdfError ? <iframe key={`${doc}-${page}-${zoom}`} title={`${info?.short || '教材'} PDF 第 ${page} 页`} src={pdfSrc} onError={() => setPdfError(true)}/> : <div className="index-empty"><CircleAlert/><b>原始 PDF 暂时无法嵌入</b><p>请重试或在新窗口打开原始文件。</p>{rawPdfUrl && <a className="primary" href={`${rawPdfUrl}#page=${page}`} target="_blank" rel="noreferrer">新窗口打开</a>}</div>}</section>
+      <section className="pdf-frame" ref={frame}>{rawPdfUrl && !pdfError ? <iframe key={`${doc}-${page}-${zoom}`} title={`${info?.short || '教材'} PDF 第 ${page} 页`} src={pdfSrc} onError={() => setPdfError(true)}/> : <div className="index-empty"><CircleAlert/><b>原始 PDF 暂时无法嵌入</b><p>请重试或在新窗口打开原始文件。</p>{rawPdfUrl && <a className="primary" href={buildPdfPageUrl(rawPdfUrl, page)} target="_blank" rel="noreferrer">新窗口打开</a>}</div>}</section>
       {paired ? <section className="paired-pdf-pane">
         <header><div><Badge tone={counterpartId === 'teacher-guide' ? 'guide' : 'textbook'}>{docName(counterpartId)}</Badge><b>{pairedSection}</b><small>{pairedPage ? `PDF 第 ${pairedPage} 页 · 印刷页 ${pairedPrintedPage}` : '正在定位对应原页'}</small></div>{swapHref && <a href={swapHref}>切换主次 <ArrowRight/></a>}</header>
-        {pairedLoading ? <div className="paired-reading-state"><Activity/><b>{pairedFocus ? '正在寻找这处原文的教学处理' : '正在定位同篇目对应原页'}</b><p>{pairedFocus ? '篇目保持不变，只用当前句段缩小教师用书范围。' : '先匹配篇目，再核对物理页，不会猜测页码。'}</p></div> : pairedError ? <div className="paired-reading-state error"><CircleAlert/><b>{pairedFocus ? '暂时没有找到这处句段的对应处理' : '对应原页暂时没有打开'}</b><p>{pairedError}</p><button type="button" onClick={() => setPairedRetry(value => value + 1)}>重新定位</button></div> : pairedPdfSrc && !pairedPdfError ? <iframe key={`${counterpartId}-${pairedPage}-${zoom}`} title={`${docName(counterpartId)} PDF 第 ${pairedPage} 页`} src={pairedPdfSrc} onError={() => setPairedPdfError(true)}/> : <div className="paired-reading-state error"><CircleAlert/><b>对应 PDF 暂时无法嵌入</b><p>页码已经定位，可以在新窗口打开原始页面。</p>{pairedRawPdfUrl && pairedPage && <a href={`${pairedRawPdfUrl}#page=${pairedPage}`} target="_blank" rel="noreferrer">新窗口打开对应原页</a>}</div>}
+        {pairedLoading ? <div className="paired-reading-state"><Activity/><b>{pairedFocus ? '正在寻找这处原文的教学处理' : '正在定位同篇目对应原页'}</b><p>{pairedFocus ? '篇目保持不变，只用当前句段缩小教师用书范围。' : '先匹配篇目，再核对物理页，不会猜测页码。'}</p></div> : pairedError ? <div className="paired-reading-state error"><CircleAlert/><b>{pairedFocus ? '暂时没有找到这处句段的对应处理' : '对应原页暂时没有打开'}</b><p>{pairedError}</p><button type="button" onClick={() => setPairedRetry(value => value + 1)}>重新定位</button></div> : pairedPdfSrc && !pairedPdfError ? <iframe key={`${counterpartId}-${pairedPage}-${zoom}`} title={`${docName(counterpartId)} PDF 第 ${pairedPage} 页`} src={pairedPdfSrc} onError={() => setPairedPdfError(true)}/> : <div className="paired-reading-state error"><CircleAlert/><b>对应 PDF 暂时无法嵌入</b><p>页码已经定位，可以在新窗口打开原始页面。</p>{pairedRawPdfUrl && pairedPage && <a href={buildPdfPageUrl(pairedRawPdfUrl, pairedPage)} target="_blank" rel="noreferrer">新窗口打开对应原页</a>}</div>}
       </section> : <aside className="panel evidence-inspector">
         <div className="source-tabs"><button className={tab === 'evidence' ? 'active' : ''} onClick={() => setTab('evidence')}>当前依据</button><button className={tab === 'context' ? 'active' : ''} onClick={() => setTab('context')}>相邻页面</button><button className={tab === 'text' ? 'active' : ''} onClick={() => setTab('text')}>可复制文本</button></div>
         {loading && <div className="evidence-missing"><Activity/><div><b>正在读取页面信息</b><small>左侧原始 PDF 可继续查看。</small></div></div>}

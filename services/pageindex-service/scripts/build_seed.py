@@ -157,7 +157,7 @@ def main():
         ),
         build_document(
             "teacher-guide", "teacher-guide-pages.json", "teacher-guide-tree.json",
-            "义务教育教科书教师教学用书 语文 九年级上册", "teacher_guide", "九年级语文上册-教师用书.pdf",
+            "义务教育教科书教师教学用书 语文 九年级上册", "teacher_guide", "九年级语文上册-教师教学用书.pdf",
         ),
     ]
     for document, index in documents:

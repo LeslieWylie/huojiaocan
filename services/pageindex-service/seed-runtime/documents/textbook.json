@@ -14,14 +14,8 @@
   "indexStatus": "ready",
   "metadata": {
     "seeded": true,
-    "seedProvider": "prebuilt-page-text",
-    "plainTextFile": "text/textbook.txt",
-    "plainTextPagesFile": "text/textbook-pages.jsonl",
-    "plainTextFormat": "page-delimited-v1",
-    "plainTextSource": "pdftotext-layout-native",
-    "plainTextSha256": "48ccb1d39c5e855870ad4b4fd3b8f5f455ada924f0861913bfbc2dcfd23bf28f",
-    "plainTextGeneratedAt": "2026-08-12T12:12:38.161813+00:00"
+    "seedProvider": "prebuilt-page-text"
   },
-  "createdAt": "2026-08-11T19:34:32.015448+00:00",
-  "updatedAt": "2026-08-11T19:34:32.015448+00:00"
+  "createdAt": "2026-08-30T07:22:15.411115+00:00",
+  "updatedAt": "2026-08-30T07:22:15.411115+00:00"
 }

@@ -17,6 +17,103 @@ export function buildPdfPageUrl(value, page, { zoom = '', view = 'FitH' } = {}) 
   return `${base}#${params}`;
 }
 
+/**
+ * Normalize a lesson title for cross-document matching.
+ *
+ * Strips lesson number prefix ("5 " / "21 "), book title marks, punctuation
+ * and whitespace so that "5 你是人间的四月天" and "你是人间的四月天" match.
+ * Operational phrases (e.g. "单元说明", "活动任务单") are left intact.
+ * Teaching-action or question phrases ("换成两课时", "这篇课文怎么备课") return
+ * empty so they are never written into lesson URLs or used for matching.
+ */
+export function normalizeLessonIdentity(value) {
+  const result = String(value || '')
+    .normalize('NFKC')
+    .replace(/^\d+\s*/u, '')              // Remove leading lesson number e.g. "5 " or "21 "
+    .replace(/[《》〈〉「」『』\s•，,。.!！?？:：;；“”"'‘’—_-]/gu, '')
+    .replace(/[（(](?:复备|副本|复制|第\s*\d+\s*版)[）)]$/u, '')
+    .toLowerCase()
+    .trim();
+  if (!result) return '';
+  // Operational / question phrases are not lesson identities.
+  if (/^(?:换成|调整为?|改为|改成)/u.test(result)) return '';
+  if (/(?:怎么|如何|怎样)(?:备课|教|处理|上|设计|安排|搞)/u.test(result)) return '';
+  return result;
+}
+
+/**
+ * Recursively search a tree node list for the first node whose normalized
+ * title matches `normalizedTitle`. Returns the node (with its startPage, id,
+ * title) or null if no match is found.
+ */
+export function findTreeNodeByNormalizedTitle(nodes, normalizedTitle) {
+  if (!Array.isArray(nodes) || !nodes.length || !normalizedTitle) return null;
+  for (const node of nodes) {
+    if (!node || typeof node !== 'object') continue;
+    const nodeNorm = normalizeLessonIdentity(node.title);
+    if (nodeNorm === normalizedTitle) return node;
+    const child = findTreeNodeByNormalizedTitle(node.children, normalizedTitle);
+    if (child) return child;
+  }
+  return null;
+}
+
+/**
+ * Given a target document id, the current lesson title and the current page,
+ * look up the matching lesson node in the target document's tree.  Returns
+ * `{ page, nodeId, lessonTitle }` — the resolved target page, node id and
+ * display title — or the original page clamped to the target's pageCount
+ * when no matching lesson node exists.
+ *
+ * @param {object}   opts
+ * @param {string}   opts.targetDocId   Document id to switch into
+ * @param {string}   opts.lessonTitle   Current lesson title (may be empty)
+ * @param {number}   opts.pageNo        Current physical page in source doc
+ * @param {object}   opts.treesCache   Map of docId → normalized tree array
+ * @param {Array}    opts.docs          Document catalogue list
+ * @returns {{ page: number, nodeId: string, lessonTitle: string }}
+ */
+export function resolveCrossDocTarget({ targetDocId, lessonTitle, pageNo, treesCache = {}, docs = [] } = {}) {
+  const docId = String(targetDocId || '').trim();
+  const currentPage = validReaderPage(pageNo) || 1;
+  const target = docs.find(item => item.id === docId);
+  const maxPage = Math.max(1, target?.pageCount || 1);
+  const clamped = Math.min(maxPage, currentPage);
+
+  if (!lessonTitle) {
+    return { page: clamped, nodeId: '', lessonTitle: '' };
+  }
+
+  const normalized = normalizeLessonIdentity(lessonTitle);
+  if (!normalized) {
+    return { page: clamped, nodeId: '', lessonTitle: '' };
+  }
+
+  const targetTree = treesCache[docId];
+  if (!targetTree) {
+    // Tree not yet cached – report pending so the caller knows to
+    // fetch the tree and retry.
+    return { page: clamped, nodeId: '', lessonTitle, pending: true };
+  }
+
+  const match = findTreeNodeByNormalizedTitle(targetTree, normalized);
+  if (match && match.startPage > 0) {
+    // If the requested page is already within the matched lesson's range,
+    // keep it — the teacher clicked a search result at that exact page.
+    // Otherwise snap to the lesson start page.
+    const inRange = currentPage >= match.startPage && currentPage <= match.endPage;
+    return {
+      page: inRange ? currentPage : match.startPage,
+      nodeId: match.id || '',
+      lessonTitle: match.title || lessonTitle
+    };
+  }
+
+  // No matching lesson found in target document – keep the current page
+  // clamped to the target's pageCount.
+  return { page: clamped, nodeId: '', lessonTitle };
+}
+
 export function pairedDocumentId(value) {
   const id = String(value || '').trim();
   if (id === 'textbook') return 'teacher-guide';

@@ -19,7 +19,7 @@ DOCS = [
     dict(id='textbook', kind='学生教材', title='义务教育教科书 语文 九年级上册', shortTitle='九年级语文上册',
          file=ROOT/'public/materials/九年级语文上册-学生教材.pdf', pdfUrl='/materials/九年级语文上册-学生教材.pdf', printedOffset=6),
     dict(id='teacher-guide', kind='教师教学用书', title='义务教育教科书教师教学用书 语文 九年级上册', shortTitle='九上教师教学用书',
-         file=ROOT/'public/materials/九年级语文上册-教师教学用书.pdf', pdfUrl='/materials/九年级语文上册-教师教学用书.pdf', printedOffset=12),
+         file=ROOT/'public/materials/九年级语文上册-教师教学用书.pdf', pdfUrl='/materials/九年级语文上册-教师教学用书.pdf', printedOffset=16),
     dict(id='curriculum-standard', kind='课程标准', title='义务教育语文课程标准（2022年版）', shortTitle='2022年版语文课程标准',
          file=ROOT/'public/materials/义务教育语文课程标准2022.pdf', pdfUrl='/materials/义务教育语文课程标准2022.pdf', printedOffset=7,
          ocrTextFile=ROOT.parent/'tmp/pdfs/义务教育语文课程标准2022_ocr.txt'),
@@ -35,8 +35,8 @@ TEXTBOOK = [
  ('第六单元 · 古代文学',135,[('23 曹刿论战',136),('24 邹忌讽齐王纳谏',139),('25 陈涉世家',142),('26 出师表',146),('27 诗词曲五首',150),('阅读综合实践',154),('写作 学会深入思考',155),('整本书阅读 《唐诗三百首》',158),('课外古诗词诵读',159)]),
 ]
 TEACHER = [
- ('第一单元 · 诗歌活动探究',5,[('单元说明',5),('活动任务单',11),('1 沁园春·雪',21),('2 周总理，你在哪里',32),('3 我爱这土地',39),('4 乡愁',46),('5 你是人间的四月天',52),('6 我看',58),('单元教学设计',64)]),
- ('第二单元 · 议论性文章',73,[('单元说明',73),('7 培养德智体美劳全面发展的社会主义建设者和接班人',80),('8 中国人失掉自信力了吗',135),('9 谈骨气',152),('10 创造宣言',164),('阅读综合实践',179),('单元教学设计',183),('写作 观点要明确',189),('专题学习活动 君子自强不息',195)]),
+ ('第一单元 · 诗歌活动探究',1,[('单元说明',1),('活动任务单',4),('1 沁园春·雪',11),('2 周总理，你在哪里',22),('3 我爱这土地',35),('4 乡愁',46),('5 你是人间的四月天',56),('6 我看',65),('任务二 诗歌朗诵',75),('任务三 尝试创作',82),('单元教学设计',92)]),
+ ('第二单元 · 议论性文章',100,[('单元说明',100),('7 培养德智体美劳全面发展的社会主义建设者和接班人',106),('8 中国人失掉自信力了吗',134),('9 谈骨气',152),('10 创造宣言',164),('阅读综合实践',179),('单元教学设计',183),('写作 观点要明确',189),('专题学习活动 君子自强不息',195)]),
  ('第三单元 · 古诗文',203,[('单元说明',203),('11 岳阳楼记',208),('12 醉翁亭记',222),('13 湖心亭看雪',232),('14 诗词三首',243),('阅读综合实践',257),('单元教学设计',262),('写作 议论要言之有据',266)]),
  ('第四单元 · 小说',271,[('单元说明',271),('15 故乡',278),('16 我的叔叔于勒',301),('17 孤独之旅',317),('18 蒲柳人家（节选）',330),('阅读综合实践',347),('单元教学设计',350),('写作 学写小小说',356),('整本书阅读 《简·爱》',361)]),
  ('第五单元 · 议论文',372,[('单元说明',372),('19 想和做',380),('20 怀疑与学问',397),('21 就英法联军远征中国致巴特勒上尉的信',413),('22 精神的三间小屋',429),('阅读综合实践',441),('单元教学设计',448),('写作 论证要合理',458),('专题学习活动 我们的数字时代',465)]),
@@ -91,18 +91,43 @@ def infer_front_matter_title(doc, idx, text):
         return '目录与版权页'
     return doc['shortTitle']
 
-def infer_printed_page(doc, idx):
+def infer_printed_page(doc, idx, text=''):
     """Keep printed-page labels separate from physical PDF pages.
 
     The teacher guide has two front-matter sequences: 编写说明 (physical
     pages 3–11) and 目录 (physical pages 13–16). The first teaching unit
     starts at physical page 17 and continues with the same printed sequence.
+
+    Where possible, extract the printed page number from the PDF header/footer
+    text rather than relying on a fixed offset.  For the teacher-guide, the
+    printed page number appears in the header on both even and odd pages:
+      - Even pages: text starts with "\\d+ │ 义务教育教科书..."
+      - Odd pages:  text contains "│ .+? │ \\d+" (right header)
+    The fallback uses the document's printedOffset.
     """
+    # Try to extract printed page number from the PDF header text
+    if doc['id'] == 'teacher-guide' and text:
+        for line in text.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            # Even pages: "46 │ 义务教育教科书..."
+            m = re.match(r'^(\d+)\s*│\s*义务教育教科书', line)
+            if m:
+                return m.group(1)
+            # Odd pages: "│ 第一单元 第四课 │ 47"
+            m = re.search(r'│\s*.+?\s*│\s*(\d+)$', line)
+            if m:
+                return m.group(1)
+            break  # Only check the first line
+
     if doc['id'] == 'teacher-guide':
         if 3 <= idx <= 11:
             return str(idx - 2)
-        if idx >= 13:
+        if 13 <= idx <= 16:
             return str(idx - 12)
+        if idx >= 17:
+            return str(idx - 16)
         return None
     printed = idx - doc['printedOffset']
     return str(printed) if printed > 0 else None
@@ -136,7 +161,7 @@ for doc in DOCS:
     for idx,page in enumerate(reader.pages,1):
         if idx in starts: current=starts[idx]
         text=extracted_ocr.get(idx) or clean(page.extract_text() or '')
-        printed=infer_printed_page(doc, idx)
+        printed=infer_printed_page(doc, idx, text)
         record={'id':f"{doc['id']}-p{idx}",'documentId':doc['id'],'pageNumber':idx,
                 'printedPage':printed,'title':current['title'] if current else infer_front_matter_title(doc, idx, text),
                 'nodeId':current['id'] if current else None,'text':text,'charCount':len(text),
