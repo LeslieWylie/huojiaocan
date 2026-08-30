@@ -4,7 +4,7 @@ import { Activity, Archive, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronD
 import { Badge } from '../ui-kit.jsx';
 import { AssetCoverage, PlanQualitySummary, sourceCoverageLabel } from '../ui-panels.jsx';
 import { CardSourceList, MindMapBoard, PeriodPlanner, TeachingBrief, TeachingEvidenceChain } from '../ui-board.jsx';
-import { cacheDraftForRecovery, rememberAuthReturn, askErrorMessage, cardEditGuidance, cardItemNeedsDetail, citationPage, clearClassroomRecovery, docName, feedbackAdviceFromForm, feedbackStorageValue, normalizeFeedbackForm, queryParams, readClassroomRecovery, requestCode, rootRequest, safeDownloadStem, sourceTypeLabel, uniqueCitations, useAuthSession, withBoardPlan, writeClassroomRecovery } from '../app-core.js';
+import { CARD_GENERATION_STEPS, cacheDraftForRecovery, rememberAuthReturn, askErrorMessage, cardEditGuidance, cardItemNeedsDetail, citationPage, clearClassroomRecovery, docName, feedbackAdviceFromForm, feedbackStorageValue, normalizeFeedbackForm, queryParams, readClassroomRecovery, requestCode, rootRequest, safeDownloadStem, sourceTypeLabel, uniqueCitations, useAuthSession, withBoardPlan, writeClassroomRecovery } from '../app-core.js';
 import { addClassroomMoment, CLASSROOM_STAGE_LABELS, emptyClassroomRun, normalizeClassroomRun, removeClassroomMoment, resolveClassroomRecovery, setClassroomStageOutcome } from '../../shared/classroom-run.js';
 import { buildBoardWritingPlan } from '../../shared/board-writing-plan.js';
 import { buildTeachingBrief } from '../../shared/teaching-brief.js';
@@ -66,6 +66,7 @@ export function Cards() {
   const classroomRef = useRef(null);
   const classroomSaveRef = useRef(false);
   const cardsLoadRef = useRef(0);
+  const generationRequestRef = useRef(false);
   const draftId = params.get('draftId') || params.get('id') || '';
   const userId = String(session?.user?.id || '');
   const cardsReaderReturn = draftId ? `/cards/?draftId=${encodeURIComponent(draftId)}` : 'cards';
@@ -237,9 +238,13 @@ export function Cards() {
   };
 
   const confirmAndGenerate = async () => {
-    if (!draftId || generating) return;
+    if (!draftId || generationRequestRef.current) return;
+    generationRequestRef.current = true;
     const current = planDirty ? await savePlan() : draft;
-    if (!current) return;
+    if (!current) {
+      generationRequestRef.current = false;
+      return;
+    }
     setGenerating('all'); setError(''); setErrorCode(''); setAssetMessage('');
     let keyId = '';
     try { keyId = sessionStorage.getItem('activeDeepSeekKeyId') || ''; } catch {}
@@ -253,16 +258,36 @@ export function Cards() {
         confirmed = confirmation.draft || confirmation;
         setDraft(confirmed);
       }
-      const data = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/cards/generate`, {
+      const generateCards = base => rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/cards/generate`, {
         method: 'POST',
-        body: { version: confirmed.version, keyId: keyId || undefined }
+        body: { version: base.version, keyId: keyId || undefined }
       });
+      let recoveredConcurrentGeneration = false;
+      let data;
+      try {
+        data = await generateCards(confirmed);
+      } catch (generationError) {
+        if (requestCode(generationError) !== 'edit_conflict') throw generationError;
+        const refreshedData = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}`);
+        const refreshed = refreshedData.draft || refreshedData;
+        setDraft(refreshed);
+        if (Array.isArray(refreshed.cards) && refreshed.cards.length) {
+          data = { draft: refreshed, generations: [] };
+          recoveredConcurrentGeneration = true;
+        } else if (isTeacherConfirmed(refreshed)) {
+          data = await generateCards(refreshed);
+        } else {
+          throw generationError;
+        }
+      }
       const saved = data.draft || data;
       const generatedCards = withBoardPlan(Array.isArray(saved.cards) ? saved.cards : [], saved.answer?.lesson?.coreQuestion || saved.question || saved.title || '');
       setDraft(saved); setCards(generatedCards); setPlanForm(planFormFromDraft(saved)); setPlanDirty(false); setDirty(false);
       setActiveCard(Math.max(0, generatedCards.findIndex(card => card.type === 'board')));
       const rounds = Math.max(1, ...(Array.isArray(data.generations) ? data.generations.map(item => Number(item?.generationRounds) || 1) : [1]));
-      setAssetMessage(rounds >= 3
+      setAssetMessage(recoveredConcurrentGeneration
+        ? '已读取刚刚完成的三卡；没有重复生成，也没有覆盖教师修改。'
+        : rounds >= 3
         ? '三卡已保存：系统先形成初稿，再核对教材依据与课堂节奏，并完成了必要修订。'
         : '三卡已保存：系统已完成初稿与教材依据、课堂可用性审校。');
     } catch (err) {
@@ -271,6 +296,7 @@ export function Cards() {
       setErrorCode(code);
     } finally {
       setGenerating('');
+      generationRequestRef.current = false;
     }
   };
 
@@ -869,4 +895,3 @@ function readRehearsalRecovery(userId, draftId) {
   try { const value = JSON.parse(localStorage.getItem(rehearsalRecoveryKey(userId, draftId)) || 'null'); return value?.userId === userId && value?.draftId === draftId ? value : null; } catch { return null; }
 }
 function clearRehearsalRecovery(userId, draftId) { try { localStorage.removeItem(rehearsalRecoveryKey(userId, draftId)); } catch {} }
-

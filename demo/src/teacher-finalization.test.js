@@ -1,6 +1,7 @@
 import { appSource } from './test-app-source.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   applyPlanForm,
   cardsForAskDraft,
@@ -96,4 +97,12 @@ test('cards page guides every generation step and keeps citation recovery teache
   const message = errorCopy({ code: 'citation_text_mismatch' });
   assert.match(message, /修改仍在/u);
   assert.doesNotMatch(message, /citation_text_mismatch|PageIndex|BFF/u);
+});
+
+test('refactored cards page imports progress copy and recovers concurrent generation', () => {
+  const source = readFileSync(new URL('./views/cards-page.jsx', import.meta.url), 'utf8');
+  assert.match(source, /import \{ CARD_GENERATION_STEPS,[^\n]+from '\.\.\/app-core\.js'/u);
+  assert.match(source, /generationRequestRef\.current/u);
+  assert.match(source, /recoveredConcurrentGeneration/u);
+  assert.match(source, /已读取刚刚完成的三卡/u);
 });
