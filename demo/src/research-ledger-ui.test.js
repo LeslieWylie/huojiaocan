@@ -1,8 +1,9 @@
+import { appSource } from './test-app-source.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-const app = fs.readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+const app = appSource;
 const styles = fs.readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 const page = fs.readFileSync(new URL('../research/index.html', import.meta.url), 'utf8');
 

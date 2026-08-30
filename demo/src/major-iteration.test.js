@@ -22,7 +22,7 @@ import { buildPreClassPulse, mergePreClassPulse, preClassPulseClassroomCue } fro
 import { buildClassroomWorksheet, buildClassroomWorksheetHtml } from '../shared/classroom-worksheet.js';
 import { buildCurriculumAlignment, curriculumSearchQueries, inferCurriculumTaskGroup } from '../shared/curriculum-alignment.js';
 
-const appSource = fs.readFileSync(path.resolve(process.cwd(), 'src/App.jsx'), 'utf8');
+import { appSource } from './test-app-source.js';
 const stylesSource = fs.readFileSync(path.resolve(process.cwd(), 'src/styles.css'), 'utf8');
 const viteSource = fs.readFileSync(path.resolve(process.cwd(), 'vite.config.js'), 'utf8');
 const indexApiSource = fs.readFileSync(path.resolve(process.cwd(), 'api/index.js'), 'utf8');

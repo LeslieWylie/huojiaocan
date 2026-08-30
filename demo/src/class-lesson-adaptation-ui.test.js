@@ -1,8 +1,9 @@
+import { appSource } from './test-app-source.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-const app = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+const app = appSource;
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
 test('10.0 combines multi-class reuse and teacher handoff without adding navigation', () => {

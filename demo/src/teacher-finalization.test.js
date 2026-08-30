@@ -1,3 +1,4 @@
+import { appSource } from './test-app-source.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -78,7 +79,7 @@ test('teacher workflow states remain explicit and cumulative', () => {
 });
 
 test('front-end contract confirms the saved version before generating cards and uses teacher-facing CTA', () => {
-  const source = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+  const source = appSource;
   const confirmCall = source.indexOf('/confirm`');
   const generateCall = source.indexOf('/cards/generate`');
   assert.ok(confirmCall > 0 && generateCall > confirmCall);

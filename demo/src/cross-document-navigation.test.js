@@ -1,3 +1,4 @@
+import { appSource as allAppSource } from './test-app-source.js';
 /**
  * 跨教材切换 + 导航合同验收。
  *
@@ -32,7 +33,7 @@ import {
 // "21 标题" and "标题" match the same node.  Query normalization
 // must use the same function.
 
-const appSource = await readFile(new URL('./App.jsx', import.meta.url), 'utf8');
+const appSource = allAppSource;
 
 /** 复刻 App.jsx 的 normalizeTree：把索引 JSON 拍平成带 startPage / pageRange 的节点树。 */
 function loadTree(name) {

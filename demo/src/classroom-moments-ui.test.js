@@ -1,8 +1,9 @@
+import { appSource } from './test-app-source.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-const app = fs.readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+const app = appSource;
 const styles = fs.readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
 test('6.3 classroom moments stay inside the existing classroom to reflection flow', () => {
