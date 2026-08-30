@@ -480,7 +480,7 @@ test('连续问答的篇目、条件、回答和上下文可在刷新后恢复',
 });
 
 test('依据夹升级为草稿级持久化，并支持整场备课记录导出', () => {
-  assert.match(appSource, /answer: \{ \.\.\.\(response\.answer \|\| \{\}\), sourceCoverage: response\.sourceCoverage \|\| response\.answer\?\.sourceCoverage/u);
+  assert.match(appSource, /answer: \{ \.\.\.\(response\.answer \|\| \{\}\), \.\.\.\(sameLesson.*?sourceCoverage: response\.sourceCoverage \|\| response\.answer\?\.sourceCoverage/u);
   assert.match(appSource, /conversationHistory: nextHistory, conversationTurns: nextConversationTurns, evidenceShelf/u);
   assert.match(appSource, /draft\.answer\?\.evidenceShelf/u);
   assert.match(appSource, /const exportConversation = \(\) =>/u);
