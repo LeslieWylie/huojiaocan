@@ -2,9 +2,8 @@
 import { useEffect, useState } from 'react';
 import { Activity, Archive, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, FileSearch, FileText, GitCompareArrows, History, Layers3, Library, Menu, MessageCircle, Microscope, Network, PanelTop, Play, RefreshCw, Route, ShieldCheck, Target, Upload, X } from 'lucide-react';
 import { Badge, Logo } from '../ui-kit.jsx';
-import { request, rootRequest, statusLabel, useAuthSession } from '../app-core.js';
+import { ROUTES, request, rootRequest, statusLabel, useAuthSession } from '../app-core.js';
 import { signOut } from '../auth.js';
-import { readDraftRecovery } from '../teacher-finalization.js';
 
 export const PRIMARY_NAV = [
   ['dashboard', '/', Route, '教学任务'],

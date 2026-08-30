@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { accessToken, authOwnersConflict, canPersistAuthOwner, clearAuthRecovery, consumeAuthCallback, ensureSession, getSession, readAuthRecovery, refreshSession, resendVerification, safeAuthReturnPath, saveAuthRecovery, sessionExpired, signIn, signOut, signUp, subscribeAuth } from './auth.js';
 import { errorCopy, UI_COPY } from './copy.js';
-import { focusedCurriculumExcerpt, questionState, pageNumber, useAuthSession, normalizeTree, findTreeNode, nodePageRange, firstPage, CARD_GENERATION_STEPS, CARD_SUBTITLES, boardLabelFromText, boardQuestion, cardEditGuidance, cardItemNeedsDetail, classroomRecoveryKey, clearClassroomRecovery, feedbackAdviceFromForm, feedbackStorageValue, lessonRefFromUrl, lessonTitleFrom, makeBoardPlan, normalizeCards, normalizeFeedbackForm, planIdentity, readClassroomRecovery, sameLessonRef, uniqueCitations, unitRefFromUrl, withBoardPlan, wrapSvgText, writeClassroomRecovery, sourceTypeLabel, API, fetchJson, request, rootRequest, askErrorMessage, canonicalDocumentId, citationPage, citationLink, citationText, currentPageReturn, DOC_LABELS, docName, isIndexRecoveryCode, pageText, pageTitle, pdfPageUrl, queryParams, requestCode, routeId, safeDownloadStem, statusLabel, terminalJob } from './app-core.js';
+import { ROUTES, focusedCurriculumExcerpt, questionState, pageNumber, useAuthSession, normalizeTree, findTreeNode, nodePageRange, firstPage, CARD_GENERATION_STEPS, CARD_SUBTITLES, boardLabelFromText, boardQuestion, cardEditGuidance, cardItemNeedsDetail, classroomRecoveryKey, clearClassroomRecovery, feedbackAdviceFromForm, feedbackStorageValue, lessonRefFromUrl, lessonTitleFrom, makeBoardPlan, normalizeCards, normalizeFeedbackForm, planIdentity, readClassroomRecovery, sameLessonRef, uniqueCitations, unitRefFromUrl, withBoardPlan, wrapSvgText, writeClassroomRecovery, sourceTypeLabel, API, fetchJson, request, rootRequest, askErrorMessage, canonicalDocumentId, citationPage, citationLink, citationText, currentPageReturn, DOC_LABELS, docName, isIndexRecoveryCode, pageText, pageTitle, pdfPageUrl, queryParams, requestCode, routeId, safeDownloadStem, statusLabel, terminalJob } from './app-core.js';
 import { Badge, Logo, SectionHead, Stat } from './ui-kit.jsx';
 import { Decision } from './views/decision-page.jsx';
 import { Pitch } from './views/pitch-page.jsx';
@@ -63,39 +63,7 @@ import { homeworkReviewCsv } from '../shared/homework-review.js';
 import { buildSubstituteTeachingPack } from '../shared/substitute-teaching-pack.js';
 import { lessonTitleForDraft } from '../shared/lesson-identity.js';
 
-const ROUTES = [
-  ['dashboard', '/', Route, '教学任务'],
-  ['guide', '/guide/', Play, '备课引导'],
-  ['unit', '/unit/', Network, '单元接力'],
-  ['cards', '/cards/', Layers3, '一课三卡'],
-  ['slides', '/slides/', PanelTop, '课堂课件'],
-  ['homework', '/homework/', ClipboardCheck, '分层作业'],
-  ['marking', '/marking/', FileCheck2, '匿名批改'],
-  ['rehearsal', '/rehearsal/', Route, '问题链预演'],
-  ['pulse', '/pulse/', Gauge, '课前学情摸底'],
-  ['worksheet', '/worksheet/', FileText, '双页课堂任务单'],
-  ['alignment', '/alignment/', Target, '课标对齐'],
-  ['learning', '/learning/', ClipboardCheck, '作业回流'],
-  ['deliberation', '/deliberation/', Route, '备课取舍'],
-  ['study', '/study/', Microscope, '一课一研'],
-  ['compare', '/compare/', GitCompareArrows, '同课异构'],
-  ['research', '/research/', FileText, '教研问题簿'],
-  ['observation', '/observation/', ClipboardCheck, '听评课观察单'],
-  ['assets', '/assets/', Archive, '教研资产'],
-  ['share', '/share/', Share2, '教研共备'],
-  ['reflection', '/reflection/', History, '课后复盘'],
-  ['library', '/library/', Library, '教材库'],
-  ['ask', '/ask/', MessageCircle, '备课问答'],
-  ['ingest', '/ingest/', Upload, '导入教材'],
-  ['jobs', '/jobs/', Activity, '处理进度'],
-  ['inspect', '/inspect/', FileSearch, '页面校正'],
-  ['validation', '/validation/', ClipboardCheck, '质量检查'],
-  ['document', '/document/', BookOpen, '教材原页核验'],
-  ['login', '/login/', ShieldCheck, '账号登录'],
-  ['settings', '/settings/', ShieldCheck, 'AI 设置'],
-  ['decision', '/decision/', Sparkles, '教学决策'],
-  ['pitch', '/pitch/', Play, '使用示例']
-];
+
 function App(){
   const active=routeId();
   const [callback] = useState(() => consumeAuthCallback());
