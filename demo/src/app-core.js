@@ -3,6 +3,7 @@
 import { buildPdfPageUrl, buildReaderHref } from './reader-target.js';
 import { errorCopy } from './copy.js';
 import { useEffect, useState } from 'react';
+import { Activity, Archive, BookOpen, ClipboardCheck, FileCheck2, FileSearch, FileText, Gauge, GitCompareArrows, History, Layers3, Library, MessageCircle, Microscope, Network, PanelTop, Play, Route, Share2, ShieldCheck, Sparkles, Target, Upload, X } from 'lucide-react';
 import { accessToken, ensureSession, getSession, refreshSession, sessionExpired, subscribeAuth } from './auth.js';
 
 export const API = '/api/index';
