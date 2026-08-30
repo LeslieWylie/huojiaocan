@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const appPath = new URL('./App.jsx', import.meta.url);
+import { appSource } from './test-app-source.js';
 const vitePath = new URL('../vite.config.js', import.meta.url);
 
 async function source(url) { return readFile(url, 'utf8'); }
@@ -18,7 +18,8 @@ function entryIdsFromVite(text) {
 }
 
 test('every built page has a teacher-facing route title', async () => {
-  const [app, vite] = await Promise.all([source(appPath), source(vitePath)]);
+  const app = appSource;
+  const vite = await source(vitePath);
   const routeIds = new Set(routeIdsFromApp(app));
   const entries = entryIdsFromVite(vite).map(id => id === 'dashboard' ? 'dashboard' : id);
   assert.ok(entries.length >= 30, `expected the full multi-page build, got ${entries.length}`);
@@ -26,9 +27,9 @@ test('every built page has a teacher-facing route title', async () => {
 });
 
 test('teacher workflow entry points do not send an unbound user to a naked cards page', async () => {
-  const app = await source(appPath);
-  const guide = app.match(/function GuidancePage\(\)[\s\S]*?\n\}/u)?.[0] || '';
-  const decision = app.slice(app.indexOf('function Decision()'), app.indexOf('function Unit()'));
+  const app = appSource;
+  const guide = app.match(/(?:export\s+)?function GuidancePage\(\)[\s\S]*?\n\}/u)?.[0] || '';
+  const decision = app.match(/(?:export\s+)?function Decision\(\)[\s\S]*?\};\n/u)?.[0] || '';
   assert.doesNotMatch(guide, /href=["']\/cards\/["']/u);
   assert.doesNotMatch(decision, /href=["']\/cards\/["']/u);
   assert.match(guide, /继续追问并保存方案/u);
@@ -36,7 +37,7 @@ test('teacher workflow entry points do not send an unbound user to a naked cards
 });
 
 test('ask and cards evidence links preserve their exact draft return path', async () => {
-  const app = await source(appPath);
+  const app = appSource;
   assert.match(app, /const askReaderReturn = draftId \? `\/ask\/\?draftId=/u);
   assert.match(app, /const cardsReaderReturn = draftId \? `\/cards\/\?draftId=/u);
   assert.match(app, /TeachingEvidenceChain chain=\{teachingEvidenceChain\} returnTo=\{cardsReaderReturn\}/u);
@@ -47,12 +48,12 @@ test('ask and cards evidence links preserve their exact draft return path', asyn
 });
 
 test('teacher-facing copy does not expose internal feature version numbers', async () => {
-  const app = await source(appPath);
+  const app = appSource;
   assert.doesNotMatch(app, /活教参\s+\d+\.\d+\s*·/u);
 });
 
 test('URL lesson identity normalization is consistent with tree matching normalization', async () => {
-  const app = await source(appPath);
+  const app = appSource;
 
   // App.jsx must import normalizeLessonIdentity from reader-target.js with an
   // alias (normalizeReaderLessonIdentity) for the initial URL-correction step.

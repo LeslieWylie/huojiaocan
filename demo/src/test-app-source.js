@@ -18,8 +18,8 @@ for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
 }
 const viewsDir = path.join(srcDir, 'views');
 if (fs.existsSync(viewsDir)) {
-  for (const entry of fs.readdirSync(viewsDir)) {
-    if (/\.(jsx?)$/.test(entry.name) && !/\.test\./ .test(entry.name)) files.push(path.join('views', entry.name));
+  for (const entry of fs.readdirSync(viewsDir, { withFileTypes: true })) {
+    if (entry.isFile() && /\.(jsx?)$/.test(entry.name) && !/\.test\./ .test(entry.name)) files.push(path.join('views', entry.name));
   }
 }
 files.sort();
