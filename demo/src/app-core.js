@@ -331,4 +331,27 @@ export function wrapSvgText(value, max = 13) {
   for (let index = 0; index < chars.length; index += max) lines.push(chars.slice(index, index + max).join(''));
   return lines.slice(0, 3);
 }
+export function sourceTypeLabel(type) {
+  return ({ textbook: '学生教材支持', 'teacher-guide': '教师用书支持', teacher_guide: '教师用书支持', 'curriculum-standard': '课程标准支持', curriculum_standard: '课程标准支持', combined: '三类材料综合', suggestion: '系统教学建议', insufficient: '依据不足' }[type] || '教材依据');
+}
+export function classroomRecoveryKey(userId, draftId) { return `huojiaocan:classroom:${userId}:${draftId}`; }
+export function readClassroomRecovery(userId, draftId) {
+  if (!userId || !draftId) return null;
+  try {
+    const value = JSON.parse(localStorage.getItem(classroomRecoveryKey(userId, draftId)) || 'null');
+    return value?.userId === userId && value?.draftId === draftId ? {
+      baseVersion: Number(value.baseVersion || value.version || 0),
+      baseRun: normalizeClassroomRun(value.baseRun || {}),
+      classroomRun: normalizeClassroomRun(value.classroomRun || {})
+    } : null;
+  } catch { return null; }
+}
+export function writeClassroomRecovery(userId, draftId, version, classroomRun, baseRun = {}) {
+  if (!userId || !draftId || !version) return;
+  try { localStorage.setItem(classroomRecoveryKey(userId, draftId), JSON.stringify({ userId, draftId, baseVersion: version, baseRun: normalizeClassroomRun(baseRun), classroomRun: normalizeClassroomRun(classroomRun) })); } catch {}
+}
+export function clearClassroomRecovery(userId, draftId) {
+  try { localStorage.removeItem(classroomRecoveryKey(userId, draftId)); } catch {}
+}
+
 
