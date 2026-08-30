@@ -6,10 +6,10 @@ import { askErrorMessage, boardLabelFromText, boardQuestion, citationLink, citat
 import { CLASSROOM_STAGE_LABELS, normalizeClassroomRun } from '../shared/classroom-run.js';
 import { buildPeriodPlan, reorderPeriodActivity, repairPeriodSequence, serializePeriodPlan, updatePeriodActivity } from '../shared/period-planner.js';
 
-function SvgLabel({ x, y, text, className = 'board-svg-label', max = 13, anchor = 'middle' }) {
+export function SvgLabel({ x, y, text, className = 'board-svg-label', max = 13, anchor = 'middle' }) {
   return <text x={x} y={y} textAnchor={anchor} className={className}>{wrapSvgText(text, max).map((line, index) => <tspan x={x} dy={index ? 21 : 0} key={`${line}-${index}`}>{line}</tspan>)}</text>;
 }
-function MindMapBoard({ title, items = [], stage = 1, filterId = 'chalkGlow', coreQuestion = '', classroomRun = null, showWriteOrder = false }) {
+export function MindMapBoard({ title, items = [], stage = 1, filterId = 'chalkGlow', coreQuestion = '', classroomRun = null, showWriteOrder = false }) {
   const cleanItems = items.filter(item => String(item?.text || '').trim()).slice(0, 9).map((item, index) => ({ ...item, writeOrder: index + 1, label: item.label || boardLabelFromText(item.text, '待补写') }));
   const branches = [
     { title: '文本结构', x: 260, y: 330, color: 'gold', anchor: 'middle', side: 'left' },
@@ -43,7 +43,7 @@ function MindMapBoard({ title, items = [], stage = 1, filterId = 'chalkGlow', co
     {stage >= 5 && <g className="board-map-blanks"><rect x="80" y="700" width="330" height="82" rx="12"/><SvgLabel x={245} y="733" text="学生关键词" className="board-map-blank-label" max={12}/><SvgLabel x={245} y="765" text={liveKeywords.length ? liveKeywords.join(' · ') : '________________'} className="board-map-blank-line" max={18}/><rect x="990" y="700" width="330" height="82" rx="12"/><SvgLabel x={1155} y="733" text="仍需追问" className="board-map-blank-label" max={12}/><SvgLabel x={1155} y="765" text={followupStages.length ? followupStages.join(' · ') : '________________'} className="board-map-blank-line" max={18}/></g>}
   </svg>;
 }
-function CardSourceList({ citations = [], refs = [], returnTo = 'cards' }) {
+export function CardSourceList({ citations = [], refs = [], returnTo = 'cards' }) {
   const items = uniqueCitations(citations, refs);
   if (!items.length) return <span className="card-source-empty">尚未绑定教材依据</span>;
   const first = items[0];
@@ -51,30 +51,7 @@ function CardSourceList({ citations = [], refs = [], returnTo = 'cards' }) {
   const chip = item => { const href = citationLink(item, returnTo); return href ? <a href={href} key={String(item.documentId) + '-' + citationPage(item)}><Quote size={12}/>{docName(item.documentId)} · 第 {citationPage(item)}页</a> : null; };
   return <div className="card-source-list"><span className="card-source-label">教材依据</span>{chip(first)}{rest.length > 0 && <details><summary>另有 {rest.length} 个依据</summary><div>{rest.map(chip)}</div></details>}</div>;
 }
-function sourceTypeLabel(type) {
-  return ({ textbook: '学生教材支持', 'teacher-guide': '教师用书支持', teacher_guide: '教师用书支持', 'curriculum-standard': '课程标准支持', curriculum_standard: '课程标准支持', combined: '三类材料综合', suggestion: '系统教学建议', insufficient: '依据不足' }[type] || '教材依据');
-}
-function classroomRecoveryKey(userId, draftId) { return `huojiaocan:classroom:${userId}:${draftId}`; }
-function readClassroomRecovery(userId, draftId) {
-  if (!userId || !draftId) return null;
-  try {
-    const value = JSON.parse(localStorage.getItem(classroomRecoveryKey(userId, draftId)) || 'null');
-    return value?.userId === userId && value?.draftId === draftId ? {
-      baseVersion: Number(value.baseVersion || value.version || 0),
-      baseRun: normalizeClassroomRun(value.baseRun || {}),
-      classroomRun: normalizeClassroomRun(value.classroomRun || {})
-    } : null;
-  } catch { return null; }
-}
-function writeClassroomRecovery(userId, draftId, version, classroomRun, baseRun = {}) {
-  if (!userId || !draftId || !version) return;
-  try { localStorage.setItem(classroomRecoveryKey(userId, draftId), JSON.stringify({ userId, draftId, baseVersion: version, baseRun: normalizeClassroomRun(baseRun), classroomRun: normalizeClassroomRun(classroomRun) })); } catch {}
-}
-function clearClassroomRecovery(userId, draftId) {
-  try { localStorage.removeItem(classroomRecoveryKey(userId, draftId)); } catch {}
-}
-
-function TeachingBrief({ brief }) {
+export function TeachingBrief({ brief }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [notice, setNotice] = useState('');
@@ -112,7 +89,7 @@ function TeachingBrief({ brief }) {
   </section>;
 }
 
-function TeachingEvidenceChain({ chain, returnTo = 'cards' }) {
+export function TeachingEvidenceChain({ chain, returnTo = 'cards' }) {
   const [filter, setFilter] = useState('all');
   const [notice, setNotice] = useState('');
   if (!chain) return null;
@@ -141,7 +118,7 @@ function TeachingEvidenceChain({ chain, returnTo = 'cards' }) {
   </section>;
 }
 
-function PeriodPlanner({ draft, onSaved }) {
+export function PeriodPlanner({ draft, onSaved }) {
   const periods = Math.max(1, Math.min(4, Number(draft?.lesson_context?.periods || draft?.lessonContext?.periods || 1) || 1));
   const periodMinutes = Math.max(35, Math.min(60, Number(draft?.lesson_context?.periodMinutes || draft?.lessonContext?.periodMinutes || 45) || 45));
   const lessonPlan = Array.isArray(draft?.answer?.lessonPlan) ? draft.answer.lessonPlan : [];
