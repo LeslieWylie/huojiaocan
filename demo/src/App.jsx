@@ -9,6 +9,7 @@ import {
 import { accessToken, authOwnersConflict, canPersistAuthOwner, clearAuthRecovery, consumeAuthCallback, ensureSession, getSession, readAuthRecovery, refreshSession, resendVerification, safeAuthReturnPath, saveAuthRecovery, sessionExpired, signIn, signOut, signUp, subscribeAuth } from './auth.js';
 import { errorCopy, UI_COPY } from './copy.js';
 import { askErrorMessage, canonicalDocumentId, citationPage, citationLink, citationText, currentPageReturn, DOC_LABELS, docName, isIndexRecoveryCode, pageText, pageTitle, pdfPageUrl, queryParams, requestCode, routeId, safeDownloadStem, statusLabel, terminalJob } from './app-core.js';
+import { Badge, Logo, SectionHead, Stat } from './ui-kit.jsx';
 import { normalizeAskAction } from './ask-actions.js';
 import { buildAskContext, buildConversationHistory } from './conversation-context.js';
 import { clearConversationSnapshot, readConversationSnapshot, readRecentConversationSnapshots, saveConversationSnapshot } from './conversation-recovery.js';
@@ -175,10 +176,6 @@ function ingestErrorMessage(code) {
     indexing_failed: '文件已保存，但索引没有完成；请查看任务状态后重试。'
   })[code] || code || '未知错误';
 }
-function Logo() { return <div className="logo"><span className="logo-mark"><BookOpen size={21}/></span><span><b>活教参</b><small>从教材依据到课堂行动</small></span></div>; }
-function Badge({ children, tone = 'neutral' }) { return <span className={`badge ${tone}`}>{children}</span>; }
-function Stat({ icon: Icon, label, value, note, tone = '' }) { return <article className={`stat-card ${tone}`}><div className="stat-icon"><Icon/></div><div><span>{label}</span><strong>{value}</strong><small>{note}</small></div></article>; }
-function SectionHead({ icon: Icon, eyebrow, title, note, action }) { return <div className="section-head"><div className="section-title"><span className="section-icon"><Icon/></span><div><small>{eyebrow}</small><h2>{title}</h2>{note && <p>{note}</p>}</div></div>{action}</div>; }
 function cacheDraftForRecovery(userId, id, draft, cards = draft?.cards) {
   try { writeDraftRecovery(localStorage, userId, id, draft, cards); } catch {}
 }
