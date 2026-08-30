@@ -5,7 +5,9 @@ import { Badge } from '../ui-kit.jsx';
 import { AssetCoverage, PlanQualitySummary } from '../ui-panels.jsx';
 import { CardSourceList, MindMapBoard, PeriodPlanner, TeachingBrief, TeachingEvidenceChain } from '../ui-board.jsx';
 import { askErrorMessage, cardEditGuidance, cardItemNeedsDetail, citationPage, clearClassroomRecovery, docName, feedbackAdviceFromForm, feedbackStorageValue, normalizeFeedbackForm, queryParams, readClassroomRecovery, requestCode, rootRequest, safeDownloadStem, sourceTypeLabel, uniqueCitations, useAuthSession, withBoardPlan, writeClassroomRecovery } from '../app-core.js';
-import { CLASSROOM_STAGE_LABELS, normalizeClassroomRun, buildBoardWritingPlan } from '../../shared/classroom-run.js';
+import { CLASSROOM_STAGE_LABELS, normalizeClassroomRun } from '../../shared/classroom-run.js';
+import { buildBoardWritingPlan } from '../../shared/board-writing-plan.js';
+import { applyPlanForm, cardsForAskDraft, deriveTeacherDraftState, isTeacherConfirmed, planFormFromDraft } from '../teacher-finalization.js';
 
 export function Cards() {
 
