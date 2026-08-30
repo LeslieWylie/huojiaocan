@@ -104,12 +104,6 @@ export function RehearsalPage() {
   </div>;
 }
 
-export function pulseRecoveryKey(userId, draftId) { return `huojiaocan:pulse:${userId}:${draftId}`; }
-export function readPulseRecovery(userId, draftId) {
-  try { const value = JSON.parse(localStorage.getItem(pulseRecoveryKey(userId, draftId)) || 'null'); return value?.userId === userId && value?.draftId === draftId ? value : null; } catch { return null; }
-}
-export function clearPulseRecovery(userId, draftId) { try { localStorage.removeItem(pulseRecoveryKey(userId, draftId)); } catch {} }
-
 export function PreClassPulsePage() {
   const params = useMemo(() => queryParams(), []);
   const session = useAuthSession();
