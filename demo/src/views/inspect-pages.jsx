@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Check, CheckCircle2, ChevronRight, CircleAlert, ClipboardCheck, ExternalLink, FileSearch, FileText, Library, RefreshCw, Target, Upload } from 'lucide-react';
 import { Badge, SectionHead, Stat } from '../ui-kit.jsx';
-import { askErrorMessage, canonicalDocumentId, citationLink, docName, focusedCurriculumExcerpt, pageNumber, pageText, pageTitle, pdfPageUrl, queryParams, questionState, request, rootRequest, statusLabel, terminalJob, useAuthSession } from '../app-core.js';
+import { JOB_STAGES, ingestErrorMessage, uploadPdf, useCatalogDocument, askErrorMessage, canonicalDocumentId, citationLink, docName, focusedCurriculumExcerpt, pageNumber, pageText, pageTitle, pdfPageUrl, queryParams, questionState, request, rootRequest, statusLabel, terminalJob, useAuthSession } from '../app-core.js';
 import { ProviderResult } from './document-page.jsx';
 import { buildCurriculumAlignment, curriculumSearchQueries } from '../../shared/curriculum-alignment.js';
 

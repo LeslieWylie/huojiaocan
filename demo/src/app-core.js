@@ -483,3 +483,44 @@ export const EXAMPLES = [
   '怎样指导学生读出《我爱这土地》的重音和节奏？',
   '某项练习在教师用书中应当如何处理？'
 ];
+export const JOB_STAGES = ['文件检查', '读取教材页面信息', '读取页面文字与页面识别', '整理教材目录与章节', '建立教材目录', '核对搜索与页码', '可用于问答和三卡生成'];
+export function ingestErrorMessage(code) {
+  return ({
+    pdf_file_required: '请先选择一个真实的 PDF 文件。',
+    pdf_content_type_required: '上传内容必须是 PDF 文件。',
+    invalid_pdf_signature: '文件内容不是有效的 PDF，请重新选择。',
+    pdf_too_large: 'PDF 文件超过当前上传大小限制。',
+    storage_not_configured: '生产存储尚未配置，原始教材无法安全保存。',
+    storage_configuration_incomplete: '生产存储配置不完整，请联系部署人员。',
+    storage_remote_unavailable: '原始教材存储暂时不可用，请稍后重试。',
+    storage_remote_write_failed: '原始教材保存失败，请稍后重试。',
+    stored_but_registration_failed: '原始教材已保存，但文档登记失败，请稍后重试。',
+    document_id_missing: '文档登记成功，但未返回文档编号。',
+    job_id_missing: '文档已登记，但未返回解析任务编号。',
+    pdf_too_large_for_inline_index: '文件已保存，但超过当前在线处理大小；请使用较小文件，或先配置对象存储读取任务。',
+    ocr_provider_not_configured: '已选择页面识别，但识别服务尚未部署。请先部署页面识别服务，再处理扫描 PDF。',
+    ocr_unavailable: '页面识别服务暂时不可用，原始教材已保留；请稍后重试。',
+    ocr_failed: '页面识别未完成，原始教材已保留；请检查页面后重试。',
+    ocr_requires_pdf_ingest: '页面识别需要重新导入原始教材，不能复用旧的页面文字快照。',
+    indexing_failed: '文件已保存，但索引没有完成；请查看任务状态后重试。'
+  })[code] || code || '未知错误';
+}
+export async function uploadPdf(file, { documentType, title, extractionPolicy = 'auto' }) {
+  if (!(file instanceof File)) throw new Error('pdf_file_required');
+  return fetchJson(`${API}/documents/upload`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/pdf',
+      'X-Filename': encodeURIComponent(file.name),
+      'X-Document-Type': documentType,
+      'X-Document-Title': encodeURIComponent(title),
+      'X-Extraction-Policy': extractionPolicy
+    },
+    body: file
+  });
+}
+export function useCatalogDocument(documentId) {
+  const [documents, setDocuments] = useState([]);
+  useEffect(() => { request('/documents').then(data => setDocuments((data.documents || []).map(normalizeCatalogItem).filter(Boolean))).catch(() => {}); }, []);
+  return documents.find(item => item.id === documentId) || null;
+}

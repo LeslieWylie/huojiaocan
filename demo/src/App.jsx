@@ -112,43 +112,8 @@ const MATERIAL_NAV = [
   ['validation', '/validation/', ClipboardCheck, '质量检查']
 ];
 
-const JOB_STAGES = ['文件检查', '读取教材页面信息', '读取页面文字与页面识别', '整理教材目录与章节', '建立教材目录', '核对搜索与页码', '可用于问答和三卡生成'];
 
-async function uploadPdf(file, { documentType, title, extractionPolicy = 'auto' }) {
-  if (!(file instanceof File)) throw new Error('pdf_file_required');
-  return fetchJson(`${API}/documents/upload`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/pdf',
-      'X-Filename': encodeURIComponent(file.name),
-      'X-Document-Type': documentType,
-      'X-Document-Title': encodeURIComponent(title),
-      'X-Extraction-Policy': extractionPolicy
-    },
-    body: file
-  });
-}
-function ingestErrorMessage(code) {
-  return ({
-    pdf_file_required: '请先选择一个真实的 PDF 文件。',
-    pdf_content_type_required: '上传内容必须是 PDF 文件。',
-    invalid_pdf_signature: '文件内容不是有效的 PDF，请重新选择。',
-    pdf_too_large: 'PDF 文件超过当前上传大小限制。',
-    storage_not_configured: '生产存储尚未配置，原始教材无法安全保存。',
-    storage_configuration_incomplete: '生产存储配置不完整，请联系部署人员。',
-    storage_remote_unavailable: '原始教材存储暂时不可用，请稍后重试。',
-    storage_remote_write_failed: '原始教材保存失败，请稍后重试。',
-    stored_but_registration_failed: '原始教材已保存，但文档登记失败，请稍后重试。',
-    document_id_missing: '文档登记成功，但未返回文档编号。',
-    job_id_missing: '文档已登记，但未返回解析任务编号。',
-    pdf_too_large_for_inline_index: '文件已保存，但超过当前在线处理大小；请使用较小文件，或先配置对象存储读取任务。',
-    ocr_provider_not_configured: '已选择页面识别，但识别服务尚未部署。请先部署页面识别服务，再处理扫描 PDF。',
-    ocr_unavailable: '页面识别服务暂时不可用，原始教材已保留；请稍后重试。',
-    ocr_failed: '页面识别未完成，原始教材已保留；请检查页面后重试。',
-    ocr_requires_pdf_ingest: '页面识别需要重新导入原始教材，不能复用旧的页面文字快照。',
-    indexing_failed: '文件已保存，但索引没有完成；请查看任务状态后重试。'
-  })[code] || code || '未知错误';
-}
+
 
 function readDraftRecovery(userId, id) {
   try { return readOwnedDraftRecovery(localStorage, userId, id); } catch { return null; }
@@ -211,11 +176,7 @@ function normalizeCatalogItem(item) {
   const documentType = ['teacher-guide', 'teacher-guidebook', 'guide'].includes(rawType) || item.id === 'teacher-guide' ? 'teacher_guide' : ['textbook', 'student-textbook', 'student-book'].includes(rawType) || item.id === 'textbook' ? 'textbook' : ['curriculum-standard', 'curriculum', 'standard', 'course-standard'].includes(rawType) || item.id === 'curriculum-standard' ? 'curriculum_standard' : rawType || 'other';
   return { ...item, id: String(item.id), documentType, title: item.title || item.originalFilename || String(item.id), short: item.short || item.shortTitle || (documentType === 'teacher_guide' ? '教师教学用书' : documentType === 'textbook' ? '学生教材' : documentType === 'curriculum_standard' ? '课程标准' : item.title || String(item.id)), pageCount: Number(item.pageCount || item.pages || 0), indexedPages: Number(item.indexedPages || item.indexed_pages || 0), pdfUrl: item.pdfUrl || '', issueCount: Number(item.issueCount || 0), visibility: item.visibility || 'public', tone: documentType === 'teacher_guide' ? 'blue' : documentType === 'textbook' ? 'orange' : documentType === 'curriculum_standard' ? 'standard' : 'green' };
 }
-function useCatalogDocument(documentId) {
-  const [documents, setDocuments] = useState([]);
-  useEffect(() => { request('/documents').then(data => setDocuments((data.documents || []).map(normalizeCatalogItem).filter(Boolean))).catch(() => {}); }, []);
-  return documents.find(item => item.id === documentId) || null;
-}
+
 const GUIDANCE_STEPS = [
   ['选定篇目', '从教材目录或搜索结果打开课文起始页，先确认教材页码、书页和章节范围。'],
   ['核对课程标准', '找到学段要求、相关学习任务群和学业质量原页；篇目的具体对齐由教师确认。'],
