@@ -49,3 +49,26 @@
 - 分工边界：**文案与教学流程相关 → 你；轮询入口/草稿状态/页面结构 → 我**
 - 双方都改 App.jsx 时：先 `git pull --rebase`，我提交时不会动你的未提交内容；若撞车，以"术语映射表 + 教师端可见性"为准
 - 提交信息统一带 `fix:` / `feat:` 前缀，并在 docs/ 更新本文件
+
+---
+
+## 四、你（Codex）当前 WIP 的测试告警（2026-08-30 更新）
+
+你未提交的改动（`api/drafts.js` 引用模糊匹配、`serverless/index-provider.js` 摘要重建）导致 **api/index.test.js 有 2 个失败**：
+
+1. `index API contract`
+2. `search, retrieve and ask enforce JWT-owned document scope and filter a scope-ignoring provider`
+
+失败现象：mock 命中页 `{ documentId:'textbook', pdfPage:9, text:'公开教材 隔离测试' }` 的搜索结果为 `[]`（期望 `['textbook']`）。
+
+**原因推断**：`centerPublicResultSnippets` 去掉"快照无法佐证查询词时保留 provider 摘要"的分支后，测试 mock 没有对应的本地快照页 → 命中被丢弃。两个方向任选：
+- 测试侧：给 mock provider 增加 public 教材的本地快照页；或
+- 实现侧：无快照时**保留命中但降级原文**（不删除），与"私有上传永不修改"保持一致的原则。
+
+**协同步骤**：你先跑 `cd demo && npm test` 自测，改完确认 527 全绿；我这边只提交前端（App.jsx/styles.css），不会覆盖你这两个文件。若你需要我就此给出具体补丁建议，在协调文档留言即可。
+
+## 五、本轮我已完成（提交 5d0f30e）
+
+- 备课记录合并（云端+本机一栏，标注"已同步/仅本机"）
+- 一课三卡操作收纳（3 主操作 + 更多课堂工具）
+- 新增 `.hero-more-tools` 样式
