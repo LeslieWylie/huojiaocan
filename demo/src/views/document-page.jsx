@@ -249,17 +249,5 @@ export function DocumentPage() {
   </div>;
 }
 
-export function focusedCurriculumExcerpt(item) {
-  const source = String(item?.source?.excerpt || '').replace(/\s+/gu, ' ').trim();
-  if (!source) return '';
-  const anchors = item?.id === 'stage'
-    ? ['【阅读与鉴赏】', '在通读课文的基础上', '阅读与鉴赏']
-    : item?.id === 'task-group'
-      ? ['第四学段', '识别文本隐含的情感、观点、立场', '本学习任务群旨在']
-      : ['阅读简单议论性文章', '区分观点与材料', '阅读与鉴赏类问题或任务'];
-  const index = anchors.map(anchor => source.indexOf(anchor)).filter(value => value >= 0).sort((a, b) => a - b)[0] ?? 0;
-  const start = Math.max(0, index - (index ? 18 : 0));
-  const excerpt = source.slice(start, start + 300);
-  return `${start > 0 ? '…' : ''}${excerpt}${start + 300 < source.length ? '…' : ''}`;
-}
+
 
