@@ -14,7 +14,7 @@ test('the immutable teaching-share flow is reachable from classroom design and a
   assert.match(app, /\/share\/\?draftId=/u);
   assert.match(app, /\/api\/shares\/resolve/u);
   assert.match(app, /发布共备快照/u);
-  assert.match(app, /账号信息、历史对话、私人教材和密钥不会进入分享内容/u);
+  assert.match(app, /账号信息、历史对话、私人教材和连接信息不会进入分享内容/u);
   assert.match(vite, /share: page\('\.\/share\/index\.html'\)/u);
   assert.match(vercel, /\/api\/shares\/:path\*/u);
 });
