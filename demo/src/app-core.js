@@ -508,6 +508,30 @@ export function ingestErrorMessage(code) {
     indexing_failed: '文件已保存，但索引没有完成；请查看任务状态后重试。'
   })[code] || code || '未知错误';
 }
+export function normalizeCatalogItem(item) {
+  if (!item || !item.id) return null;
+  const rawType = String(item.documentType || item.type || '').trim().toLowerCase().replaceAll('_', '-').replace(/\s+/g, '-');
+  const documentType = ['teacher-guide', 'teacher-guidebook', 'guide'].includes(rawType) || item.id === 'teacher-guide'
+    ? 'teacher_guide'
+    : ['textbook', 'student-textbook', 'student-book'].includes(rawType) || item.id === 'textbook'
+      ? 'textbook'
+      : ['curriculum-standard', 'curriculum', 'standard', 'course-standard'].includes(rawType) || item.id === 'curriculum-standard'
+        ? 'curriculum_standard'
+        : rawType || 'other';
+  return {
+    ...item,
+    id: String(item.id),
+    documentType,
+    title: item.title || item.originalFilename || String(item.id),
+    short: item.short || item.shortTitle || (documentType === 'teacher_guide' ? '教师教学用书' : documentType === 'textbook' ? '学生教材' : documentType === 'curriculum_standard' ? '课程标准' : item.title || String(item.id)),
+    pageCount: Number(item.pageCount || item.pages || 0),
+    indexedPages: Number(item.indexedPages || item.indexed_pages || 0),
+    pdfUrl: item.pdfUrl || '',
+    issueCount: Number(item.issueCount || 0),
+    visibility: item.visibility || 'public',
+    tone: documentType === 'teacher_guide' ? 'blue' : documentType === 'textbook' ? 'orange' : documentType === 'curriculum_standard' ? 'standard' : 'green'
+  };
+}
 export async function uploadPdf(file, { documentType, title, extractionPolicy = 'auto' }) {
   if (!(file instanceof File)) throw new Error('pdf_file_required');
   return fetchJson(`${API}/documents/upload`, {

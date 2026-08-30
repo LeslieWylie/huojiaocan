@@ -12,6 +12,11 @@ function routeIdsFromApp(text) {
   return [...block.matchAll(/\['([^']+)',/gu)].map(match => match[1]);
 }
 
+function routePathsFromApp(text) {
+  const block = text.match(/const ROUTES = \[([\s\S]*?)\n\];/u)?.[1] || '';
+  return [...block.matchAll(/\['[^']+',\s*'([^']+)'/gu)].map(match => match[1]);
+}
+
 function entryIdsFromVite(text) {
   const block = text.match(/input:\s*\{([\s\S]*?)\n\s*\}/u)?.[1] || '';
   return [...block.matchAll(/^\s*,?([a-z][a-z-]*):\s*page\(/gmu)].map(match => match[1]);
@@ -24,6 +29,18 @@ test('every built page has a teacher-facing route title', async () => {
   const entries = entryIdsFromVite(vite).map(id => id === 'dashboard' ? 'dashboard' : id);
   assert.ok(entries.length >= 30, `expected the full multi-page build, got ${entries.length}`);
   assert.deepEqual(entries.filter(id => !routeIds.has(id)), []);
+});
+
+test('every literal internal page link resolves to a declared route', () => {
+  const declared = new Set(routePathsFromApp(appSource));
+  const literalHrefs = [...appSource.matchAll(/href=["'](\/[^"']*)["']/gu)]
+    .map(match => match[1])
+    .filter(href => !href.startsWith('/api/'));
+  const unknown = [...new Set(literalHrefs.map(href => {
+    const pathname = href.split(/[?#]/u, 1)[0] || '/';
+    return pathname.endsWith('/') ? pathname : `${pathname}/`;
+  }).filter(pathname => !declared.has(pathname)))];
+  assert.deepEqual(unknown, [], `found literal links without a declared page route: ${unknown.join(', ')}`);
 });
 
 test('teacher workflow entry points do not send an unbound user to a naked cards page', async () => {

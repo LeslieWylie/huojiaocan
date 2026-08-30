@@ -102,6 +102,7 @@ function declaredNames(source) {
     const names2 = splitParams(match[1]);
     for (const name of names2) names.add(name);
   }
+  for (const match of source.matchAll(/\b([A-Za-z_$][\w$]*)\s*=>/g)) names.add(match[1]);
   return names;
 }
 
@@ -159,6 +160,10 @@ for (const path of walk(root)) {
   const names = new Set([...declaredNames(original), ...destructureNames(source)]);
   const used = new Set();
   for (const match of source.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(/g)) used.add(match[1]);
+  // Callback references do not contain a direct `name(` call. Without this
+  // pass a missing import such as `.map(normalizeCatalogItem)` survives the
+  // build and fails only after the page loads.
+  for (const match of source.matchAll(/\.(?:map|flatMap|filter|find|findIndex|some|every|sort)\(\s*([A-Za-z_$][\w$]*)/g)) used.add(match[1]);
   for (const match of source.matchAll(/<([A-Z][\w$]*)[\s>/]/g)) used.add(match[1]);
   for (const match of source.matchAll(/icon=\{\s*([A-Z][\w$]*)\s*\}/g)) used.add(match[1]);
   for (const match of source.matchAll(/(?<![.\w$])([A-Z][\w$]{2,})\s*\./g)) used.add(match[1]);
