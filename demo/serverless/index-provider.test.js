@@ -484,6 +484,34 @@ test('remote PageIndex lesson reranking removes directory and unrelated-unit hit
   ]);
 });
 
+test('课文简称会优先定位教师用书教学重点和学生教材课文起始页', async t => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({
+    results: [
+      { documentId: 'teacher-guide', pdfPage: 15, title: '目录', text: '目录 21 就英法联军远征中国致巴特勒上尉的信', score: 0.99 },
+      { documentId: 'textbook', pdfPage: 5, title: '目录', text: '目录 21 就英法联军远征中国致巴特勒上尉的信', score: 0.98 },
+      { documentId: 'textbook', pdfPage: 127, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '课后任务 巴特勒上尉', score: 0.95 },
+      { documentId: 'textbook', pdfPage: 124, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '21 就英法联军远征中国致巴特勒上尉的信 雨果', score: 0.7 },
+      { documentId: 'teacher-guide', pdfPage: 471, title: '单元教学设计', text: '单元设计中提到巴特勒上尉', score: 0.94 },
+      { documentId: 'teacher-guide', pdfPage: 429, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '21 就英法联军远征中国致巴特勒上尉的信 教学重点', score: 0.68 }
+    ]
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  t.after(() => { global.fetch = originalFetch; });
+
+  const provider = new PageIndexProvider({ baseUrl: 'https://pageindex.test' });
+  const searched = await provider.search({
+    query: '巴特勒信',
+    scope: ['textbook', 'teacher-guide'],
+    limit: 6
+  });
+  assert.deepEqual(searched.results.slice(0, 2).map(result => [result.documentId, result.pdfPage]), [
+    ['teacher-guide', 429],
+    ['textbook', 124]
+  ]);
+  assert.equal(searched.results.some(result => result.title === '目录'), false);
+  assert.equal(searched.results.some(result => result.pdfPage === 471), false);
+});
+
 test('remote PageIndex excludes a neighboring teacher-guide lesson page from a broad tree node', async t => {
   const originalFetch = global.fetch;
   global.fetch = async () => new Response(JSON.stringify({

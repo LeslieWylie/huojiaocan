@@ -39,7 +39,8 @@ const LESSON_QUERY_ALIASES = new Map([
   ['曹文轩', '孤独之旅'],
   ['刘绍棠', '蒲柳人家'],
   ['梁启超', '敬业与乐业'],
-  ['傅雷', '傅雷家书']
+  ['傅雷', '傅雷家书'],
+  ['巴特勒信', '就英法联军远征中国致巴特勒上尉的信']
 ]);
 const mutableDocuments = new Map();
 const pageOverrides = new Map();
@@ -445,7 +446,9 @@ function rerankProviderResults(results = [], query, scope) {
     const hasLessonInPageText = content.includes(target.title);
     const compactQuery = clean(query).replace(/[·・\s]/gu, '');
     const compactTitle = clean(target.title).replace(/[·・\s]/gu, '');
-    const exactLessonQuery = compactQuery === compactTitle;
+    const recognizedQueryTitle = LESSON_QUERY_ALIASES.get(compactQuery) || compactQuery;
+    const exactLessonQuery = recognizedQueryTitle === compactTitle;
+    const lessonStart = page === target.startPage;
     const guideFocusHeading = exactLessonQuery && result.documentId === 'teacher-guide'
       && /(教学重点|教学目标|教学建议|教学设计)/u.test(content);
     const guideLessonHeading = exactLessonQuery && result.documentId === 'teacher-guide'
@@ -461,6 +464,7 @@ function rerankProviderResults(results = [], query, scope) {
       + (inTarget ? 1000 : 0)
       + (exactTitle ? 250 : 0)
       + (hasLessonInPageText ? 180 : 0)
+      + (exactLessonQuery && lessonStart ? 220 : 0)
       + (guideFocusHeading ? 240 : 0)
       + (guideLessonHeading ? 120 : 0)
       // A teacher-guide directory label is copied onto every page in the
