@@ -314,7 +314,7 @@ export function ReflectionPage() {
   </div>;
 }
 
-const STUDY_DECISIONS = [
+export const STUDY_DECISIONS = [
   ['retain', '保留', '这项处理值得在相近班级继续使用'],
   ['adjust', '调整', '保留核心思路，只改变一个关键环节'],
   ['replace', '更换', '本次处理没有形成预期学习表现']

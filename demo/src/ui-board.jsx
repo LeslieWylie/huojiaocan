@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, CircleAlert, ClipboardCheck, Download, ExternalLink, FileSearch, Network, Play, Plus, Quote, Route, ShieldCheck } from 'lucide-react';
 import { Badge, SectionHead } from './ui-kit.jsx';
-import { askErrorMessage, boardLabelFromText, boardQuestion, citationLink, citationPage, classroomRecoveryKey, clearClassroomRecovery, docName, readClassroomRecovery, sourceTypeLabel, statusLabel, uniqueCitations, wrapSvgText, writeClassroomRecovery } from './app-core.js';
+import { askErrorMessage, boardLabelFromText, boardQuestion, citationLink, citationPage, classroomRecoveryKey, clearClassroomRecovery, docName, readClassroomRecovery, rootRequest, sourceTypeLabel, statusLabel, uniqueCitations, wrapSvgText, writeClassroomRecovery } from './app-core.js';
 import { CLASSROOM_STAGE_LABELS, normalizeClassroomRun } from '../shared/classroom-run.js';
 import { buildPeriodPlan, reorderPeriodActivity, repairPeriodSequence, serializePeriodPlan, updatePeriodActivity } from '../shared/period-planner.js';
 

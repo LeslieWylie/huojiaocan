@@ -1,6 +1,6 @@
 // 教材处理与页面对齐（Ingest/Jobs/Inspect/Validation/课程对齐，从 App.jsx 迁出）
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowRight, Check, CheckCircle2, ChevronRight, CircleAlert, ClipboardCheck, ExternalLink, FileSearch, FileText, Library, RefreshCw, Target, Upload } from 'lucide-react';
+import { Activity, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, CircleAlert, ClipboardCheck, ExternalLink, Eye, FileCheck2, FileSearch, FileText, Library, RefreshCw, Route, Target, Upload } from 'lucide-react';
 import { Badge, SectionHead, Stat } from '../ui-kit.jsx';
 import { JOB_STAGES, askErrorMessage, canonicalDocumentId, citationLink, docName, focusedCurriculumExcerpt, ingestErrorMessage, pageNumber, pageText, pageTitle, pdfPageUrl, queryParams, questionState, request, rootRequest, statusLabel, terminalJob, uploadPdf, useAuthSession, useCatalogDocument } from '../app-core.js';
 import { ProviderResult } from './document-page.jsx';
