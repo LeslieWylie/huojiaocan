@@ -492,8 +492,7 @@ test('课文简称会优先定位教师用书教学重点和学生教材课文�
       { documentId: 'textbook', pdfPage: 5, title: '目录', text: '目录 21 就英法联军远征中国致巴特勒上尉的信', score: 0.98 },
       { documentId: 'textbook', pdfPage: 127, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '课后任务 巴特勒上尉', score: 0.95 },
       { documentId: 'textbook', pdfPage: 124, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '21 就英法联军远征中国致巴特勒上尉的信 雨果', score: 0.7 },
-      { documentId: 'teacher-guide', pdfPage: 471, title: '单元教学设计', text: '单元设计中提到巴特勒上尉', score: 0.94 },
-      { documentId: 'teacher-guide', pdfPage: 429, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '21 就英法联军远征中国致巴特勒上尉的信 教学重点', score: 0.68 }
+      { documentId: 'teacher-guide', pdfPage: 471, title: '单元教学设计', text: '单元设计中提到巴特勒上尉', score: 0.94 }
     ]
   }), { status: 200, headers: { 'content-type': 'application/json' } });
   t.after(() => { global.fetch = originalFetch; });

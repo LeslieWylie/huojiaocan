@@ -523,7 +523,12 @@ async function correctRecognizedLessonMiss(results = [], input = {}) {
     limit: Math.max(24, clampLimit(input.limit ?? input.topK, 8) * 3)
   });
   const corrected = rerankProviderResults(snapshot.results || [], query, scope)
-    .filter(result => hasQueryCoverage(result, query))
+    // A recognized shorthand can identify the lesson without appearing as a
+    // contiguous phrase on the page (for example “巴特勒信” vs “巴特勒上尉的信”).
+    // Keep only verified pages inside that lesson window; do not require the
+    // shorthand itself to be copied verbatim into the source text.
+    .filter(result => hasQueryCoverage(result, query)
+      || hasLessonTargetHit([result], query, [result.documentId]))
     .map(result => ({
       ...result,
       providerMetadata: { ...(result.providerMetadata || {}), rankCorrection: 'verified_snapshot' }
@@ -538,7 +543,7 @@ async function correctRecognizedLessonMiss(results = [], input = {}) {
   const remainingCorrections = [];
   for (const result of corrected) {
     const count = correctionCounts.get(result.documentId) || 0;
-    if (count < 3) {
+    if (count < 1) {
       leadingCorrections.push(result);
       correctionCounts.set(result.documentId, count + 1);
     } else {
