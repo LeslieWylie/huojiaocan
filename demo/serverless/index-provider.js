@@ -148,9 +148,12 @@ function bestQuote(text, query, terms, maxLength = 230) {
 }
 
 // PageIndex may return a page-start preview even when it selected the page for
-// a phrase near the end. For bundled public books, rebuild only the preview
-// from our immutable local page snapshot. Page identity and ranking still come
-// from PageIndex; private uploads are deliberately left untouched.
+// a phrase near the end, or an aggregated excerpt that never appears on the
+// physical page at all. For bundled public books, the final text/quote is
+// always rebuilt from our immutable local page snapshot, so a remote-only
+// aggregated excerpt can never be surfaced as evidence. Page identity and
+// ranking still come from PageIndex; private uploads have no local snapshot
+// and are deliberately left untouched.
 function centerPublicResultSnippets(results = [], query = '') {
   const q = String(query || '').trim();
   const terms = queryTerms(q);
@@ -159,12 +162,6 @@ function centerPublicResultSnippets(results = [], query = '') {
     if (!sourcePage) return result;
     const source = String(sourcePage.retrievalText || sourcePage.text || '').trim();
     if (!source) return result;
-    const lowerSource = source.toLowerCase();
-    const candidates = [q, ...terms].filter(Boolean);
-    // Preserve the provider excerpt when the immutable page snapshot cannot
-    // itself substantiate any query term. This matters for newly updated
-    // provider data and keeps the helper from erasing a valid remote match.
-    if (candidates.length && !candidates.some(item => lowerSource.includes(String(item).toLowerCase()))) return result;
     const quote = bestQuote(source, q, terms);
     return { ...result, text: quote, quote };
   });

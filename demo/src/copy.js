@@ -75,7 +75,7 @@ export const UI_COPY = Object.freeze({
     student_sample_contains_contact: '请删除手机号、邮箱或学号，只保留班级层面的归纳。',
     citation_outside_lesson: '有教材依据不属于当前篇目，请重新搜索后再保存。',
     citation_document_forbidden: '有教材依据不属于当前账号或公共教材，请重新搜索后再保存。',
-    citation_text_mismatch: '教材摘录与原始页面不一致，未保存。请重新打开该页核验。',
+    citation_text_mismatch: '教材页码或摘录发生变化。你的修改仍在，请重新核对教材依据后再确认。',
     lesson_change_requires_new_draft: '这份方案已有锁定卡片。请新建备课，再切换篇目。',
     deliberation_confirmed: '这份备课取舍已经确认。如需调整，请先更新方案，再重新比较。',
     deliberation_not_found: '还没有生成本课的备课取舍。',

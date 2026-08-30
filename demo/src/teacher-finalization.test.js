@@ -11,6 +11,7 @@ import {
   readDraftRecovery,
   writeDraftRecovery
 } from './teacher-finalization.js';
+import { errorCopy } from './copy.js';
 
 function storage() {
   const values = new Map();
@@ -86,4 +87,14 @@ test('front-end contract confirms the saved version before generating cards and 
   assert.match(source, /查看并定稿方案/u);
   assert.match(source, /cards:\s*sameLesson\s*\?\s*cardsForAskDraft\(existingDraft\)\s*:\s*\[\]/u);
   assert.doesNotMatch(source, /href=\{cardsHref\}>生成一课三卡/u);
+});
+
+test('cards page guides every generation step and keeps citation recovery teacher-facing', () => {
+  const source = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+  for (const label of ['本页使用顺序', '核对方案', '生成三卡', '编辑保存锁定', '课堂使用', '重新核对并重试']) {
+    assert.match(source, new RegExp(label, 'u'));
+  }
+  const message = errorCopy({ code: 'citation_text_mismatch' });
+  assert.match(message, /修改仍在/u);
+  assert.doesNotMatch(message, /citation_text_mismatch|PageIndex|BFF/u);
 });

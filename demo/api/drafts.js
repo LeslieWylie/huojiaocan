@@ -431,36 +431,131 @@ function trustedPageText(value = {}) {
   return String(page.retrievalText || page.text || page.quote || '');
 }
 
-async function assertCitationTextMatchesSource(citations) {
+const CITATION_FUZZY_MATCH_THRESHOLD = 0.72;
+const CITATION_FUZZY_MIN_LENGTH = 8;
+const CITATION_FUZZY_MIN_ANCHOR = 6;
+
+function characterTrigrams(value) {
+  const text = citationComparableText(value);
+  const grams = new Map();
+  if (text.length < 3) return grams;
+  for (let index = 0; index <= text.length - 3; index += 1) {
+    const gram = text.slice(index, index + 3);
+    grams.set(gram, (grams.get(gram) || 0) + 1);
+  }
+  return grams;
+}
+
+function citationFuzzyContainment(quote, source) {
+  const wanted = characterTrigrams(quote);
+  const available = characterTrigrams(source);
+  let total = 0;
+  let matched = 0;
+  for (const [gram, count] of wanted) {
+    total += count;
+    matched += Math.min(count, available.get(gram) || 0);
+  }
+  return total ? matched / total : 0;
+}
+
+async function neighboringPageText(provider, documentId, pageNumber) {
+  const pages = await Promise.all([pageNumber - 1, pageNumber, pageNumber + 1].map(async page => {
+    if (page < 1) return '';
+    try {
+      return trustedPageText(await provider.getPage(documentId, page));
+    } catch {
+      return '';
+    }
+  }));
+  return pages.filter(Boolean).join('\n');
+}
+
+function comparableTextWithMap(value) {
+  const raw = String(value || '');
+  let comparable = '';
+  const rawOffsets = [];
+  let rawOffset = 0;
+  for (const character of raw) {
+    const normalized = character.normalize('NFKC').toLowerCase();
+    for (const candidate of normalized) {
+      if (/[^\s\p{P}\p{S}]/u.test(candidate)) {
+        comparable += candidate;
+        rawOffsets.push(rawOffset);
+      }
+    }
+    rawOffset += character.length;
+  }
+  return { raw, comparable, rawOffsets };
+}
+
+function sharedCitationAnchor(quote, source) {
+  const wanted = comparableTextWithMap(quote).comparable;
+  const trusted = comparableTextWithMap(source);
+  const maximum = Math.min(40, wanted.length);
+  for (let length = maximum; length >= CITATION_FUZZY_MIN_ANCHOR; length -= 1) {
+    for (let index = 0; index <= wanted.length - length; index += 1) {
+      const sourceStart = trusted.comparable.indexOf(wanted.slice(index, index + length));
+      if (sourceStart >= 0) return { sourceStart, length };
+    }
+  }
+  return null;
+}
+
+function canonicalPageQuote(rawSource, anchor) {
+  const trusted = comparableTextWithMap(rawSource);
+  if (!anchor || !trusted.rawOffsets.length) return '';
+  const anchorStart = trusted.rawOffsets[anchor.sourceStart] ?? 0;
+  const anchorEndComparable = Math.min(trusted.rawOffsets.length - 1, anchor.sourceStart + anchor.length - 1);
+  const anchorEnd = (trusted.rawOffsets[anchorEndComparable] ?? anchorStart) + 1;
+  const start = Math.max(0, anchorStart - 36);
+  let end = Math.min(trusted.raw.length, anchorEnd + 72);
+  while (end < trusted.raw.length && citationComparableText(trusted.raw.slice(start, end)).length < 120 && end - start < 500) {
+    end = Math.min(trusted.raw.length, end + 48);
+  }
+  return trusted.raw.slice(start, Math.min(end, start + 500)).trim();
+}
+
+async function assertCitationTextMatchesSource(citations, { allowPublicDrift = false } = {}) {
   const items = Array.isArray(citations) ? citations : [];
-  if (!items.length) return;
+  if (!items.length) return [];
   const publicIds = new Set((getManifest().documents || []).map(item => String(item.id)));
   const local = new LocalFullTextIndexProvider();
   const remote = getIndexProvider().provider;
-  await Promise.all(items.map(async citation => {
+  return Promise.all(items.map(async citation => {
     const documentId = String(citation?.documentId || citation?.document_id || '');
     const pageNumber = Number(citation?.pdfPage ?? citation?.pageNumber ?? citation?.page);
-    const quote = citationComparableText(citation?.quote || citation?.text);
+    const rawQuote = String(citation?.quote || citation?.text || '');
+    const quote = citationComparableText(rawQuote);
     if (!documentId || !Number.isInteger(pageNumber) || pageNumber < 1 || quote.length < 4) {
       throw Object.assign(new Error('citation_text_mismatch'), { code: 'citation_text_mismatch', status: 422 });
     }
+    const isPublic = publicIds.has(documentId);
+    const provider = isPublic ? local : remote;
     let result;
     try {
-      result = await (publicIds.has(documentId) ? local : remote).getPage(documentId, pageNumber);
+      result = await provider.getPage(documentId, pageNumber);
     } catch {
       throw Object.assign(new Error('citation_text_mismatch'), { code: 'citation_text_mismatch', status: 422 });
     }
-    const source = citationComparableText(trustedPageText(result));
-    if (!source || !source.includes(quote)) {
-      throw Object.assign(new Error('citation_text_mismatch'), { code: 'citation_text_mismatch', status: 422 });
+    const rawSource = trustedPageText(result);
+    const source = citationComparableText(rawSource);
+    if (source && source.includes(quote)) return citation;
+    if (isPublic && allowPublicDrift && quote.length >= CITATION_FUZZY_MIN_LENGTH) {
+      const anchor = sharedCitationAnchor(rawQuote, rawSource);
+      const neighborhood = await neighboringPageText(provider, documentId, pageNumber);
+      if (anchor && citationFuzzyContainment(rawQuote, neighborhood) >= CITATION_FUZZY_MATCH_THRESHOLD) {
+        const canonical = canonicalPageQuote(rawSource, anchor);
+        if (canonical) return { ...citation, quote: canonical, text: canonical };
+      }
     }
+    throw Object.assign(new Error('citation_text_mismatch'), { code: 'citation_text_mismatch', status: 422 });
   }));
 }
 
-async function assertCitationsTrusted(user, citations, context) {
+async function assertCitationsTrusted(user, citations, context, options) {
   await assertCitationDocumentsAccessible(user, citations);
   assertCitationsBelongToLesson(citations, context);
-  await assertCitationTextMatchesSource(citations);
+  return assertCitationTextMatchesSource(citations, options);
 }
 
 function lessonName(value) {
@@ -898,19 +993,20 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const body = await readJson(req);
       assertCurrentVersion(current, requestVersion(req, body));
-      await assertCitationsTrusted(user, current.citations, current.lesson_context);
+      const citations = await assertCitationsTrusted(user, current.citations, current.lesson_context, { allowPublicDrift: true });
+      const trustedCurrent = { ...current, citations };
       if (current.answer?.teachingDeliberation?.status === 'confirmed' && !teachingDeliberationIsStale(current)) {
         throw Object.assign(new Error('deliberation_confirmed'), { code: 'deliberation_confirmed', status: 409 });
       }
       let deepseek = null;
       if (typeof body.keyId === 'string' && body.keyId.trim()) deepseek = await resolveActiveDeepSeekKey(user, body.keyId.trim());
-      const deliberation = await generateTeachingDeliberation({ draft: current, deepseek });
+      const deliberation = await generateTeachingDeliberation({ draft: trustedCurrent, deepseek });
       const answer = clone(current.answer || {});
       if (answer.teachingDeliberation?.status === 'confirmed') {
         answer.teachingDeliberationHistory = [clone(answer.teachingDeliberation), ...(Array.isArray(answer.teachingDeliberationHistory) ? answer.teachingDeliberationHistory : [])].slice(0, 8);
       }
       answer.teachingDeliberation = deliberation;
-      const saved = await patchOwnedDraft(user, id, current.version || 1, { answer, updated_at: deliberation.updatedAt, version: Number(current.version || 1) + 1 });
+      const saved = await patchOwnedDraft(user, id, current.version || 1, { answer, citations, updated_at: deliberation.updatedAt, version: Number(current.version || 1) + 1 });
       return json(res, 200, { draft: saved, deliberation });
     }
     if (parts.length === 2 && parts[1] === 'deliberation' && req.method === 'PATCH') {
@@ -1112,11 +1208,13 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const body = await readJson(req);
       assertCurrentVersion(current, requestVersion(req, body));
-      await assertCitationsTrusted(user, current.citations, current.lesson_context);
-      const answer = confirmDraftPlan(current, { confirmedBy: user.id });
-      answer.revisions = appendRevision(current, '确认教学方案').revisions;
+      const citations = await assertCitationsTrusted(user, current.citations, current.lesson_context, { allowPublicDrift: true });
+      const trustedCurrent = { ...current, citations };
+      const answer = confirmDraftPlan(trustedCurrent, { confirmedBy: user.id });
+      answer.revisions = appendRevision(trustedCurrent, '确认教学方案').revisions;
       const saved = await patchOwnedDraft(user, id, current.version || 1, {
         answer,
+        citations,
         updated_at: new Date().toISOString(),
         version: Number(current.version || 1) + 1
       });
@@ -1139,10 +1237,11 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const body = await readJson(req);
       assertCurrentVersion(current, requestVersion(req, body));
-      await assertCitationsTrusted(user, current.citations, current.lesson_context);
+      const citations = await assertCitationsTrusted(user, current.citations, current.lesson_context, { allowPublicDrift: true });
+      const trustedCurrent = { ...current, citations };
       let deepseek = null;
       if (typeof body.keyId === 'string' && body.keyId.trim()) deepseek = await resolveActiveDeepSeekKey(user, body.keyId.trim());
-      const generated = await generateDraftCards({ draft: current, deepseek });
+      const generated = await generateDraftCards({ draft: trustedCurrent, deepseek });
       const saved = await patchOwnedDraft(user, id, current.version || 1, {
         cards: generated.cards,
         citations: generated.citations,
@@ -1165,13 +1264,14 @@ export default async function handler(req, res) {
       if (req.method === 'POST' && parts[3] === 'lock') {
         cards[index] = { ...card, status: 'locked', updatedAt: new Date().toISOString() };
       } else if (req.method === 'POST' && parts[3] === 'regenerate') {
-        await assertCitationsTrusted(user, current.citations, current.lesson_context);
+        const citations = await assertCitationsTrusted(user, current.citations, current.lesson_context, { allowPublicDrift: true });
+        const trustedCurrent = { ...current, citations };
         let deepseek = null;
         if (typeof body.keyId === 'string' && body.keyId.trim()) {
           deepseek = await resolveActiveDeepSeekKey(user, body.keyId.trim());
         }
         const generated = await regenerateDraftCard({
-          draft: current,
+          draft: trustedCurrent,
           card,
           deepseek,
           focus: typeof body.focus === 'string' ? body.focus.trim().slice(0, 240) : ''

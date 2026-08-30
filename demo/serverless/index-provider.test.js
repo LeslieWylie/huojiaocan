@@ -270,6 +270,41 @@ test('remote public hits rebuild their preview around the query from the verifie
   assert.doesNotMatch(response.results[0].text, /无关预览/u);
 });
 
+test('remote public hits never keep a provider-only aggregated excerpt, even without a query match; private hits stay untouched', async t => {
+  const originalFetch = global.fetch;
+  const aggregatedExcerpt = '这是提供方聚合生成的摘要文本，物理页原文中并不存在这句话。';
+  global.fetch = async () => new Response(JSON.stringify({
+    results: [
+      { documentId: 'textbook', pdfPage: 9, text: aggregatedExcerpt, score: 0.5 },
+      { documentId: 'private-doc-42', pdfPage: 1, text: aggregatedExcerpt, score: 0.5 }
+    ]
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  t.after(() => { global.fetch = originalFetch; });
+
+  const provider = new PageIndexProvider({ baseUrl: 'https://pageindex.test' });
+  const response = await provider.search({
+    query: '完全不存在的词组ABC123456',
+    scope: ['textbook', 'private-doc-42'],
+    limit: 6
+  });
+
+  const publicHit = response.results.find(result => result.documentId === 'textbook');
+  assert.ok(publicHit);
+  assert.equal(publicHit.pdfPage, 9);
+  // No local page text can substantiate this nonsense query, so the old
+  // "preserve the provider excerpt" escape hatch used to let the remote-only
+  // aggregation through untouched. It must now always be rebuilt from the
+  // immutable local physical page instead.
+  assert.doesNotMatch(publicHit.text, /提供方聚合生成的摘要/u);
+  assert.equal(publicHit.text, publicHit.quote);
+  assert.match(publicHit.text, /沁园春/u);
+
+  const privateHit = response.results.find(result => result.documentId === 'private-doc-42');
+  assert.ok(privateHit);
+  assert.equal(privateHit.text, aggregatedExcerpt);
+  assert.equal(privateHit.quote, aggregatedExcerpt);
+});
+
 test('remote PageIndex converts scalar UI scope into documentIds array', async t => {
   const originalFetch = global.fetch;
   let payload;

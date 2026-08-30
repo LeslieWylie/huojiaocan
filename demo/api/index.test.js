@@ -425,7 +425,7 @@ test('index API contract', { concurrency: false }, async t => {
         return new Response(JSON.stringify({
           total: 3,
           hits: [
-            { documentId: 'textbook', pdfPage: 9, text: '公开教材 隔离测试', score: 0.9 },
+            { documentId: 'textbook', pdfPage: 9, text: '公开教材 千里冰封', score: 0.9 },
             { documentId: 'private-doc', pdfPage: 1, text: '私有备课 私人材料', score: 0.95 },
             { documentId: 'other-private', pdfPage: 1, text: '其他账号私有备课', score: 0.99 }
           ]
@@ -434,17 +434,21 @@ test('index API contract', { concurrency: false }, async t => {
       throw new Error(`unexpected fetch: ${target}`);
     };
 
-    const anonymousSearch = await request('/search', { method: 'POST', headers: {}, body: { query: '隔离测试', userId: 'owner-1' } });
+    // Public provider-only snippets are not accepted as evidence. Use a phrase
+    // that the immutable textbook page can substantiate after reconstruction.
+    const anonymousSearch = await request('/search', { method: 'POST', headers: {}, body: { query: '千里冰封', userId: 'owner-1' } });
     assert.equal(anonymousSearch.statusCode, 200);
-    assert.deepEqual(anonymousSearch.payload.results.map(item => item.documentId), ['textbook']);
+    assert.ok(anonymousSearch.payload.results.some(item => item.documentId === 'textbook'));
+    assert.ok(anonymousSearch.payload.results.every(item => ['textbook', 'teacher-guide'].includes(item.documentId)));
     assert.deepEqual(providerPayloads.at(-1).documentIds, ['textbook', 'teacher-guide']);
 
     const ownerBoth = await request('/retrieve', {
       method: 'POST',
       headers: { authorization: 'Bearer owner-token' },
-      body: { query: '隔离测试', scope: 'both', userId: 'other-1' }
+      body: { query: '千里冰封', scope: 'both', userId: 'other-1' }
     });
-    assert.deepEqual(ownerBoth.payload.results.map(item => item.documentId), ['textbook']);
+    assert.ok(ownerBoth.payload.results.some(item => item.documentId === 'textbook'));
+    assert.ok(ownerBoth.payload.results.every(item => ['textbook', 'teacher-guide'].includes(item.documentId)));
     assert.deepEqual(providerPayloads.at(-1).documentIds, ['textbook', 'teacher-guide']);
 
     const anonymousPrivate = await request('/retrieve', { method: 'POST', headers: {}, body: { query: '私有备课', scope: ['private-doc'] } });
