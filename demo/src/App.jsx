@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Archive, ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, Copy,
   CircleAlert, ClipboardCheck, Download, ExternalLink, Eye, FileCheck2, FileSearch,
@@ -10,23 +10,8 @@ import { accessToken, authOwnersConflict, canPersistAuthOwner, clearAuthRecovery
 import { errorCopy, UI_COPY } from './copy.js';
 import { ROUTES, focusedCurriculumExcerpt, questionState, pageNumber, useAuthSession, normalizeTree, findTreeNode, nodePageRange, firstPage, CARD_GENERATION_STEPS, CARD_SUBTITLES, boardLabelFromText, boardQuestion, cardEditGuidance, cardItemNeedsDetail, classroomRecoveryKey, clearClassroomRecovery, feedbackAdviceFromForm, feedbackStorageValue, lessonRefFromUrl, lessonTitleFrom, makeBoardPlan, normalizeCards, normalizeFeedbackForm, planIdentity, readClassroomRecovery, sameLessonRef, uniqueCitations, unitRefFromUrl, withBoardPlan, wrapSvgText, writeClassroomRecovery, sourceTypeLabel, API, fetchJson, request, rootRequest, askErrorMessage, canonicalDocumentId, citationPage, citationLink, citationText, currentPageReturn, DOC_LABELS, docName, isIndexRecoveryCode, pageText, pageTitle, pdfPageUrl, queryParams, requestCode, routeId, safeDownloadStem, statusLabel, terminalJob } from './app-core.js';
 import { Badge, Logo, SectionHead, Stat } from './ui-kit.jsx';
-import { Decision } from './views/decision-page.jsx';
-import { Pitch } from './views/pitch-page.jsx';
-import { LoginPage, SettingsPage } from './views/auth-pages.jsx';
-import { Unit } from './views/unit-page.jsx';
 import { AssetCoverage, PlanQualitySummary, SharedPlanList, assetPrimaryAction, assetWorkflowBadge, sharedItemText, sourceCoverageLabel } from './ui-panels.jsx';
-import { LibraryPage } from './views/library-page.jsx';
-import { DocumentPage } from './views/document-page.jsx';
-import { ProviderResult } from './views/document-page.jsx';
-import { Cards } from './views/cards-page.jsx';
-import { AskPage } from './views/ask-page.jsx';
-import { ClassroomWorksheetPage, LearningEvidencePage, PreClassPulsePage, RehearsalPage } from './views/lesson-pages.jsx';
-import { DeliberationPage, ReflectionPage } from './views/lesson2-pages.jsx';
-import { LayeredHomeworkPage, LessonStudyPage, SameLessonComparisonPage, TeachingSlidesPage } from './views/lesson3-pages.jsx';
-import { AnonymousMarkingPage, ObservationProtocolPage } from './views/g4-pages.jsx';
-import { AssetsPage, ResearchLedgerPage, TeachingSharePage } from './views/g5-pages.jsx';
 import { Dashboard, GuidancePage, Layout, Sidebar, WORKFLOW_TOOL_NAV, MATERIAL_NAV, PRIMARY_NAV } from './views/shell-pages.jsx';
-import { CurriculumAlignmentPage, IngestPage, InspectPage, JobsPage, ValidationPage } from './views/inspect-pages.jsx';
 import { CardSourceList, MindMapBoard, PeriodPlanner, TeachingBrief, TeachingEvidenceChain } from './ui-board.jsx';
 import { normalizeAskAction } from './ask-actions.js';
 import { buildAskContext, buildConversationHistory } from './conversation-context.js';
@@ -64,6 +49,39 @@ import { buildSubstituteTeachingPack } from '../shared/substitute-teaching-pack.
 import { lessonTitleForDraft } from '../shared/lesson-identity.js';
 
 
+
+// 路由级按需加载（拆分后 pages 视图均懒加载）
+const Decision = lazy(() => import('./views/decision-page.jsx').then(m => ({ default: m.Decision })));
+const Pitch = lazy(() => import('./views/pitch-page.jsx').then(m => ({ default: m.Pitch })));
+const LoginPage = lazy(() => import('./views/auth-pages.jsx').then(m => ({ default: m.LoginPage })));
+const SettingsPage = lazy(() => import('./views/auth-pages.jsx').then(m => ({ default: m.SettingsPage })));
+const Unit = lazy(() => import('./views/unit-page.jsx').then(m => ({ default: m.Unit })));
+const LibraryPage = lazy(() => import('./views/library-page.jsx').then(m => ({ default: m.LibraryPage })));
+const DocumentPage = lazy(() => import('./views/document-page.jsx').then(m => ({ default: m.DocumentPage })));
+const ProviderResult = lazy(() => import('./views/document-page.jsx').then(m => ({ default: m.ProviderResult })));
+const Cards = lazy(() => import('./views/cards-page.jsx').then(m => ({ default: m.Cards })));
+const AskPage = lazy(() => import('./views/ask-page.jsx').then(m => ({ default: m.AskPage })));
+const ClassroomWorksheetPage = lazy(() => import('./views/lesson-pages.jsx').then(m => ({ default: m.ClassroomWorksheetPage })));
+const LearningEvidencePage = lazy(() => import('./views/lesson-pages.jsx').then(m => ({ default: m.LearningEvidencePage })));
+const PreClassPulsePage = lazy(() => import('./views/lesson-pages.jsx').then(m => ({ default: m.PreClassPulsePage })));
+const RehearsalPage = lazy(() => import('./views/lesson-pages.jsx').then(m => ({ default: m.RehearsalPage })));
+const DeliberationPage = lazy(() => import('./views/lesson2-pages.jsx').then(m => ({ default: m.DeliberationPage })));
+const ReflectionPage = lazy(() => import('./views/lesson2-pages.jsx').then(m => ({ default: m.ReflectionPage })));
+const LayeredHomeworkPage = lazy(() => import('./views/lesson3-pages.jsx').then(m => ({ default: m.LayeredHomeworkPage })));
+const LessonStudyPage = lazy(() => import('./views/lesson3-pages.jsx').then(m => ({ default: m.LessonStudyPage })));
+const SameLessonComparisonPage = lazy(() => import('./views/lesson3-pages.jsx').then(m => ({ default: m.SameLessonComparisonPage })));
+const TeachingSlidesPage = lazy(() => import('./views/lesson3-pages.jsx').then(m => ({ default: m.TeachingSlidesPage })));
+const AnonymousMarkingPage = lazy(() => import('./views/g4-pages.jsx').then(m => ({ default: m.AnonymousMarkingPage })));
+const ObservationProtocolPage = lazy(() => import('./views/g4-pages.jsx').then(m => ({ default: m.ObservationProtocolPage })));
+const AssetsPage = lazy(() => import('./views/g5-pages.jsx').then(m => ({ default: m.AssetsPage })));
+const ResearchLedgerPage = lazy(() => import('./views/g5-pages.jsx').then(m => ({ default: m.ResearchLedgerPage })));
+const TeachingSharePage = lazy(() => import('./views/g5-pages.jsx').then(m => ({ default: m.TeachingSharePage })));
+const CurriculumAlignmentPage = lazy(() => import('./views/inspect-pages.jsx').then(m => ({ default: m.CurriculumAlignmentPage })));
+const IngestPage = lazy(() => import('./views/inspect-pages.jsx').then(m => ({ default: m.IngestPage })));
+const InspectPage = lazy(() => import('./views/inspect-pages.jsx').then(m => ({ default: m.InspectPage })));
+const JobsPage = lazy(() => import('./views/inspect-pages.jsx').then(m => ({ default: m.JobsPage })));
+const ValidationPage = lazy(() => import('./views/inspect-pages.jsx').then(m => ({ default: m.ValidationPage })));
+
 function App(){
   const active=routeId();
   const [callback] = useState(() => consumeAuthCallback());
@@ -82,8 +100,9 @@ function App(){
     if (recovery?.next) query.set('next', recovery.next);
     location.replace(`/login/?${query}`);
   }, [active, callback]);
+  const renderPage = activePage => <Suspense fallback={<div className="page-loading"><Activity/>正在打开…</div>}>{activePage}</Suspense>;
   const pages={dashboard:<Dashboard/>,guide:<GuidancePage/>,decision:<Decision/>,unit:<Unit/>,cards:<Cards/>,slides:<TeachingSlidesPage/>,homework:<LayeredHomeworkPage/>,marking:<AnonymousMarkingPage/>,rehearsal:<RehearsalPage/>,pulse:<PreClassPulsePage/>,worksheet:<ClassroomWorksheetPage/>,alignment:<CurriculumAlignmentPage/>,learning:<LearningEvidencePage/>,deliberation:<DeliberationPage/>,reflection:<ReflectionPage/>,study:<LessonStudyPage/>,compare:<SameLessonComparisonPage/>,research:<ResearchLedgerPage/>,observation:<ObservationProtocolPage/>,assets:<AssetsPage/>,share:<TeachingSharePage/>,pitch:<Pitch/>,library:<LibraryPage/>,ask:<AskPage/>,ingest:<IngestPage/>,jobs:<JobsPage/>,inspect:<InspectPage/>,validation:<ValidationPage/>,document:<DocumentPage/>,login:<LoginPage callback={callback}/>,settings:<SettingsPage/>};
-  if (active === 'login' || active === 'settings') return <Layout active={active}>{pages[active]}</Layout>;
-  return <Layout active={active}>{pages[active]||<Dashboard/>}</Layout>;
+  if (active === 'login' || active === 'settings') return <Layout active={active}>{renderPage(pages[active])}</Layout>;
+  return <Layout active={active}>{renderPage(pages[active] || <Dashboard/>)}</Layout>;
 }
 export default App;
