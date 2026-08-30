@@ -8,6 +8,7 @@ import { buildClassroomWorksheet, buildClassroomWorksheetHtml } from '../../shar
 import { emptyLearningEvidence, learningEvidenceIsStale, learningEvidenceProgress, learningEvidenceSummary, normalizeLearningEvidence } from '../../shared/learning-evidence.js';
 import { emptyPreClassPulse, normalizePreClassPulse, preClassPulseIsStale, preClassPulseProgress } from '../../shared/preclass-pulse.js';
 import { emptyQuestionRehearsal, normalizeQuestionRehearsal, questionRehearsalIsStale, rehearsalProgress } from '../../shared/question-rehearsal.js';
+import { clearRehearsalRecovery, readRehearsalRecovery, rehearsalRecoveryKey } from './cards-page.jsx';
 
 export function RehearsalPage() {
   const params = useMemo(() => queryParams(), []);

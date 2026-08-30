@@ -1,6 +1,6 @@
 // 备课问答页（CitationChips/RouteTrace/ConversationSide/AskPage 等，从 App.jsx 迁出）
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Download, ExternalLink, History, MessageCircle, Network, Plus, Quote, Route, Send, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Download, ExternalLink, History, MessageCircle, Network, Plus, Quote, Route, Send, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { Badge, SectionHead } from '../ui-kit.jsx';
 import { normalizeAskAction } from '../ask-actions.js';
 import { withAskRetry } from '../ask-retry.js';
@@ -10,6 +10,8 @@ import { clearConversationSnapshot, readConversationSnapshot, readRecentConversa
 import { UI_COPY } from '../copy.js';
 import { evidenceShelfKey, mergeEvidenceShelf, removeEvidenceShelfItem } from '../evidence-shelf.js';
 import { pairLessonEvidence } from '../lesson-evidence.js';
+import { citationByRef } from './library-page.jsx';
+import { draftRecoverySnapshot } from './shell-pages.jsx';
 import { cardsForAskDraft } from '../teacher-finalization.js';
 import { checklistProgress, deriveWorkflowChecklist } from '../workflow-checklist.js';
 import { EXAMPLES, askErrorMessage, canonicalDocumentId, citationLink, citationPage, citationText, cacheDraftForRecovery, docName, isIndexRecoveryCode, lessonRefFromUrl, normalizeFeedbackForm, planIdentity, rememberAuthReturn, request, requestCode, rootRequest, sameLessonRef, unitRefFromUrl, useAuthSession } from '../app-core.js';
@@ -575,7 +577,6 @@ export function AskPage() {
       // catalogue pages. Prefer that corrected title over an old browser
       // draft that may still contain conversational text such as “我岳阳楼记”.
       const lessonTitle = planIdentity(response?.answer?.lesson?.title || resolvedIdentityTitle || identityTitle || canonicalQuestion, '当前篇目');
-      const stableCoreQuestion = response?.answer?.lesson?.coreQuestion || canonicalQuestion;
       const previousLessonTitle = planIdentity(existingDraft?.answer?.lesson?.title || existingDraft?.lesson_context?.lessonRef?.title || existingDraft?.title, '');
       const sameLesson = sameLessonRef(existingDraft?.lesson_context?.lessonRef, nextLessonRef)
         || Boolean(previousLessonTitle && lessonTitle && previousLessonTitle === lessonTitle);

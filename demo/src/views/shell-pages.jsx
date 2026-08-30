@@ -4,6 +4,7 @@ import { Activity, Archive, ArrowRight, Check, CheckCircle2, ChevronDown, Chevro
 import { Badge, Logo } from '../ui-kit.jsx';
 import { ROUTES, request, rootRequest, statusLabel, useAuthSession } from '../app-core.js';
 import { signOut } from '../auth.js';
+import { readDraftRecovery as readOwnedDraftRecovery } from '../teacher-finalization.js';
 
 export const PRIMARY_NAV = [
   ['dashboard', '/', Route, '教学任务'],

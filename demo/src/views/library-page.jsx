@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, BookOpen, ChevronRight, CircleAlert, ExternalLink, FileSearch, FileText, Library, Search } from 'lucide-react';
 import { Badge, SectionHead } from '../ui-kit.jsx';
-import { canonicalDocumentId, citationText, currentPageReturn, docName, findTreeNode, nodePageRange, normalizeTree, pageTitle, pdfPageUrl, queryParams, request, statusLabel, uniqueCitations } from '../app-core.js';
+import { canonicalDocumentId, citationText, currentPageReturn, docName, findTreeNode, nodePageRange, normalizeTree, pageTitle, pdfPageUrl, queryParams, request, searchResultDocumentId, searchResultPage, statusLabel, uniqueCitations } from '../app-core.js';
 import { buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity as normalizeReaderLessonIdentity, resolveCrossDocTarget } from '../reader-target.js';
 
 

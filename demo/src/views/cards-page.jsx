@@ -864,9 +864,9 @@ ${sourceNote}`;
   </div>;
 }
 
-function rehearsalRecoveryKey(userId, draftId) { return `huojiaocan:rehearsal:${userId}:${draftId}`; }
-function readRehearsalRecovery(userId, draftId) {
+export function rehearsalRecoveryKey(userId, draftId) { return `huojiaocan:rehearsal:${userId}:${draftId}`; }
+export function readRehearsalRecovery(userId, draftId) {
   try { const value = JSON.parse(localStorage.getItem(rehearsalRecoveryKey(userId, draftId)) || 'null'); return value?.userId === userId && value?.draftId === draftId ? value : null; } catch { return null; }
 }
-function clearRehearsalRecovery(userId, draftId) { try { localStorage.removeItem(rehearsalRecoveryKey(userId, draftId)); } catch {} }
+export function clearRehearsalRecovery(userId, draftId) { try { localStorage.removeItem(rehearsalRecoveryKey(userId, draftId)); } catch {} }
 

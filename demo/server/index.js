@@ -21,6 +21,10 @@ const port = Number(process.env.PORT || 8787);
 app.post('/api/upload', uploadHandler);
 app.post('/api/index/documents/upload', uploadHandler);
 app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  res.on('finish', () => console.log(`[api] ${req.method} ${req.originalUrl} → ${res.statusCode}`));
+  next();
+});
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'live-teacher-guide' }));
 app.get('/api/config', configHandler);
 app.all('/api/auth', authProxy);
