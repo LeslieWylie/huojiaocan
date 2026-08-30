@@ -4,7 +4,7 @@ import { Activity, ArrowLeft, ArrowRight, BookOpen, CircleAlert, ClipboardCheck,
 import { Badge } from '../ui-kit.jsx';
 import { canonicalDocumentId, citationLink, citationText, docName, focusedCurriculumExcerpt, questionState, queryParams, request, requestCode, searchResultDocumentId, searchResultPage } from '../app-core.js';
 import { buildPdfPageUrl, buildReaderHref, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveReaderReturn } from '../reader-target.js';
-import { buildDualSourceTeachingCard } from '../shared/dual-source-teaching-card.js';
+import { buildDualSourceTeachingCard } from '../../shared/dual-source-teaching-card.js';
 import { pairLessonEvidence } from '../lesson-evidence.js';
 
 export function ProviderResult({ title, time, tone, question, result, status, providerState }) {
