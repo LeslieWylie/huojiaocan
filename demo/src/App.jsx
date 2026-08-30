@@ -15,6 +15,7 @@ import { Pitch } from './views/pitch-page.jsx';
 import { LoginPage, SettingsPage } from './views/auth-pages.jsx';
 import { Unit } from './views/unit-page.jsx';
 import { LibraryPage } from './views/library-page.jsx';
+import { DocumentPage } from './views/document-page.jsx';
 import { CardSourceList, MindMapBoard, PeriodPlanner, TeachingBrief, TeachingEvidenceChain } from './ui-board.jsx';
 import { normalizeAskAction } from './ask-actions.js';
 import { buildAskContext, buildConversationHistory } from './conversation-context.js';
@@ -3392,10 +3393,7 @@ function questionResult(validation, question) {
   };
 }
 
-function questionState(result) {
-  if (!result) return { label: '未运行', tone: 'neutral' };
-  return result.passed ? { label: '已定位', tone: 'green' } : { label: '需检查', tone: 'orange' };
-}
+
 
 function ValidationPage() {
   const params = useMemo(() => queryParams(), []);
@@ -3751,19 +3749,7 @@ function DocumentPage() {
   </div>;
 }
 
-function focusedCurriculumExcerpt(item) {
-  const source = String(item?.source?.excerpt || '').replace(/\s+/gu, ' ').trim();
-  if (!source) return '';
-  const anchors = item?.id === 'stage'
-    ? ['【阅读与鉴赏】', '在通读课文的基础上', '阅读与鉴赏']
-    : item?.id === 'task-group'
-      ? ['第四学段', '识别文本隐含的情感、观点、立场', '本学习任务群旨在']
-      : ['阅读简单议论性文章', '区分观点与材料', '阅读与鉴赏类问题或任务'];
-  const index = anchors.map(anchor => source.indexOf(anchor)).filter(value => value >= 0).sort((a, b) => a - b)[0] ?? 0;
-  const start = Math.max(0, index - (index ? 18 : 0));
-  const excerpt = source.slice(start, start + 300);
-  return `${start > 0 ? '…' : ''}${excerpt}${start + 300 < source.length ? '…' : ''}`;
-}
+
 
 function CurriculumAlignmentPage() {
   const params = useMemo(() => queryParams(), []);

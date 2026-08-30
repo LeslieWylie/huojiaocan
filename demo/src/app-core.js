@@ -443,3 +443,28 @@ export const CARD_EDIT_GUIDANCE = {
   question: '建议写清“回到哪一处原文 + 观察什么 + 为什么追问”，问题要能直接带学生找到词句、意象或结构。',
   assessment: '建议写清“学生完成什么任务 + 使用哪处教材依据 + 达到什么可观察表现”，不要只停留在“能否……”的判断。'
 };
+export function questionState(result) {
+  if (!result) return { label: '未运行', tone: 'neutral' };
+  return result.passed ? { label: '已定位', tone: 'green' } : { label: '需检查', tone: 'orange' };
+}
+export function focusedCurriculumExcerpt(item) {
+  const source = String(item?.source?.excerpt || '').replace(/\s+/gu, ' ').trim();
+  if (!source) return '';
+  const anchors = item?.id === 'stage'
+    ? ['【阅读与鉴赏】', '在通读课文的基础上', '阅读与鉴赏']
+    : item?.id === 'task-group'
+      ? ['第四学段', '识别文本隐含的情感、观点、立场', '本学习任务群旨在']
+      : ['阅读简单议论性文章', '区分观点与材料', '阅读与鉴赏类问题或任务'];
+  const index = anchors.map(anchor => source.indexOf(anchor)).filter(value => value >= 0).sort((a, b) => a - b)[0] ?? 0;
+  const start = Math.max(0, index - (index ? 18 : 0));
+  const excerpt = source.slice(start, start + 300);
+  return `${start > 0 ? '…' : ''}${excerpt}${start + 300 < source.length ? '…' : ''}`;
+}
+export function searchResultDocumentId(result = {}) {
+  result = result && typeof result === 'object' ? result : {};
+  return canonicalDocumentId(result.documentId || result.document_id || result.docId || result.doc_id || result.viewer?.documentId || result.viewer?.document_id);
+}
+export function searchResultPage(result = {}) {
+  result = result && typeof result === 'object' ? result : {};
+  return pageNumber(result.pdfPage ?? result.pdf_page ?? result.pageNumber ?? result.page ?? result.viewer?.page ?? result.viewer?.page_number);
+}

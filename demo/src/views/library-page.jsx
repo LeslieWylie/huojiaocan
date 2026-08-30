@@ -5,14 +5,8 @@ import { Badge, SectionHead } from '../ui-kit.jsx';
 import { canonicalDocumentId, citationText, currentPageReturn, docName, findTreeNode, nodePageRange, normalizeTree, pageTitle, pdfPageUrl, queryParams, request, statusLabel, uniqueCitations } from '../app-core.js';
 import { buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity as normalizeReaderLessonIdentity, resolveCrossDocTarget } from '../reader-target.js';
 
-export function searchResultDocumentId(result = {}) {
-  result = result && typeof result === 'object' ? result : {};
-  return canonicalDocumentId(result.documentId || result.document_id || result.docId || result.doc_id || result.viewer?.documentId || result.viewer?.document_id);
-}
-export function searchResultPage(result = {}) {
-  result = result && typeof result === 'object' ? result : {};
-  return pageNumber(result.pdfPage ?? result.pdf_page ?? result.pageNumber ?? result.page ?? result.viewer?.page ?? result.viewer?.page_number);
-}
+
+
 
 
 
