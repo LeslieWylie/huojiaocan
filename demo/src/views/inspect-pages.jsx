@@ -1,11 +1,10 @@
 // 教材处理与页面对齐（Ingest/Jobs/Inspect/Validation/课程对齐，从 App.jsx 迁出）
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Check, CheckCircle2, ChevronRight, CircleAlert, ClipboardCheck, ExternalLink, FileSearch, FileText, Library, RefreshCw, Target, Upload } from 'lucide-react';
+import { Activity, ArrowRight, Check, CheckCircle2, ChevronRight, CircleAlert, ClipboardCheck, ExternalLink, FileSearch, FileText, Library, RefreshCw, Target, Upload } from 'lucide-react';
 import { Badge, SectionHead, Stat } from '../ui-kit.jsx';
-import { JOB_STAGES, ingestErrorMessage, uploadPdf, useCatalogDocument, askErrorMessage, canonicalDocumentId, citationLink, docName, focusedCurriculumExcerpt, pageNumber, pageText, pageTitle, pdfPageUrl, queryParams, questionState, request, rootRequest, statusLabel, terminalJob, useAuthSession } from '../app-core.js';
+import { JOB_STAGES, askErrorMessage, canonicalDocumentId, citationLink, docName, focusedCurriculumExcerpt, ingestErrorMessage, pageNumber, pageText, pageTitle, pdfPageUrl, queryParams, questionState, request, rootRequest, statusLabel, terminalJob, uploadPdf, useAuthSession, useCatalogDocument } from '../app-core.js';
 import { ProviderResult } from './document-page.jsx';
 import { buildCurriculumAlignment, curriculumSearchQueries } from '../../shared/curriculum-alignment.js';
-
 export function IngestPage() {
   const [file,setFile]=useState(null),[step,setStep]=useState(1),[kind,setKind]=useState('teacher_guide'),[policy,setPolicy]=useState('auto'),[working,setWorking]=useState(false),[error,setError]=useState(''),[created,setCreated]=useState(null);
   const displayFile=file;
