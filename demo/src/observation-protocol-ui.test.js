@@ -18,7 +18,7 @@ test('5.3 observation protocol is generated from a confirmed comparison and is d
 
 test('observation protocol records classroom evidence without ranking teachers or identifying students', () => {
   const start = app.indexOf('function ObservationProtocolPage');
-  const end = app.indexOf('function sourceCoverageLabel', start);
+  const end = app.indexOf('function TeachingSharePage', start);
   const view = app.slice(start, end);
   assert.match(view, /不评价教师表现/u);
   assert.match(view, /课堂事件/u);

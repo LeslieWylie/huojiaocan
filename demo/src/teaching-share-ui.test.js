@@ -5,7 +5,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const app = fs.readFileSync(path.join(here, 'App.jsx'), 'utf8');
+import { appSource as app } from './test-app-source.js';
 const vite = fs.readFileSync(path.resolve(here, '../vite.config.js'), 'utf8');
 const vercel = fs.readFileSync(path.resolve(here, '../vercel.json'), 'utf8');
 
