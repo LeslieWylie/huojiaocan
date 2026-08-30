@@ -2,7 +2,8 @@
 // 目标：App.jsx 只保留壳与路由，按页面的视图迁到 views/ 后从这里导入。
 import { buildPdfPageUrl, buildReaderHref } from './reader-target.js';
 import { errorCopy } from './copy.js';
-import { accessToken, ensureSession, refreshSession, sessionExpired } from './auth.js';
+import { useEffect, useState } from 'react';
+import { accessToken, ensureSession, getSession, refreshSession, sessionExpired, subscribeAuth } from './auth.js';
 
 export const API = '/api/index';
 
@@ -431,4 +432,9 @@ export function useAuthSession() {
   const [session, setSession] = useState(() => getSession());
   useEffect(() => subscribeAuth(setSession), []);
   return session;
+}
+export function pageNumber(value) {
+  if (Number.isFinite(Number(value)) && Number(value) > 0) return Math.floor(Number(value));
+  const match = String(value || '').match(/\d+/);
+  return match ? Number(match[0]) : 0;
 }
