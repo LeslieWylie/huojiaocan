@@ -4376,7 +4376,7 @@ function questionResult(validation, question) {
 
 function questionState(result) {
   if (!result) return { label: '未运行', tone: 'neutral' };
-  return result.passed ? { label: '已命中', tone: 'green' } : { label: '需检查', tone: 'orange' };
+  return result.passed ? { label: '已定位', tone: 'green' } : { label: '需检查', tone: 'orange' };
 }
 
 function ValidationPage() {
@@ -4511,13 +4511,13 @@ function ProviderResult({ title, time, tone, question, result, status, providerS
         <span><small>教材页码</small><b>{hit.pdfPage}</b></span>
         <span><small>书页</small><b>{hit.printedPage || '未标注'}</b></span>
         <span><small>章节路径</small><b>{section}</b></span>
-        <span><small>定位状态</small><b>已命中原始页</b></span>
+        <span><small>定位状态</small><b>已定位原始页</b></span>
       </div>
       <blockquote>{hit.text || '暂时没有可展示的页面片段。'}</blockquote>
       <a className="provider-open" href={openHref}>打开原始教材核验 <ExternalLink/></a>
     </> : <div className="evidence-missing">
       <CircleAlert/>
-      <div><b>{providerState}</b><small>{status === 'ready' ? '验证已完成，但当前问题没有返回可核验命中。' : '尚无该问题的真实命中结果，不展示推测页码。'}</small></div>
+      <div><b>{providerState}</b><small>{status === 'ready' ? '验证已完成，但当前问题没有返回可核验的定位结果。' : '尚无该问题的真实定位结果，不展示推测页码。'}</small></div>
     </div>}
   </article>;
 }
@@ -4600,7 +4600,7 @@ function DocumentPage() {
       setPairedResult(match);
     }).catch(err => {
       if (err.name !== 'AbortError') setPairedError(requestCode(err) === 'paired_page_missing'
-        ? pairedFocus ? '教师用书中暂未直接命中这处句段。可以缩短关键词，或回到篇目起点查看整体教学建议。' : '暂时没有找到同篇目的对应原页。可以返回教材目录换一页再试。'
+        ? pairedFocus ? '教师用书中暂未直接找到这处句段的对应处理。可以缩短关键词，或回到篇目起点查看整体教学建议。' : '暂时没有找到同篇目的对应原页。可以返回教材目录换一页再试。'
         : '对应材料暂时没有响应，当前原始教材仍可继续阅读。');
     }).finally(() => setPairedLoading(false));
     return () => controller.abort();
@@ -4723,7 +4723,7 @@ function DocumentPage() {
     </div>
     {paired && <section className="panel paired-reading-summary"><article><span>学生此刻看到什么</span><b>{doc === 'textbook' ? title : pairedResult?.title || lessonQuery}</b><p>{doc === 'textbook' ? retrievalText || '请直接核对左侧学生教材原页。' : citationText(pairedResult) || '请直接核对右侧学生教材原页。'}</p></article><i/><article><span>教师此刻参考什么</span><b>{doc === 'teacher-guide' ? title : pairedResult?.title || lessonQuery}</b><p>{doc === 'teacher-guide' ? retrievalText || '请直接核对左侧教师用书原页。' : citationText(pairedResult) || '请直接核对右侧教师用书原页。'}</p></article><small>以上文字只帮助辨认页面；备课结论仍需回到两侧原始教材核验。</small></section>}
     {dualSourceTeachingCard && <section className="panel dual-source-teaching-card">
-      <header><div><span>双源讲解卡</span><h2>一处课文，对齐学生怎么读、教师怎么教</h2><p>只整理当前已经定位的教材和教师用书原页，不调用模型，也不替学生预写结论。</p></div><div><Badge tone={dualSourceTeachingCard.status === 'direct' ? 'green' : 'orange'}>{dualSourceTeachingCard.status === 'direct' ? '双侧原文直接命中' : dualSourceTeachingCard.status === 'partial' ? '一侧原文直接命中' : '已定位相关页面'}</Badge><button type="button" onClick={copyTeachingCard}><ClipboardCheck/>复制讲解卡</button><button type="button" onClick={downloadTeachingCard}><Download/>下载讲解卡</button></div></header>
+      <header><div><span>双源讲解卡</span><h2>一处课文，对齐学生怎么读、教师怎么教</h2><p>只整理当前已经定位的教材和教师用书原页，不调用模型，也不替学生预写结论。</p></div><div><Badge tone={dualSourceTeachingCard.status === 'direct' ? 'green' : 'orange'}>{dualSourceTeachingCard.status === 'direct' ? '双侧原文均已定位' : dualSourceTeachingCard.status === 'partial' ? '一侧原文已定位' : '已定位相关页面'}</Badge><button type="button" onClick={copyTeachingCard}><ClipboardCheck/>复制讲解卡</button><button type="button" onClick={downloadTeachingCard}><Download/>下载讲解卡</button></div></header>
       <div className="dual-source-card-focus"><small>本次聚焦</small><b>{dualSourceTeachingCard.focus}</b>{teachingCardNotice && <span>{teachingCardNotice}</span>}</div>
       <div className="dual-source-card-columns">
         {[['学生先读什么', dualSourceTeachingCard.textbook], ['教师再参考什么', dualSourceTeachingCard.teacherGuide]].map(([label, source]) => <article key={source.documentId}><div><span>{label}</span><b>{docName(source.documentId)} · 第 {source.pdfPage} 页{source.printedPage ? ` · 书页 ${source.printedPage}` : ''}</b><small>{source.section || source.title || '当前篇目'}</small></div><blockquote>{source.excerpt || '当前页面没有可复制片段，请直接打开原始教材核验。'}</blockquote><a href={buildReaderHref({ documentId: source.documentId, page: source.pdfPage, lessonTitle: lessonQuery, focus: pairedFocus, paired: true, returnTo: `${location.pathname}${location.search}` })}>打开这份原始页面 <ExternalLink/></a></article>)}

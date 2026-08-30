@@ -4,7 +4,7 @@ export const UI_COPY = Object.freeze({
   provider: {
     systemGateway: '系统智能（默认）',
     personalKey: '我的智能连接',
-    stableSnapshot: '已核验教材快照'
+    stableSnapshot: '已核验教材固定版'
   },
   ask: {
     loading: '正在锁定篇目与页段，核对课程标准、学生教材和教师用书；初稿完成后还会做一次教材依据与课堂可用性校核…',
@@ -97,8 +97,8 @@ export const UI_COPY = Object.freeze({
     retry: '重试',
     switchBook: '换一本教材',
     status: '查看教材处理状态',
-    snapshot: '使用已核验快照',
-    snapshotBanner: '当前使用：已核验教材快照',
+    snapshot: '使用已核验教材固定版',
+    snapshotBanner: '当前使用：已核验教材固定版',
     snapshotBody: '答案仍可打开原始教材核验，但可能不含最近的教材更新。'
   }
 });
