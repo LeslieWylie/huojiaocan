@@ -3219,7 +3219,7 @@ function LibraryPage() {
   const treesCache = useRef({});
   const treePromises = useRef({});
   const currentDoc = docs.find(item => item.id === doc) || docs[0] || null;
-  const loadDocs = async()=>{ setDocsError(''); try { const data=await request('/documents'); const list=(data.documents||[]).map(normalizeCatalogItem).filter(Boolean); setDocs(list); const selected=list.find(item=>item.id===doc)||list[0]; if (selected && selected.id!==doc) setDoc(selected.id); } catch(error) { setDocs([]); setDocsError('教材目录暂时无法读取，请重试。'); } };
+  const loadDocs = async()=>{ setDocsError(''); try { const data=await request('/documents'); const list=(data.documents||[]).map(normalizeCatalogItem).filter(Boolean); setDocs(list); const selected=list.find(item=>item.id===doc)||list[0]; if (selected && selected.id!==doc) setDoc(selected.id); } catch(error) { setDocs([]); setDocsError(error.status === 401 || String(error.code || '').startsWith('auth_') ? '登录已过期，请重新登录后继续。' : '教材目录暂时无法读取，请重试。'); } };
   useEffect(()=>{loadDocs();},[]);
   const ensureTree = async (docId) => {
     const id = String(docId || '').trim();
@@ -3446,7 +3446,7 @@ function LibraryPage() {
             </button>
             <div className="source-choice-actions"><button type="button" onClick={() => switchDocument(item.id)}>查看目录</button><a href={`/ask/?scope=${encodeURIComponent(item.id)}`}>进入备课问答 <ArrowRight/></a></div>
           </article>;
-        }) : <div className="catalog-empty"><FileSearch/><b>{docsError || "正在读取教材目录…"}</b><button type="button" onClick={loadDocs}>重新读取</button></div>}</div>
+        }) : <div className="catalog-empty"><FileSearch/><b>{docsError || "正在读取教材目录…"}</b><div className="catalog-empty-actions">{docsError === '登录已过期，请重新登录后继续。' ? <a className="primary" href={"/login/?next=" + encodeURIComponent(location.pathname + location.search)}>重新登录</a> : <button type="button" onClick={loadDocs}>重新读取</button>}</div></div>}</div>
       </section>
       <div className="index-toolbar"><form onSubmit={search}>
         <label className="search-scope"><span>搜索范围</span><select value={scope} onChange={e => setScope(e.target.value)}><option value="all">课标、学生教材与教师用书</option><option value="both">学生教材与教师用书</option>{docs.map(item => <option value={item.id} key={item.id}>{item.short}</option>)}</select></label>
