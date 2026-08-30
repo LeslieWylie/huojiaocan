@@ -2,6 +2,9 @@
 // 目标：App.jsx 只保留壳与路由，按页面的视图迁到 views/ 后从这里导入。
 import { buildPdfPageUrl, buildReaderHref } from './reader-target.js';
 import { errorCopy } from './copy.js';
+import { accessToken, ensureSession, refreshSession, sessionExpired } from './auth.js';
+
+export const API = '/api/index';
 
 export const DOC_LABELS = { textbook: '学生教材', 'teacher-guide': '教师教学用书', 'curriculum-standard': '课程标准' };
 
@@ -74,3 +77,39 @@ export function isIndexRecoveryCode(code) {
 }
 
 export function askErrorMessage(error) { return errorCopy(error); }
+
+// ---- HTTP 请求层（原在 App.jsx） ----
+export async function fetchJson(url, options = {}) {
+  const original = { ...options };
+  const isFormData = typeof FormData !== 'undefined' && original.body instanceof FormData;
+  const isBinaryBody = typeof Blob !== 'undefined' && original.body instanceof Blob
+    || typeof ArrayBuffer !== 'undefined' && (original.body instanceof ArrayBuffer || ArrayBuffer.isView(original.body));
+  const body = original.body && !isFormData && !isBinaryBody && typeof original.body !== 'string' ? JSON.stringify(original.body) : original.body;
+  const baseHeaders = { ...(isFormData || isBinaryBody ? {} : { 'Content-Type': 'application/json' }), ...(original.headers || {}) };
+  let token = accessToken();
+  if (token && sessionExpired()) {
+    await ensureSession();
+    token = accessToken();
+  }
+  const send = currentToken => {
+    const headers = { ...baseHeaders };
+    if (currentToken) headers.Authorization = `Bearer ${currentToken}`;
+    return fetch(url, { ...original, headers, body });
+  };
+  let response = await send(token);
+  if (response.status === 401 && token) {
+    const refreshed = await refreshSession();
+    if (refreshed?.access_token) response = await send(refreshed.access_token);
+  }
+  const payload = response.status === 204 ? {} : await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(payload.error || payload.detail || payload.message || `request_failed_${response.status}`);
+    error.code = payload.error || payload.code || (response.status === 401 ? 'auth_invalid' : '');
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
+export async function request(path, options = {}) { return fetchJson(`${API}${path}`, options); }
+export async function rootRequest(path, options = {}) { return fetchJson(path, options); }
