@@ -83,3 +83,23 @@
 | （教材库认证失败）重试死循环 | 401/auth_* → "登录已过期，请重新登录" + 重新登录按钮 |
 
 保留：产品名"共备快照/发布共备快照"（教师可理解的共享固定版本）；运维页（AI 设置/导入教材/处理进度/页面校正/质量检查）允许 "DeepSeek 密钥、SHA-256、PDF 文件、模型名"。
+
+## 八、结构变更交接（2026-08-30 收官更新）
+
+### 新目录结构（DSH 已完成 App.jsx 全量拆分）
+- `src/App.jsx`（89 行）：**仅路由壳 + 各页 React.lazy 动态导入**；`ROUTES` 在 `app-core.js`
+- `src/app-core.js`：工具/常量/HTTP 层/ROUTES（含 lucide 图标）
+- `src/ui-kit.jsx / ui-board.jsx / ui-panels.jsx`：展示层共享组件
+- `src/views/*.jsx`（18 个文件）：每页/每簇一个模块（pitch/decision/auth/unit/library/document/cards/ask/lesson×3/g4/g5/inspect/shell）
+- `src/test-app-source.js`：测试安全网（源码守卫断言拼接所有 src 前端源码）
+
+### 代码规范（请 Codex 同步遵守）
+1. **修改页面前先看 `src/views/`**：不要在 App.jsx 加页面逻辑；新页面 → 新建 `views/xxx.jsx` + `export function` + App.jsx 补 lazy 导入。
+2. **文案**：教师端中文字符串仍以 `copy.js` 的 UI_COPY 为准；涉及技术词参见上文术语映射表。
+3. **不要`git reset --hard`/`git checkout -- .`**（已重复约定；会丢双方未提交成果；DSH 每步已提交并推 origin）。
+4. **performance 基线**：主包 212KB(gzip67KB) + 每页 lazy chunk；不要把大依赖写进 App.jsx 顶部静态导入。
+
+### 当前基线
+- `7dc1d4b`（已推 origin）：App.jsx 89 行 + 懒加载 + 全部话术/UX/移动端/可访问性修复。
+- 性能实测（本地）：DCL 26-38ms / FCP 60-76ms / CLS 0。
+- 全量测试 531/532（唯一失败 = 你的 `api/drafts.test.js:1237`，等你收尾）。

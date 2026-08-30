@@ -3,6 +3,7 @@
 import { buildPdfPageUrl, buildReaderHref } from './reader-target.js';
 import { errorCopy } from './copy.js';
 import { useEffect, useState } from 'react';
+import { Activity, Archive, BookOpen, ClipboardCheck, FileCheck2, FileSearch, FileText, Gauge, GitCompareArrows, History, Layers3, Library, MessageCircle, Microscope, Network, PanelTop, Play, Route, Share2, ShieldCheck, Sparkles, Target, Upload, X } from 'lucide-react';
 import { accessToken, ensureSession, getSession, refreshSession, sessionExpired, subscribeAuth } from './auth.js';
 
 export const API = '/api/index';
@@ -529,3 +530,36 @@ export function readPulseRecovery(userId, draftId) {
   try { const value = JSON.parse(localStorage.getItem(pulseRecoveryKey(userId, draftId)) || 'null'); return value?.userId === userId && value?.draftId === draftId ? value : null; } catch { return null; }
 }
 export function clearPulseRecovery(userId, draftId) { try { localStorage.removeItem(pulseRecoveryKey(userId, draftId)); } catch {} }
+export const ROUTES = [
+  ['dashboard', '/', Route, '教学任务'],
+  ['guide', '/guide/', Play, '备课引导'],
+  ['unit', '/unit/', Network, '单元接力'],
+  ['cards', '/cards/', Layers3, '一课三卡'],
+  ['slides', '/slides/', PanelTop, '课堂课件'],
+  ['homework', '/homework/', ClipboardCheck, '分层作业'],
+  ['marking', '/marking/', FileCheck2, '匿名批改'],
+  ['rehearsal', '/rehearsal/', Route, '问题链预演'],
+  ['pulse', '/pulse/', Gauge, '课前学情摸底'],
+  ['worksheet', '/worksheet/', FileText, '双页课堂任务单'],
+  ['alignment', '/alignment/', Target, '课标对齐'],
+  ['learning', '/learning/', ClipboardCheck, '作业回流'],
+  ['deliberation', '/deliberation/', Route, '备课取舍'],
+  ['study', '/study/', Microscope, '一课一研'],
+  ['compare', '/compare/', GitCompareArrows, '同课异构'],
+  ['research', '/research/', FileText, '教研问题簿'],
+  ['observation', '/observation/', ClipboardCheck, '听评课观察单'],
+  ['assets', '/assets/', Archive, '教研资产'],
+  ['share', '/share/', Share2, '教研共备'],
+  ['reflection', '/reflection/', History, '课后复盘'],
+  ['library', '/library/', Library, '教材库'],
+  ['ask', '/ask/', MessageCircle, '备课问答'],
+  ['ingest', '/ingest/', Upload, '导入教材'],
+  ['jobs', '/jobs/', Activity, '处理进度'],
+  ['inspect', '/inspect/', FileSearch, '页面校正'],
+  ['validation', '/validation/', ClipboardCheck, '质量检查'],
+  ['document', '/document/', BookOpen, '教材原页核验'],
+  ['login', '/login/', ShieldCheck, '账号登录'],
+  ['settings', '/settings/', ShieldCheck, 'AI 设置'],
+  ['decision', '/decision/', Sparkles, '教学决策'],
+  ['pitch', '/pitch/', Play, '使用示例']
+];
