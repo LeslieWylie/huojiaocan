@@ -50,6 +50,7 @@ import { lessonTitleForDraft } from '../shared/lesson-identity.js';
 
 
 
+import { PageErrorBoundary } from './error-boundary.jsx';
 // 路由级按需加载（拆分后 pages 视图均懒加载）
 const Decision = lazy(() => import('./views/decision-page.jsx').then(m => ({ default: m.Decision })));
 const Pitch = lazy(() => import('./views/pitch-page.jsx').then(m => ({ default: m.Pitch })));
@@ -100,7 +101,7 @@ function App(){
     if (recovery?.next) query.set('next', recovery.next);
     location.replace(`/login/?${query}`);
   }, [active, callback]);
-  const renderPage = activePage => <Suspense fallback={<div className="page-loading"><Activity/>正在打开…</div>}>{activePage}</Suspense>;
+  const renderPage = activePage => <Suspense fallback={<div className="page-loading"><Activity/>正在打开…</div>}><PageErrorBoundary>{activePage}</PageErrorBoundary></Suspense>;
   const pages={dashboard:<Dashboard/>,guide:<GuidancePage/>,decision:<Decision/>,unit:<Unit/>,cards:<Cards/>,slides:<TeachingSlidesPage/>,homework:<LayeredHomeworkPage/>,marking:<AnonymousMarkingPage/>,rehearsal:<RehearsalPage/>,pulse:<PreClassPulsePage/>,worksheet:<ClassroomWorksheetPage/>,alignment:<CurriculumAlignmentPage/>,learning:<LearningEvidencePage/>,deliberation:<DeliberationPage/>,reflection:<ReflectionPage/>,study:<LessonStudyPage/>,compare:<SameLessonComparisonPage/>,research:<ResearchLedgerPage/>,observation:<ObservationProtocolPage/>,assets:<AssetsPage/>,share:<TeachingSharePage/>,pitch:<Pitch/>,library:<LibraryPage/>,ask:<AskPage/>,ingest:<IngestPage/>,jobs:<JobsPage/>,inspect:<InspectPage/>,validation:<ValidationPage/>,document:<DocumentPage/>,login:<LoginPage callback={callback}/>,settings:<SettingsPage/>};
   if (active === 'login' || active === 'settings') return <Layout active={active}>{renderPage(pages[active])}</Layout>;
   return <Layout active={active}>{renderPage(pages[active] || <Dashboard/>)}</Layout>;
