@@ -150,6 +150,42 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       const payload = JSON.parse(body || '{}');
       const model = payload.model || 'mock-model';
+      const rawPayload = JSON.stringify(payload.messages || payload);
+      const cardMode = rawPayload.includes('板书卡生成 3—6') || rawPayload.includes('只(?:重新)?生成(?:本)?卡');
+      if (cardMode) {
+        const answer = {
+          lesson: { title: '《我爱这土地》', coreQuestion: '怎样教《我爱这土地》？' },
+          answer: {
+            summary: '三卡围绕“意象群—象征—深沉的爱”的主线：先板书文本抓手，再按可观察任务推进朗读、比较与小结。',
+            evidenceRefs: ['E1']
+          },
+          threeCardSuggestions: {
+            board: [
+              { text: '鸟 → 土地 → 河流 → 风 → 黎明', evidenceRefs: ['E1'] },
+              { text: '意象群 → 象征 → 深沉的爱', evidenceRefs: ['E1'] },
+              { text: '嘶哑歌唱 → 至死不渝', evidenceRefs: ['E1'] },
+              { text: '删改比较 → 直抒胸臆效果', evidenceRefs: ['E1'] },
+              { text: '为什么我的眼里常含泪水', evidenceRefs: ['E1'] }
+            ],
+            question: [
+              { text: '主问：朗读第一节，圈画“鸟、土地、河流、风、黎明”五种意象。｜追问：这些意象共同寄托了诗人怎样的情感？｜预期学生回应：鸟的嘶哑歌唱与土地的风雨形成对照，表现出诗人对土地深沉的爱。', evidenceRefs: ['E1'] },
+              { text: '主问：第二节“为什么我的眼里常含泪水”放在最后，有什么作用？｜追问：删去第二节再朗读，情感变化在哪里？｜预期学生回应：直接抒发对土地的爱，结尾让情感更有冲击力。', evidenceRefs: ['E1'] },
+              { text: '主问：比较“连羽毛也腐烂在土地里”与“歌唱”，你发现什么？｜追问：诗人为什么要这样写？｜预期学生回应：用生命守护土地，表达至死不渝的感情。', evidenceRefs: ['E1'] },
+              { text: '主问：诗歌第一节与第二节情感有什么不同？｜追问：两节之间靠哪一句衔接？｜预期学生回应：第一节以描写为主，第二节转为直接抒情，“我的眼里常含泪水”承上启下。', evidenceRefs: ['E1'] }
+            ],
+            assessment: [
+              { text: '任务：从第一节找出三种以上意象并说明其象征。｜可观察表现：学生能说出鸟、土地、河流、风、黎明并给出原文依据。｜判断标准：能结合原词句说明两层含义为达成；只列名称需要支架。', evidenceRefs: ['E1'] },
+              { text: '任务：朗读第二节，用一句话说出感情变化。｜可观察表现：学生朗读重音、停顿与情感变化可听可辨。｜判断标准：能抓住“常含泪水—爱得深沉”为达成。', evidenceRefs: ['E1'] },
+              { text: '任务：比较删改前后的朗读效果，说出原因。｜可观察表现：学生说出直抒胸臆与含蓄表达的不同。｜判断标准：能引用诗句佐证为达成。', evidenceRefs: ['E1'] }
+            ]
+          }
+        };
+        return send(res, 200, {
+          id: 'mock-completion-cards', object: 'chat.completion', created: Math.floor(Date.now() / 1000), model,
+          choices: [{ index: 0, message: { role: 'assistant', content: JSON.stringify(answer) }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 60, completion_tokens: 320, total_tokens: 380 }
+        });
+      }
       const answer = {
         answer: {
           summary: '围绕《我爱这土地》，先让学生抓住“鸟—土地—河流—风—黎明”的意象群，再通过删改比较体会第二节直接抒情的作用；本课建议两课时，第一课时品意象，第二课时悟情感并在朗读中落实。',

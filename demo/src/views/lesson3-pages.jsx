@@ -1,6 +1,6 @@
 // 一课一研/同课异构/课件/分层作业页（从 App.jsx 迁出）
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { lessonStudyRecoveryKey } from './lesson2-pages.jsx';
+import { lessonStudyRecoveryKey, STUDY_DECISIONS } from './lesson2-pages.jsx';
 import { Activity, Archive, ArrowLeft, ArrowRight, Check, CheckCircle2, CircleAlert, ClipboardCheck, Download, Eye, FileCheck2, GitCompareArrows, History, Maximize2, Microscope, PanelTop, RefreshCw, Share2, ShieldCheck } from 'lucide-react';
 import { Badge } from '../ui-kit.jsx';
 import { CardSourceList } from '../ui-board.jsx';

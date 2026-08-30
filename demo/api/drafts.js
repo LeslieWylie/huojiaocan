@@ -423,7 +423,7 @@ async function assertCitationDocumentsAccessible(user, citations) {
 }
 
 function citationComparableText(value) {
-  return String(value || '').normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+  return String(value || '').normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}\uFFFD]+/gu, '');
 }
 
 function trustedPageText(value = {}) {

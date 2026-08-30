@@ -14,7 +14,7 @@ const root = join(fileURLToPath(import.meta.url), '..', '..', 'src');
 const GLOBALS = new Set(('document window location history localStorage sessionStorage fetch '
   + 'URL URLSearchParams File Blob FormData AbortController setTimeout clearTimeout '
   + 'setInterval clearInterval requestAnimationFrame crypto atob btoa navigator performance '
-  + 'JSON Math Date String Number Boolean Array Object RegExp Error TypeError Symbol Map Set '
+  + 'JSON Math Date String Number Boolean Array Object RegExp Error TypeError ArrayBuffer Symbol Map Set '
   + 'Promise Intl console TextEncoder TextDecoder Event MouseEvent CustomEvent EventTarget '
   + 'Request Response Headers DOMParser Image HTMLElement SVGElement ResizeObserver '
   + 'IntersectionObserver MutationObserver matchMedia FileReader getComputedStyle __DEV__ '
@@ -161,6 +161,7 @@ for (const path of walk(root)) {
   for (const match of source.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(/g)) used.add(match[1]);
   for (const match of source.matchAll(/<([A-Z][\w$]*)[\s>/]/g)) used.add(match[1]);
   for (const match of source.matchAll(/icon=\{\s*([A-Z][\w$]*)\s*\}/g)) used.add(match[1]);
+  for (const match of source.matchAll(/(?<![.\w$])([A-Z][\w$]{2,})\s*\./g)) used.add(match[1]);
   const unknown = [...used].filter(name => name.length > 2 && !names.has(name)
     && !GLOBALS.has(name) && !KEYWORDS.has(name) && !CLASS_METHODS.has(name));
   if (unknown.length) issues.push(`${relative(root, path)} → ${unknown.sort().join(', ')}`);
