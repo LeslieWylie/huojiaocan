@@ -2,14 +2,14 @@
 // drift back into infrastructure terminology as the product grows.
 export const UI_COPY = Object.freeze({
   provider: {
-    systemGateway: '系统网关（默认）',
-    personalKey: '个人密钥',
+    systemGateway: '系统智能（默认）',
+    personalKey: '我的智能连接',
     stableSnapshot: '已核验教材快照'
   },
   ask: {
     loading: '正在锁定篇目与页段，核对课程标准、学生教材和教师用书；初稿完成后还会做一次教材依据与课堂可用性校核…',
     ready: '三类教学材料和系统智能服务已准备好。输入篇目或课堂问题，先找可核验依据，再组织课堂方案。',
-    personalReady: '个人 DeepSeek 连接已准备好。系统会沿用当前篇目和材料范围，并把引用重新绑定到真实 PDF 页面。',
+    personalReady: '我的智能连接 连接已准备好。系统会沿用当前篇目和材料范围，并把引用重新绑定到真实 PDF 页面。',
     loginReady: '三类教学材料和系统智能服务已准备好。登录后可以连续提问、保存方案并在下次备课时继续编辑。',
     noProvider: '当前没有可用的 AI 服务，请稍后重试或联系部署人员。',
     title: '先把这节课讲清楚，',
@@ -27,16 +27,16 @@ export const UI_COPY = Object.freeze({
     email_not_confirmed: '邮箱还没有完成验证，请先点击验证邮件。',
     weak_password: '密码强度不足，请使用至少 8 位密码。',
     auth_not_configured: '账号服务尚未配置，请联系部署人员。',
-    key_not_found: '当前没有可用的智能生成服务。请稍后重试，或在“AI 设置”中添加并测试个人 DeepSeek 密钥。',
+    key_not_found: '当前没有可用的智能生成服务。请稍后重试，或在“AI 设置”中添加并测试我的智能连接 密钥。',
     key_invalid: '请输入有效的 DeepSeek 密钥。',
-    deepseek_unauthorized: '个人 DeepSeek 密钥无效，请重新测试或更换。',
-    deepseek_forbidden: '个人 DeepSeek 密钥未获授权，请检查账号权限。',
-    deepseek_rate_limited: '个人 DeepSeek 请求过于频繁，请稍后重试。',
-    deepseek_timeout: '个人 DeepSeek 响应超时，请稍后重试。',
-    deepseek_unavailable: '个人 DeepSeek 暂时不可用，请稍后重试。',
-    deepseek_invalid_response: '个人 DeepSeek 返回内容无法解析，请重试。',
-    deepseek_invalid_request: '个人 DeepSeek 请求参数无效，请检查模型设置。',
-    deepseek_request_failed: '个人 DeepSeek 连接失败。系统 AI 仍可使用，请切换为“系统网关（默认）”后重试。',
+    deepseek_unauthorized: '我的智能连接 密钥无效，请重新测试或更换。',
+    deepseek_forbidden: '我的智能连接 密钥未获授权，请检查账号权限。',
+    deepseek_rate_limited: '我的智能连接 请求过于频繁，请稍后重试。',
+    deepseek_timeout: '我的智能连接 响应超时，请稍后重试。',
+    deepseek_unavailable: '我的智能连接 暂时不可用，请稍后重试。',
+    deepseek_invalid_response: '我的智能连接 返回内容无法解析，请重试。',
+    deepseek_invalid_request: '我的智能连接 请求参数无效，请检查模型设置。',
+    deepseek_request_failed: '我的智能连接 连接失败。系统 AI 仍可使用，请切换为“系统智能（默认）”后重试。',
     gateway_not_configured: '系统 AI 尚未配置，暂时无法生成方案，请联系部署人员。',
     gateway_invalid_url: '系统 AI 地址无效，暂时无法生成方案，请联系部署人员。',
     gateway_unauthorized: '系统 AI 的连接凭据暂时不可用。当前定稿和已保存内容都已保留，请稍后重试生成。',
@@ -99,7 +99,7 @@ export const UI_COPY = Object.freeze({
     status: '查看教材处理状态',
     snapshot: '使用已核验快照',
     snapshotBanner: '当前使用：已核验教材快照',
-    snapshotBody: '答案仍可打开原始 PDF 核验，但可能不含最近的教材更新。'
+    snapshotBody: '答案仍可打开原始教材核验，但可能不含最近的教材更新。'
   }
 });
 

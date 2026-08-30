@@ -59,8 +59,8 @@ test('paired reading switches only between the student textbook and teacher guid
   assert.equal(pairedDocumentId('textbook'), 'teacher-guide');
   assert.equal(pairedDocumentId('teacher_guide'), 'textbook');
   assert.equal(pairedDocumentId('private-upload'), '');
-  assert.equal(pairedLessonQuery({ explicitTitle: '', sectionPath: ['第三单元 · 古诗文', '11 岳阳楼记'], pageTitle: 'PDF 第 48 页' }), '11 岳阳楼记');
-  assert.equal(pairedLessonQuery({ sectionPath: ['目录'], pageTitle: 'PDF 第 1 页' }), '');
+  assert.equal(pairedLessonQuery({ explicitTitle: '', sectionPath: ['第三单元 · 古诗文', '11 岳阳楼记'], pageTitle: '第 48 页' }), '11 岳阳楼记');
+  assert.equal(pairedLessonQuery({ sectionPath: ['目录'], pageTitle: '第 1 页' }), '');
   assert.match(buildReaderHref({ documentId: 'textbook', page: 48, lessonTitle: '岳阳楼记', paired: true }), /paired=1/u);
 });
 

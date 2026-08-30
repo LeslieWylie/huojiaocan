@@ -125,7 +125,7 @@ export function pairedLessonQuery({ explicitTitle = '', sectionPath = [], pageTi
   const candidates = [explicitTitle, ...(Array.isArray(sectionPath) ? [...sectionPath].reverse() : []), pageTitle];
   for (const value of candidates) {
     const text = String(value || '').trim().replace(/^(第[一二三四五六七八九十\d]+单元[·\s]*)/u, '');
-    if (!text || /^PDF\s*第?\s*\d+\s*页$/iu.test(text) || /目录|封面|版权页/u.test(text)) continue;
+    if (!text || /^(?:PDF\s*)?第\s*\d+\s*页$/iu.test(text) || /目录|封面|版权页/u.test(text)) continue;
     return text.slice(0, 80);
   }
   return '';
