@@ -8,6 +8,11 @@ import { cacheDraftForRecovery, rememberAuthReturn, askErrorMessage, cardEditGui
 import { addClassroomMoment, CLASSROOM_STAGE_LABELS, emptyClassroomRun, normalizeClassroomRun, removeClassroomMoment, resolveClassroomRecovery, setClassroomStageOutcome } from '../../shared/classroom-run.js';
 import { buildBoardWritingPlan } from '../../shared/board-writing-plan.js';
 import { buildTeachingBrief } from '../../shared/teaching-brief.js';
+import { buildTeachingEvidenceChain } from '../../shared/teaching-evidence-chain.js';
+import { CLASSROOM_PACE_SIGNALS } from '../../shared/classroom-adaptation.js';
+import { lessonTitleForDraft } from '../../shared/lesson-identity.js';
+import { normalizeQuestionRehearsal, questionRehearsalIsStale } from '../../shared/question-rehearsal.js';
+import { buildSubstituteTeachingPack } from '../../shared/substitute-teaching-pack.js';
 import { applyPlanForm, cardsForAskDraft, deriveTeacherDraftState, isTeacherConfirmed, planFormFromDraft, readDraftRecovery } from '../teacher-finalization.js';
 import { analyzeTeachingPlanQuality } from '../lesson-quality.js';
 import { classroomAdaptationAdvice } from '../../shared/classroom-adaptation.js';
