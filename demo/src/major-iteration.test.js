@@ -485,7 +485,7 @@ test('依据夹升级为草稿级持久化，并支持整场备课记录导出',
   assert.match(appSource, /draft\.answer\?\.evidenceShelf/u);
   assert.match(appSource, /const exportConversation = \(\) =>/u);
   assert.match(appSource, /导出记录/u);
-  assert.match(appSource, /其他备课记录（\{recentDrafts\.length\}）/u);
+  assert.match(appSource, /备课记录（\{recentDrafts\.length \+ visibleLocalSessions\.length\}）/u);
   assert.match(appSource, /data\.drafts\.slice\(0, 50\)/u);
   assert.match(appSource, /回答已经生成，但暂时没有保存到账号/u);
   assert.match(appSource, /const recoveredMessages = \[\.\.\.messages, pendingTurn\]/u);
