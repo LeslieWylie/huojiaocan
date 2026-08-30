@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { accessToken, authOwnersConflict, canPersistAuthOwner, clearAuthRecovery, consumeAuthCallback, ensureSession, getSession, readAuthRecovery, refreshSession, resendVerification, safeAuthReturnPath, saveAuthRecovery, sessionExpired, signIn, signOut, signUp, subscribeAuth } from './auth.js';
 import { errorCopy, UI_COPY } from './copy.js';
+import { askErrorMessage, canonicalDocumentId, citationPage, citationLink, citationText, currentPageReturn, DOC_LABELS, docName, isIndexRecoveryCode, pageText, pageTitle, pdfPageUrl, queryParams, requestCode, routeId, safeDownloadStem, statusLabel, terminalJob } from './app-core.js';
 import { normalizeAskAction } from './ask-actions.js';
 import { buildAskContext, buildConversationHistory } from './conversation-context.js';
 import { clearConversationSnapshot, readConversationSnapshot, readRecentConversationSnapshots, saveConversationSnapshot } from './conversation-recovery.js';
@@ -44,7 +45,6 @@ import { buildSubstituteTeachingPack } from '../shared/substitute-teaching-pack.
 import { lessonTitleForDraft } from '../shared/lesson-identity.js';
 
 const API = '/api/index';
-const DOC_LABELS = { textbook: '学生教材', 'teacher-guide': '教师教学用书', 'curriculum-standard': '课程标准' };
 const ROUTES = [
   ['dashboard', '/', Route, '教学任务'],
   ['guide', '/guide/', Play, '备课引导'],
@@ -175,61 +175,10 @@ function ingestErrorMessage(code) {
     indexing_failed: '文件已保存，但索引没有完成；请查看任务状态后重试。'
   })[code] || code || '未知错误';
 }
-function queryParams() { return new URLSearchParams(location.search); }
-function canonicalDocumentId(value) {
-  const raw = String(value || '').trim();
-  const id = raw.toLowerCase();
-  if (id === 'teacher_guide' || id === 'guide') return 'teacher-guide';
-  if (['curriculum_standard', 'curriculum', 'standard', 'course-standard'].includes(id)) return 'curriculum-standard';
-  return raw;
-}
-function pdfPageUrl(value, page) { return buildPdfPageUrl(value, page); }
-function terminalJob(status) { return ['ready', 'partial', 'failed', 'completed', 'succeeded', 'cancelled'].includes(String(status || '').toLowerCase()); }
-function statusLabel(status) {
-  return ({ queued: '等待处理', pending: '等待处理', running: '正在处理', processing: '正在处理', ready: '已准备好，可搜索', partial: '已准备好，少量页面待核对', failed: '处理失败', succeeded: '已完成', completed: '已完成', not_run: '尚未检查', unknown: '尚未检查' })[String(status || '').toLowerCase()] || '尚未检查';
-}
-function pageText(page, source) {
-  if (!page) return '';
-  if (source === 'native') return page.nativeText || page.native_text || '';
-  if (source === 'ocr') return page.ocrText || page.ocr_text || '';
-  return page.retrievalText || page.retrieval_text || page.text || '';
-}
-function pageTitle(page) {
-  return page?.pageTitle || page?.page_title || page?.title || '正在读取页面';
-}
 function Logo() { return <div className="logo"><span className="logo-mark"><BookOpen size={21}/></span><span><b>活教参</b><small>从教材依据到课堂行动</small></span></div>; }
 function Badge({ children, tone = 'neutral' }) { return <span className={`badge ${tone}`}>{children}</span>; }
 function Stat({ icon: Icon, label, value, note, tone = '' }) { return <article className={`stat-card ${tone}`}><div className="stat-icon"><Icon/></div><div><span>{label}</span><strong>{value}</strong><small>{note}</small></div></article>; }
 function SectionHead({ icon: Icon, eyebrow, title, note, action }) { return <div className="section-head"><div className="section-title"><span className="section-icon"><Icon/></span><div><small>{eyebrow}</small><h2>{title}</h2>{note && <p>{note}</p>}</div></div>{action}</div>; }
-function routeId() { return document.body.dataset.route || 'dashboard'; }
-function currentPageReturn() { return `${location.pathname}${location.search}${location.hash}`; }
-function docName(id) { return DOC_LABELS[canonicalDocumentId(id)] || id || '教材'; }
-function citationPage(c) {
-  const value = Number(c?.pdfPage ?? c?.pageNumber ?? c?.page ?? 0);
-  return Number.isInteger(value) && value > 0 ? value : null;
-}
-function citationText(c) { return c?.text || c?.quote || c?.snippet || ''; }
-function safeDownloadStem(value, fallback = '课堂设计') {
-  const text = String(value || '').replace(/[《》]/gu, '').replace(/[\\/:*?"<>|]/gu, '-').replace(/\s+/gu, ' ').trim();
-  return (text || fallback).slice(0, 48);
-}
-function citationLink(c, returnTo = '') {
-  const page = citationPage(c);
-  if (!page || !c?.documentId) return '';
-  return buildReaderHref({
-    documentId: canonicalDocumentId(c.documentId),
-    page,
-    nodeId: c.nodeId || c.node_id,
-    lessonTitle: c.lessonTitle || c.lesson_title || c.title,
-    returnTo,
-    scope: c.scope
-  });
-}
-function requestCode(error) { return String(error?.code || error?.message || '').trim(); }
-function isIndexRecoveryCode(code) {
-  return ['pageindex_unavailable', 'pageindex_timeout', 'pageindex_rate_limited', 'pageindex_invalid_response', 'pageindex_request_failed', 'index_provider_error'].includes(code);
-}
-function askErrorMessage(error) { return errorCopy(error); }
 function cacheDraftForRecovery(userId, id, draft, cards = draft?.cards) {
   try { writeDraftRecovery(localStorage, userId, id, draft, cards); } catch {}
 }
