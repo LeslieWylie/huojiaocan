@@ -468,3 +468,12 @@ export function searchResultPage(result = {}) {
   result = result && typeof result === 'object' ? result : {};
   return pageNumber(result.pdfPage ?? result.pdf_page ?? result.pageNumber ?? result.page ?? result.viewer?.page ?? result.viewer?.page_number);
 }
+
+export function cacheDraftForRecovery(userId, id, draft, cards = draft?.cards) {
+  try { writeDraftRecovery(localStorage, userId, id, draft, cards); } catch {}
+}
+
+export function rememberAuthReturn(extra = {}) {
+  saveAuthRecovery({ next: `${location.pathname}${location.search}`, ...extra, savedAt: new Date().toISOString() });
+  return `/login/?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
+}

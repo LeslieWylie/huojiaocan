@@ -151,16 +151,11 @@ function ingestErrorMessage(code) {
     indexing_failed: '文件已保存，但索引没有完成；请查看任务状态后重试。'
   })[code] || code || '未知错误';
 }
-function cacheDraftForRecovery(userId, id, draft, cards = draft?.cards) {
-  try { writeDraftRecovery(localStorage, userId, id, draft, cards); } catch {}
-}
+
 function readDraftRecovery(userId, id) {
   try { return readOwnedDraftRecovery(localStorage, userId, id); } catch { return null; }
 }
-function rememberAuthReturn(extra = {}) {
-  saveAuthRecovery({ next: `${location.pathname}${location.search}`, ...extra, savedAt: new Date().toISOString() });
-  return `/login/?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
-}
+
 
 
 function draftRecoverySnapshot(draft, cards = draft?.cards) {

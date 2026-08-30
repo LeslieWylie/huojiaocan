@@ -4,9 +4,10 @@ import { Activity, Archive, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronD
 import { Badge } from '../ui-kit.jsx';
 import { AssetCoverage, PlanQualitySummary, sourceCoverageLabel } from '../ui-panels.jsx';
 import { CardSourceList, MindMapBoard, PeriodPlanner, TeachingBrief, TeachingEvidenceChain } from '../ui-board.jsx';
-import { askErrorMessage, cardEditGuidance, cardItemNeedsDetail, citationPage, clearClassroomRecovery, docName, feedbackAdviceFromForm, feedbackStorageValue, normalizeFeedbackForm, queryParams, readClassroomRecovery, requestCode, rootRequest, safeDownloadStem, sourceTypeLabel, uniqueCitations, useAuthSession, withBoardPlan, writeClassroomRecovery } from '../app-core.js';
+import { cacheDraftForRecovery, rememberAuthReturn, askErrorMessage, cardEditGuidance, cardItemNeedsDetail, citationPage, clearClassroomRecovery, docName, feedbackAdviceFromForm, feedbackStorageValue, normalizeFeedbackForm, queryParams, readClassroomRecovery, requestCode, rootRequest, safeDownloadStem, sourceTypeLabel, uniqueCitations, useAuthSession, withBoardPlan, writeClassroomRecovery } from '../app-core.js';
 import { addClassroomMoment, CLASSROOM_STAGE_LABELS, emptyClassroomRun, normalizeClassroomRun, removeClassroomMoment, resolveClassroomRecovery, setClassroomStageOutcome } from '../../shared/classroom-run.js';
 import { buildBoardWritingPlan } from '../../shared/board-writing-plan.js';
+import { buildTeachingBrief } from '../../shared/teaching-brief.js';
 import { applyPlanForm, cardsForAskDraft, deriveTeacherDraftState, isTeacherConfirmed, planFormFromDraft, readDraftRecovery } from '../teacher-finalization.js';
 import { analyzeTeachingPlanQuality } from '../lesson-quality.js';
 import { classroomAdaptationAdvice } from '../../shared/classroom-adaptation.js';
