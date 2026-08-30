@@ -20,6 +20,7 @@ import { DocumentPage } from './views/document-page.jsx';
 import { ProviderResult } from './views/document-page.jsx';
 import { Cards } from './views/cards-page.jsx';
 import { AskPage } from './views/ask-page.jsx';
+import { ClassroomWorksheetPage, LearningEvidencePage, PreClassPulsePage, RehearsalPage } from './views/lesson-pages.jsx';
 import { CurriculumAlignmentPage, IngestPage, InspectPage, JobsPage, ValidationPage } from './views/inspect-pages.jsx';
 import { CardSourceList, MindMapBoard, PeriodPlanner, TeachingBrief, TeachingEvidenceChain } from './ui-board.jsx';
 import { normalizeAskAction } from './ask-actions.js';
@@ -338,11 +339,6 @@ function RehearsalPage() {
   </div>;
 }
 
-function pulseRecoveryKey(userId, draftId) { return `huojiaocan:pulse:${userId}:${draftId}`; }
-function readPulseRecovery(userId, draftId) {
-  try { const value = JSON.parse(localStorage.getItem(pulseRecoveryKey(userId, draftId)) || 'null'); return value?.userId === userId && value?.draftId === draftId ? value : null; } catch { return null; }
-}
-function clearPulseRecovery(userId, draftId) { try { localStorage.removeItem(pulseRecoveryKey(userId, draftId)); } catch {} }
 
 function PreClassPulsePage() {
   const params = useMemo(() => queryParams(), []);
