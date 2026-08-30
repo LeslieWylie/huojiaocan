@@ -1,0 +1,27 @@
+{
+  "id": "textbook",
+  "title": "义务教育教科书 语文 九年级上册",
+  "documentType": "textbook",
+  "extractionPolicy": "auto",
+  "originalFilename": "九年级语文上册-学生教材.pdf",
+  "originalObjectKey": "materials/九年级语文上册-学生教材.pdf",
+  "mimeType": "application/pdf",
+  "byteSize": null,
+  "sha256": null,
+  "pageCount": 168,
+  "pdfUrl": "/materials/九年级语文上册-学生教材.pdf",
+  "pdfStatus": "ready",
+  "indexStatus": "ready",
+  "metadata": {
+    "seeded": true,
+    "seedProvider": "prebuilt-page-text",
+    "plainTextFile": "text/textbook.txt",
+    "plainTextPagesFile": "text/textbook-pages.jsonl",
+    "plainTextFormat": "page-delimited-v1",
+    "plainTextSource": "pdftotext-layout-native",
+    "plainTextSha256": "48ccb1d39c5e855870ad4b4fd3b8f5f455ada924f0861913bfbc2dcfd23bf28f",
+    "plainTextGeneratedAt": "2026-08-12T12:12:38.161813+00:00"
+  },
+  "createdAt": "2026-08-11T19:34:32.015448+00:00",
+  "updatedAt": "2026-08-11T19:34:32.015448+00:00"
+}

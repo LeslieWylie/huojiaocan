@@ -1,0 +1,1 @@
+"""Huojiaocan PDF index service."""

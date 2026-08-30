@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
+<defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#123e38"/><stop offset="1" stop-color="#2c7667"/></linearGradient></defs>
+<rect width="1280" height="720" fill="url(#g)"/><circle cx="1090" cy="250" r="250" fill="none" stroke="#7ac5aa" stroke-opacity=".18" stroke-width="2"/><circle cx="1090" cy="250" r="180" fill="none" stroke="#f1c36a" stroke-opacity=".18" stroke-width="2"/>
+<text x="90" y="115" fill="#f2c66c" font-family="PingFang SC, sans-serif" font-size="24" letter-spacing="8">活教参 · 使用引导</text>
+<text x="90" y="280" fill="#fff8e8" font-family="PingFang SC, STSong, serif" font-size="74" font-weight="600">从教材到课堂</text>
+<text x="90" y="350" fill="#d8eee6" font-family="PingFang SC, sans-serif" font-size="30">选篇目 · 读教参 · 核原文 · 连续追问 · 做三卡</text>
+<rect x="90" y="490" width="290" height="62" rx="31" fill="#fff8e8" fill-opacity=".12" stroke="#f2c66c"/><text x="235" y="530" text-anchor="middle" fill="#fff8e8" font-family="PingFang SC" font-size="25">三分钟走完一遍</text>
+</svg>

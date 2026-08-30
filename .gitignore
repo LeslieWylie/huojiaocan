@@ -1,0 +1,24 @@
+.DS_Store
+.codex/
+.wrangler/
+
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/dist/
+**/.vercel/
+
+**/.env
+**/.env.*
+!**/.env.example
+*.log
+
+tmp/
+output/
+pageindex_session.txt
+shared_conversation.txt
+
+# Local upstream clone; the application uses the curated copy under
+# services/pageindex-service/pageindex_vendor instead.
+services/pageindex/vendor/PageIndex/

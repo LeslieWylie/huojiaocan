@@ -1,0 +1,43 @@
+[project]
+name = "huojiaocan-pdf-index-service"
+version = "0.1.0"
+description = "Runnable PDF page-text and PageIndex adapter thin slice for Huojiaocan"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi==0.116.1",
+  "pydantic==2.11.7",
+  "uvicorn[standard]==0.35.0",
+  "litellm==1.84.0",
+  "pymupdf==1.26.4",
+  "PyPDF2==3.0.1",
+  "pypdfium2==4.30.0",
+  "python-dotenv==1.2.2",
+  "pyyaml==6.0.2",
+  "regex>=2024.0.0",
+  "sortedcontainers==2.4.0",
+  "reportlab==4.4.3",
+]
+
+[project.optional-dependencies]
+ocr = [
+  "paddleocr==3.7.0",
+]
+
+[dependency-groups]
+dev = [
+  "httpx==0.28.1",
+  "pytest==8.4.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["runtime*", "scripts*", "tests*"]

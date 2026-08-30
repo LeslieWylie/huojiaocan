@@ -1,0 +1,306 @@
+[
+  {
+    "id": "curriculum-standard-u1",
+    "documentId": "curriculum-standard",
+    "title": "课程性质",
+    "level": 1,
+    "startPage": 8,
+    "endPage": 8,
+    "children": [
+      {
+        "id": "curriculum-standard-u1-n1",
+        "documentId": "curriculum-standard",
+        "title": "课程性质",
+        "level": 2,
+        "startPage": 8,
+        "endPage": 8,
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "curriculum-standard-u2",
+    "documentId": "curriculum-standard",
+    "title": "课程理念",
+    "level": 1,
+    "startPage": 9,
+    "endPage": 10,
+    "children": [
+      {
+        "id": "curriculum-standard-u2-n1",
+        "documentId": "curriculum-standard",
+        "title": "课程理念",
+        "level": 2,
+        "startPage": 9,
+        "endPage": 10,
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "curriculum-standard-u3",
+    "documentId": "curriculum-standard",
+    "title": "课程目标",
+    "level": 1,
+    "startPage": 11,
+    "endPage": 24,
+    "children": [
+      {
+        "id": "curriculum-standard-u3-n1",
+        "documentId": "curriculum-standard",
+        "title": "核心素养内涵",
+        "level": 2,
+        "startPage": 11,
+        "endPage": 12,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u3-n2",
+        "documentId": "curriculum-standard",
+        "title": "总目标",
+        "level": 2,
+        "startPage": 13,
+        "endPage": 13,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u3-n3",
+        "documentId": "curriculum-standard",
+        "title": "学段要求",
+        "level": 2,
+        "startPage": 14,
+        "endPage": 20,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u3-n4",
+        "documentId": "curriculum-standard",
+        "title": "第四学段（7—9年级）",
+        "level": 2,
+        "startPage": 21,
+        "endPage": 24,
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "curriculum-standard-u4",
+    "documentId": "curriculum-standard",
+    "title": "课程内容",
+    "level": 1,
+    "startPage": 25,
+    "endPage": 43,
+    "children": [
+      {
+        "id": "curriculum-standard-u4-n1",
+        "documentId": "curriculum-standard",
+        "title": "主题与载体形式",
+        "level": 2,
+        "startPage": 25,
+        "endPage": 26,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u4-n2",
+        "documentId": "curriculum-standard",
+        "title": "语言文字积累与梳理",
+        "level": 2,
+        "startPage": 27,
+        "endPage": 29,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u4-n3",
+        "documentId": "curriculum-standard",
+        "title": "实用性阅读与交流",
+        "level": 2,
+        "startPage": 30,
+        "endPage": 32,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u4-n4",
+        "documentId": "curriculum-standard",
+        "title": "文学阅读与创意表达",
+        "level": 2,
+        "startPage": 33,
+        "endPage": 35,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u4-n5",
+        "documentId": "curriculum-standard",
+        "title": "思辨性阅读与表达",
+        "level": 2,
+        "startPage": 36,
+        "endPage": 38,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u4-n6",
+        "documentId": "curriculum-standard",
+        "title": "整本书阅读",
+        "level": 2,
+        "startPage": 39,
+        "endPage": 40,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u4-n7",
+        "documentId": "curriculum-standard",
+        "title": "跨学科学习",
+        "level": 2,
+        "startPage": 41,
+        "endPage": 43,
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "curriculum-standard-u5",
+    "documentId": "curriculum-standard",
+    "title": "学业质量",
+    "level": 1,
+    "startPage": 44,
+    "endPage": 50,
+    "children": [
+      {
+        "id": "curriculum-standard-u5-n1",
+        "documentId": "curriculum-standard",
+        "title": "学业质量内涵",
+        "level": 2,
+        "startPage": 44,
+        "endPage": 43,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u5-n2",
+        "documentId": "curriculum-standard",
+        "title": "学业质量描述",
+        "level": 2,
+        "startPage": 44,
+        "endPage": 48,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u5-n3",
+        "documentId": "curriculum-standard",
+        "title": "第四学段（7—9年级）",
+        "level": 2,
+        "startPage": 49,
+        "endPage": 50,
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "curriculum-standard-u6",
+    "documentId": "curriculum-standard",
+    "title": "课程实施",
+    "level": 1,
+    "startPage": 51,
+    "endPage": 64,
+    "children": [
+      {
+        "id": "curriculum-standard-u6-n1",
+        "documentId": "curriculum-standard",
+        "title": "教学建议",
+        "level": 2,
+        "startPage": 51,
+        "endPage": 52,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u6-n2",
+        "documentId": "curriculum-standard",
+        "title": "评价建议",
+        "level": 2,
+        "startPage": 53,
+        "endPage": 58,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u6-n3",
+        "documentId": "curriculum-standard",
+        "title": "教材编写建议",
+        "level": 2,
+        "startPage": 59,
+        "endPage": 59,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u6-n4",
+        "documentId": "curriculum-standard",
+        "title": "课程资源开发与利用",
+        "level": 2,
+        "startPage": 60,
+        "endPage": 61,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u6-n5",
+        "documentId": "curriculum-standard",
+        "title": "教学研究与教师培训",
+        "level": 2,
+        "startPage": 62,
+        "endPage": 64,
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "curriculum-standard-u7",
+    "documentId": "curriculum-standard",
+    "title": "附录",
+    "level": 1,
+    "startPage": 65,
+    "endPage": 109,
+    "children": [
+      {
+        "id": "curriculum-standard-u7-n1",
+        "documentId": "curriculum-standard",
+        "title": "附录1 优秀诗文背诵推荐篇目",
+        "level": 2,
+        "startPage": 65,
+        "endPage": 70,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u7-n2",
+        "documentId": "curriculum-standard",
+        "title": "附录2 关于课内外读物的建议",
+        "level": 2,
+        "startPage": 71,
+        "endPage": 71,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u7-n3",
+        "documentId": "curriculum-standard",
+        "title": "附录3 关于语法修辞知识的说明",
+        "level": 2,
+        "startPage": 72,
+        "endPage": 72,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u7-n4",
+        "documentId": "curriculum-standard",
+        "title": "附录4 识字、写字教学基本字表",
+        "level": 2,
+        "startPage": 73,
+        "endPage": 76,
+        "children": []
+      },
+      {
+        "id": "curriculum-standard-u7-n5",
+        "documentId": "curriculum-standard",
+        "title": "附录5 义务教育语文课程常用字表",
+        "level": 2,
+        "startPage": 77,
+        "endPage": 109,
+        "children": []
+      }
+    ]
+  }
+]

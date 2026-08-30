@@ -1,0 +1,24 @@
+{
+  "name": "live-teacher-guide",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"node --watch server/index.js\"",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "verify:production": "node scripts/verify-production-provider.mjs",
+    "check": "node --check shared/lesson-identity.js && node --check shared/substitute-teaching-pack.js && node --check server/index.js && node --check api/index.js && node --check api/ask.js && node --check api/drafts.js && node --check api/assets.js && node --check api/generate-image.js && node --check serverless/auth-proxy.js && node --check serverless/index-provider.js && node --check serverless/grounded-answer.js && node --check serverless/card-generation.js && node --check serverless/teaching-deliberation.js && node --check serverless/teaching-share.js && node --check serverless/teaching-share-api.js && node --check serverless/draft-revisions.js && node --check serverless/source-coverage.js && node --check serverless/asset-model.js && node --check shared/classroom-run.js && node --check shared/classroom-carryover.js && node --check shared/teaching-task-flow.js && node --check shared/class-learning-profile.js && node --check shared/class-lesson-adaptation.js && node --check shared/lesson-study.js && node --check shared/same-lesson-comparison.js && node --check shared/research-ledger.js && node --check shared/observation-protocol.js && node --check shared/teaching-slides.js && node --check shared/layered-homework.js && node --check shared/homework-review.js && node --check serverless/homework-marking.js && vite build",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "6.0.5",
+    "concurrently": "10.0.4",
+    "express": "5.2.1",
+    "lucide-react": "1.28.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vite": "8.2.0"
+  },
+  "devDependencies": {}
+}

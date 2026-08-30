@@ -1,0 +1,27 @@
+{
+  "id": "teacher-guide",
+  "title": "义务教育教科书教师教学用书 语文 九年级上册",
+  "documentType": "teacher_guide",
+  "extractionPolicy": "auto",
+  "originalFilename": "九年级语文上册-教师用书.pdf",
+  "originalObjectKey": "materials/九年级语文上册-教师用书.pdf",
+  "mimeType": "application/pdf",
+  "byteSize": null,
+  "sha256": null,
+  "pageCount": 612,
+  "pdfUrl": "/materials/九年级语文上册-教师用书.pdf",
+  "pdfStatus": "ready",
+  "indexStatus": "ready",
+  "metadata": {
+    "seeded": true,
+    "seedProvider": "prebuilt-page-text",
+    "plainTextFile": "text/teacher-guide.txt",
+    "plainTextPagesFile": "text/teacher-guide-pages.jsonl",
+    "plainTextFormat": "page-delimited-v1",
+    "plainTextSource": "pdftotext-layout-native",
+    "plainTextSha256": "70a9018e0f0a91eb9ce20d5000831c939420a8ed14e697f2d94e1701baab343c",
+    "plainTextGeneratedAt": "2026-08-12T12:12:52.135500+00:00"
+  },
+  "createdAt": "2026-08-11T19:34:32.022597+00:00",
+  "updatedAt": "2026-08-11T19:34:32.022597+00:00"
+}

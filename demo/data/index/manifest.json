@@ -1,0 +1,1369 @@
+{
+  "version": 1,
+  "provider": "local-fulltext",
+  "documents": [
+    {
+      "id": "textbook",
+      "kind": "学生教材",
+      "title": "义务教育教科书 语文 九年级上册",
+      "shortTitle": "九年级语文上册",
+      "pdfUrl": "/materials/九年级语文上册-学生教材.pdf",
+      "pageCount": 168,
+      "charCount": 110258,
+      "indexedPages": 168,
+      "status": "ready",
+      "tree": [
+        {
+          "id": "textbook-u1",
+          "documentId": "textbook",
+          "title": "第一单元 · 活动探究",
+          "level": 1,
+          "startPage": 7,
+          "endPage": 26,
+          "children": [
+            {
+              "id": "textbook-u1-n1",
+              "documentId": "textbook",
+              "title": "活动任务单",
+              "level": 2,
+              "startPage": 7,
+              "endPage": 8,
+              "children": []
+            },
+            {
+              "id": "textbook-u1-n2",
+              "documentId": "textbook",
+              "title": "1 沁园春·雪",
+              "level": 2,
+              "startPage": 9,
+              "endPage": 10,
+              "children": []
+            },
+            {
+              "id": "textbook-u1-n3",
+              "documentId": "textbook",
+              "title": "2 周总理，你在哪里",
+              "level": 2,
+              "startPage": 11,
+              "endPage": 13,
+              "children": []
+            },
+            {
+              "id": "textbook-u1-n4",
+              "documentId": "textbook",
+              "title": "3 我爱这土地",
+              "level": 2,
+              "startPage": 14,
+              "endPage": 14,
+              "children": []
+            },
+            {
+              "id": "textbook-u1-n5",
+              "documentId": "textbook",
+              "title": "4 乡愁",
+              "level": 2,
+              "startPage": 15,
+              "endPage": 15,
+              "children": []
+            },
+            {
+              "id": "textbook-u1-n6",
+              "documentId": "textbook",
+              "title": "5 你是人间的四月天",
+              "level": 2,
+              "startPage": 16,
+              "endPage": 17,
+              "children": []
+            },
+            {
+              "id": "textbook-u1-n7",
+              "documentId": "textbook",
+              "title": "6 我看",
+              "level": 2,
+              "startPage": 18,
+              "endPage": 19,
+              "children": []
+            },
+            {
+              "id": "textbook-u1-n8",
+              "documentId": "textbook",
+              "title": "任务二 诗歌朗诵",
+              "level": 2,
+              "startPage": 20,
+              "endPage": 23,
+              "children": []
+            },
+            {
+              "id": "textbook-u1-n9",
+              "documentId": "textbook",
+              "title": "任务三 尝试创作",
+              "level": 2,
+              "startPage": 24,
+              "endPage": 26,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "textbook-u2",
+          "documentId": "textbook",
+          "title": "第二单元 · 议论性文章",
+          "level": 1,
+          "startPage": 27,
+          "endPage": 54,
+          "children": [
+            {
+              "id": "textbook-u2-n1",
+              "documentId": "textbook",
+              "title": "7 培养德智体美劳全面发展的社会主义建设者和接班人",
+              "level": 2,
+              "startPage": 28,
+              "endPage": 35,
+              "children": []
+            },
+            {
+              "id": "textbook-u2-n2",
+              "documentId": "textbook",
+              "title": "8 中国人失掉自信力了吗",
+              "level": 2,
+              "startPage": 36,
+              "endPage": 38,
+              "children": []
+            },
+            {
+              "id": "textbook-u2-n3",
+              "documentId": "textbook",
+              "title": "9 谈骨气",
+              "level": 2,
+              "startPage": 39,
+              "endPage": 41,
+              "children": []
+            },
+            {
+              "id": "textbook-u2-n4",
+              "documentId": "textbook",
+              "title": "10 创造宣言",
+              "level": 2,
+              "startPage": 42,
+              "endPage": 46,
+              "children": []
+            },
+            {
+              "id": "textbook-u2-n5",
+              "documentId": "textbook",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 47,
+              "endPage": 48,
+              "children": []
+            },
+            {
+              "id": "textbook-u2-n6",
+              "documentId": "textbook",
+              "title": "写作 观点要明确",
+              "level": 2,
+              "startPage": 49,
+              "endPage": 51,
+              "children": []
+            },
+            {
+              "id": "textbook-u2-n7",
+              "documentId": "textbook",
+              "title": "专题学习活动 君子自强不息",
+              "level": 2,
+              "startPage": 52,
+              "endPage": 54,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "textbook-u3",
+          "documentId": "textbook",
+          "title": "第三单元 · 古诗文",
+          "level": 1,
+          "startPage": 55,
+          "endPage": 72,
+          "children": [
+            {
+              "id": "textbook-u3-n1",
+              "documentId": "textbook",
+              "title": "11 岳阳楼记",
+              "level": 2,
+              "startPage": 56,
+              "endPage": 58,
+              "children": []
+            },
+            {
+              "id": "textbook-u3-n2",
+              "documentId": "textbook",
+              "title": "12 醉翁亭记",
+              "level": 2,
+              "startPage": 59,
+              "endPage": 61,
+              "children": []
+            },
+            {
+              "id": "textbook-u3-n3",
+              "documentId": "textbook",
+              "title": "13 湖心亭看雪",
+              "level": 2,
+              "startPage": 62,
+              "endPage": 63,
+              "children": []
+            },
+            {
+              "id": "textbook-u3-n4",
+              "documentId": "textbook",
+              "title": "14 诗词三首",
+              "level": 2,
+              "startPage": 64,
+              "endPage": 66,
+              "children": []
+            },
+            {
+              "id": "textbook-u3-n5",
+              "documentId": "textbook",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 67,
+              "endPage": 67,
+              "children": []
+            },
+            {
+              "id": "textbook-u3-n6",
+              "documentId": "textbook",
+              "title": "写作 议论要言之有据",
+              "level": 2,
+              "startPage": 68,
+              "endPage": 70,
+              "children": []
+            },
+            {
+              "id": "textbook-u3-n7",
+              "documentId": "textbook",
+              "title": "课外古诗词诵读",
+              "level": 2,
+              "startPage": 71,
+              "endPage": 72,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "textbook-u4",
+          "documentId": "textbook",
+          "title": "第四单元 · 小说",
+          "level": 1,
+          "startPage": 73,
+          "endPage": 116,
+          "children": [
+            {
+              "id": "textbook-u4-n1",
+              "documentId": "textbook",
+              "title": "15 故乡",
+              "level": 2,
+              "startPage": 74,
+              "endPage": 83,
+              "children": []
+            },
+            {
+              "id": "textbook-u4-n2",
+              "documentId": "textbook",
+              "title": "16 我的叔叔于勒",
+              "level": 2,
+              "startPage": 84,
+              "endPage": 90,
+              "children": []
+            },
+            {
+              "id": "textbook-u4-n3",
+              "documentId": "textbook",
+              "title": "17 孤独之旅",
+              "level": 2,
+              "startPage": 91,
+              "endPage": 98,
+              "children": []
+            },
+            {
+              "id": "textbook-u4-n4",
+              "documentId": "textbook",
+              "title": "18 蒲柳人家（节选）",
+              "level": 2,
+              "startPage": 99,
+              "endPage": 108,
+              "children": []
+            },
+            {
+              "id": "textbook-u4-n5",
+              "documentId": "textbook",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 109,
+              "endPage": 110,
+              "children": []
+            },
+            {
+              "id": "textbook-u4-n6",
+              "documentId": "textbook",
+              "title": "写作 学写小小说",
+              "level": 2,
+              "startPage": 111,
+              "endPage": 113,
+              "children": []
+            },
+            {
+              "id": "textbook-u4-n7",
+              "documentId": "textbook",
+              "title": "整本书阅读 《简·爱》",
+              "level": 2,
+              "startPage": 114,
+              "endPage": 116,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "textbook-u5",
+          "documentId": "textbook",
+          "title": "第五单元 · 议论文",
+          "level": 1,
+          "startPage": 117,
+          "endPage": 140,
+          "children": [
+            {
+              "id": "textbook-u5-n1",
+              "documentId": "textbook",
+              "title": "19 想和做",
+              "level": 2,
+              "startPage": 118,
+              "endPage": 120,
+              "children": []
+            },
+            {
+              "id": "textbook-u5-n2",
+              "documentId": "textbook",
+              "title": "20 怀疑与学问",
+              "level": 2,
+              "startPage": 121,
+              "endPage": 123,
+              "children": []
+            },
+            {
+              "id": "textbook-u5-n3",
+              "documentId": "textbook",
+              "title": "21 就英法联军远征中国致巴特勒上尉的信",
+              "level": 2,
+              "startPage": 124,
+              "endPage": 127,
+              "children": []
+            },
+            {
+              "id": "textbook-u5-n4",
+              "documentId": "textbook",
+              "title": "22 精神的三间小屋",
+              "level": 2,
+              "startPage": 128,
+              "endPage": 131,
+              "children": []
+            },
+            {
+              "id": "textbook-u5-n5",
+              "documentId": "textbook",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 132,
+              "endPage": 132,
+              "children": []
+            },
+            {
+              "id": "textbook-u5-n6",
+              "documentId": "textbook",
+              "title": "写作 论证要合理",
+              "level": 2,
+              "startPage": 133,
+              "endPage": 135,
+              "children": []
+            },
+            {
+              "id": "textbook-u5-n7",
+              "documentId": "textbook",
+              "title": "专题学习活动 我们的数字时代",
+              "level": 2,
+              "startPage": 136,
+              "endPage": 140,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "textbook-u6",
+          "documentId": "textbook",
+          "title": "第六单元 · 古代文学",
+          "level": 1,
+          "startPage": 141,
+          "endPage": 168,
+          "children": [
+            {
+              "id": "textbook-u6-n1",
+              "documentId": "textbook",
+              "title": "23 曹刿论战",
+              "level": 2,
+              "startPage": 142,
+              "endPage": 144,
+              "children": []
+            },
+            {
+              "id": "textbook-u6-n2",
+              "documentId": "textbook",
+              "title": "24 邹忌讽齐王纳谏",
+              "level": 2,
+              "startPage": 145,
+              "endPage": 147,
+              "children": []
+            },
+            {
+              "id": "textbook-u6-n3",
+              "documentId": "textbook",
+              "title": "25 陈涉世家",
+              "level": 2,
+              "startPage": 148,
+              "endPage": 151,
+              "children": []
+            },
+            {
+              "id": "textbook-u6-n4",
+              "documentId": "textbook",
+              "title": "26 出师表",
+              "level": 2,
+              "startPage": 152,
+              "endPage": 155,
+              "children": []
+            },
+            {
+              "id": "textbook-u6-n5",
+              "documentId": "textbook",
+              "title": "27 诗词曲五首",
+              "level": 2,
+              "startPage": 156,
+              "endPage": 159,
+              "children": []
+            },
+            {
+              "id": "textbook-u6-n6",
+              "documentId": "textbook",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 160,
+              "endPage": 160,
+              "children": []
+            },
+            {
+              "id": "textbook-u6-n7",
+              "documentId": "textbook",
+              "title": "写作 学会深入思考",
+              "level": 2,
+              "startPage": 161,
+              "endPage": 163,
+              "children": []
+            },
+            {
+              "id": "textbook-u6-n8",
+              "documentId": "textbook",
+              "title": "整本书阅读 《唐诗三百首》",
+              "level": 2,
+              "startPage": 164,
+              "endPage": 164,
+              "children": []
+            },
+            {
+              "id": "textbook-u6-n9",
+              "documentId": "textbook",
+              "title": "课外古诗词诵读",
+              "level": 2,
+              "startPage": 165,
+              "endPage": 168,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "teacher-guide",
+      "kind": "教师教学用书",
+      "title": "义务教育教科书教师教学用书 语文 九年级上册",
+      "shortTitle": "九上教师教学用书",
+      "pdfUrl": "/materials/九年级语文上册-教师教学用书.pdf",
+      "pageCount": 612,
+      "charCount": 663540,
+      "indexedPages": 612,
+      "status": "ready",
+      "tree": [
+        {
+          "id": "teacher-guide-u1",
+          "documentId": "teacher-guide",
+          "title": "第一单元 · 诗歌活动探究",
+          "level": 1,
+          "startPage": 17,
+          "endPage": 84,
+          "children": [
+            {
+              "id": "teacher-guide-u1-n1",
+              "documentId": "teacher-guide",
+              "title": "单元说明",
+              "level": 2,
+              "startPage": 17,
+              "endPage": 22,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u1-n2",
+              "documentId": "teacher-guide",
+              "title": "活动任务单",
+              "level": 2,
+              "startPage": 23,
+              "endPage": 32,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u1-n3",
+              "documentId": "teacher-guide",
+              "title": "1 沁园春·雪",
+              "level": 2,
+              "startPage": 33,
+              "endPage": 43,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u1-n4",
+              "documentId": "teacher-guide",
+              "title": "2 周总理，你在哪里",
+              "level": 2,
+              "startPage": 44,
+              "endPage": 50,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u1-n5",
+              "documentId": "teacher-guide",
+              "title": "3 我爱这土地",
+              "level": 2,
+              "startPage": 51,
+              "endPage": 57,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u1-n6",
+              "documentId": "teacher-guide",
+              "title": "4 乡愁",
+              "level": 2,
+              "startPage": 58,
+              "endPage": 63,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u1-n7",
+              "documentId": "teacher-guide",
+              "title": "5 你是人间的四月天",
+              "level": 2,
+              "startPage": 64,
+              "endPage": 69,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u1-n8",
+              "documentId": "teacher-guide",
+              "title": "6 我看",
+              "level": 2,
+              "startPage": 70,
+              "endPage": 75,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u1-n9",
+              "documentId": "teacher-guide",
+              "title": "单元教学设计",
+              "level": 2,
+              "startPage": 76,
+              "endPage": 84,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "teacher-guide-u2",
+          "documentId": "teacher-guide",
+          "title": "第二单元 · 议论性文章",
+          "level": 1,
+          "startPage": 85,
+          "endPage": 214,
+          "children": [
+            {
+              "id": "teacher-guide-u2-n1",
+              "documentId": "teacher-guide",
+              "title": "单元说明",
+              "level": 2,
+              "startPage": 85,
+              "endPage": 91,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u2-n2",
+              "documentId": "teacher-guide",
+              "title": "7 培养德智体美劳全面发展的社会主义建设者和接班人",
+              "level": 2,
+              "startPage": 92,
+              "endPage": 146,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u2-n3",
+              "documentId": "teacher-guide",
+              "title": "8 中国人失掉自信力了吗",
+              "level": 2,
+              "startPage": 147,
+              "endPage": 163,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u2-n4",
+              "documentId": "teacher-guide",
+              "title": "9 谈骨气",
+              "level": 2,
+              "startPage": 164,
+              "endPage": 175,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u2-n5",
+              "documentId": "teacher-guide",
+              "title": "10 创造宣言",
+              "level": 2,
+              "startPage": 176,
+              "endPage": 190,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u2-n6",
+              "documentId": "teacher-guide",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 191,
+              "endPage": 194,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u2-n7",
+              "documentId": "teacher-guide",
+              "title": "单元教学设计",
+              "level": 2,
+              "startPage": 195,
+              "endPage": 200,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u2-n8",
+              "documentId": "teacher-guide",
+              "title": "写作 观点要明确",
+              "level": 2,
+              "startPage": 201,
+              "endPage": 206,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u2-n9",
+              "documentId": "teacher-guide",
+              "title": "专题学习活动 君子自强不息",
+              "level": 2,
+              "startPage": 207,
+              "endPage": 214,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "teacher-guide-u3",
+          "documentId": "teacher-guide",
+          "title": "第三单元 · 古诗文",
+          "level": 1,
+          "startPage": 215,
+          "endPage": 282,
+          "children": [
+            {
+              "id": "teacher-guide-u3-n1",
+              "documentId": "teacher-guide",
+              "title": "单元说明",
+              "level": 2,
+              "startPage": 215,
+              "endPage": 219,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u3-n2",
+              "documentId": "teacher-guide",
+              "title": "11 岳阳楼记",
+              "level": 2,
+              "startPage": 220,
+              "endPage": 233,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u3-n3",
+              "documentId": "teacher-guide",
+              "title": "12 醉翁亭记",
+              "level": 2,
+              "startPage": 234,
+              "endPage": 243,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u3-n4",
+              "documentId": "teacher-guide",
+              "title": "13 湖心亭看雪",
+              "level": 2,
+              "startPage": 244,
+              "endPage": 254,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u3-n5",
+              "documentId": "teacher-guide",
+              "title": "14 诗词三首",
+              "level": 2,
+              "startPage": 255,
+              "endPage": 268,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u3-n6",
+              "documentId": "teacher-guide",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 269,
+              "endPage": 273,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u3-n7",
+              "documentId": "teacher-guide",
+              "title": "单元教学设计",
+              "level": 2,
+              "startPage": 274,
+              "endPage": 277,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u3-n8",
+              "documentId": "teacher-guide",
+              "title": "写作 议论要言之有据",
+              "level": 2,
+              "startPage": 278,
+              "endPage": 282,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "teacher-guide-u4",
+          "documentId": "teacher-guide",
+          "title": "第四单元 · 小说",
+          "level": 1,
+          "startPage": 283,
+          "endPage": 383,
+          "children": [
+            {
+              "id": "teacher-guide-u4-n1",
+              "documentId": "teacher-guide",
+              "title": "单元说明",
+              "level": 2,
+              "startPage": 283,
+              "endPage": 289,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u4-n2",
+              "documentId": "teacher-guide",
+              "title": "15 故乡",
+              "level": 2,
+              "startPage": 290,
+              "endPage": 312,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u4-n3",
+              "documentId": "teacher-guide",
+              "title": "16 我的叔叔于勒",
+              "level": 2,
+              "startPage": 313,
+              "endPage": 328,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u4-n4",
+              "documentId": "teacher-guide",
+              "title": "17 孤独之旅",
+              "level": 2,
+              "startPage": 329,
+              "endPage": 341,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u4-n5",
+              "documentId": "teacher-guide",
+              "title": "18 蒲柳人家（节选）",
+              "level": 2,
+              "startPage": 342,
+              "endPage": 358,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u4-n6",
+              "documentId": "teacher-guide",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 359,
+              "endPage": 361,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u4-n7",
+              "documentId": "teacher-guide",
+              "title": "单元教学设计",
+              "level": 2,
+              "startPage": 362,
+              "endPage": 367,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u4-n8",
+              "documentId": "teacher-guide",
+              "title": "写作 学写小小说",
+              "level": 2,
+              "startPage": 368,
+              "endPage": 372,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u4-n9",
+              "documentId": "teacher-guide",
+              "title": "整本书阅读 《简·爱》",
+              "level": 2,
+              "startPage": 373,
+              "endPage": 383,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "teacher-guide-u5",
+          "documentId": "teacher-guide",
+          "title": "第五单元 · 议论文",
+          "level": 1,
+          "startPage": 384,
+          "endPage": 489,
+          "children": [
+            {
+              "id": "teacher-guide-u5-n1",
+              "documentId": "teacher-guide",
+              "title": "单元说明",
+              "level": 2,
+              "startPage": 384,
+              "endPage": 391,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u5-n2",
+              "documentId": "teacher-guide",
+              "title": "19 想和做",
+              "level": 2,
+              "startPage": 392,
+              "endPage": 408,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u5-n3",
+              "documentId": "teacher-guide",
+              "title": "20 怀疑与学问",
+              "level": 2,
+              "startPage": 409,
+              "endPage": 424,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u5-n4",
+              "documentId": "teacher-guide",
+              "title": "21 就英法联军远征中国致巴特勒上尉的信",
+              "level": 2,
+              "startPage": 425,
+              "endPage": 440,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u5-n5",
+              "documentId": "teacher-guide",
+              "title": "22 精神的三间小屋",
+              "level": 2,
+              "startPage": 441,
+              "endPage": 452,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u5-n6",
+              "documentId": "teacher-guide",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 453,
+              "endPage": 459,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u5-n7",
+              "documentId": "teacher-guide",
+              "title": "单元教学设计",
+              "level": 2,
+              "startPage": 460,
+              "endPage": 469,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u5-n8",
+              "documentId": "teacher-guide",
+              "title": "写作 论证要合理",
+              "level": 2,
+              "startPage": 470,
+              "endPage": 476,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u5-n9",
+              "documentId": "teacher-guide",
+              "title": "专题学习活动 我们的数字时代",
+              "level": 2,
+              "startPage": 477,
+              "endPage": 489,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "teacher-guide-u6",
+          "documentId": "teacher-guide",
+          "title": "第六单元 · 古代文学",
+          "level": 1,
+          "startPage": 490,
+          "endPage": 612,
+          "children": [
+            {
+              "id": "teacher-guide-u6-n1",
+              "documentId": "teacher-guide",
+              "title": "单元说明",
+              "level": 2,
+              "startPage": 490,
+              "endPage": 495,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n2",
+              "documentId": "teacher-guide",
+              "title": "23 曹刿论战",
+              "level": 2,
+              "startPage": 496,
+              "endPage": 504,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n3",
+              "documentId": "teacher-guide",
+              "title": "24 邹忌讽齐王纳谏",
+              "level": 2,
+              "startPage": 505,
+              "endPage": 515,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n4",
+              "documentId": "teacher-guide",
+              "title": "25 陈涉世家",
+              "level": 2,
+              "startPage": 516,
+              "endPage": 529,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n5",
+              "documentId": "teacher-guide",
+              "title": "26 出师表",
+              "level": 2,
+              "startPage": 530,
+              "endPage": 546,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n6",
+              "documentId": "teacher-guide",
+              "title": "27 诗词曲五首",
+              "level": 2,
+              "startPage": 547,
+              "endPage": 575,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n7",
+              "documentId": "teacher-guide",
+              "title": "阅读综合实践",
+              "level": 2,
+              "startPage": 576,
+              "endPage": 583,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n8",
+              "documentId": "teacher-guide",
+              "title": "单元教学设计",
+              "level": 2,
+              "startPage": 584,
+              "endPage": 586,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n9",
+              "documentId": "teacher-guide",
+              "title": "写作 学会深入思考",
+              "level": 2,
+              "startPage": 587,
+              "endPage": 597,
+              "children": []
+            },
+            {
+              "id": "teacher-guide-u6-n10",
+              "documentId": "teacher-guide",
+              "title": "整本书阅读 《唐诗三百首》",
+              "level": 2,
+              "startPage": 598,
+              "endPage": 612,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "curriculum-standard",
+      "kind": "课程标准",
+      "title": "义务教育语文课程标准（2022年版）",
+      "shortTitle": "2022年版语文课程标准",
+      "pdfUrl": "/materials/义务教育语文课程标准2022.pdf",
+      "pageCount": 109,
+      "charCount": 63584,
+      "indexedPages": 109,
+      "status": "ready",
+      "tree": [
+        {
+          "id": "curriculum-standard-u1",
+          "documentId": "curriculum-standard",
+          "title": "课程性质",
+          "level": 1,
+          "startPage": 8,
+          "endPage": 8,
+          "children": [
+            {
+              "id": "curriculum-standard-u1-n1",
+              "documentId": "curriculum-standard",
+              "title": "课程性质",
+              "level": 2,
+              "startPage": 8,
+              "endPage": 8,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "curriculum-standard-u2",
+          "documentId": "curriculum-standard",
+          "title": "课程理念",
+          "level": 1,
+          "startPage": 9,
+          "endPage": 10,
+          "children": [
+            {
+              "id": "curriculum-standard-u2-n1",
+              "documentId": "curriculum-standard",
+              "title": "课程理念",
+              "level": 2,
+              "startPage": 9,
+              "endPage": 10,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "curriculum-standard-u3",
+          "documentId": "curriculum-standard",
+          "title": "课程目标",
+          "level": 1,
+          "startPage": 11,
+          "endPage": 24,
+          "children": [
+            {
+              "id": "curriculum-standard-u3-n1",
+              "documentId": "curriculum-standard",
+              "title": "核心素养内涵",
+              "level": 2,
+              "startPage": 11,
+              "endPage": 12,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u3-n2",
+              "documentId": "curriculum-standard",
+              "title": "总目标",
+              "level": 2,
+              "startPage": 13,
+              "endPage": 13,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u3-n3",
+              "documentId": "curriculum-standard",
+              "title": "学段要求",
+              "level": 2,
+              "startPage": 14,
+              "endPage": 20,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u3-n4",
+              "documentId": "curriculum-standard",
+              "title": "第四学段（7—9年级）",
+              "level": 2,
+              "startPage": 21,
+              "endPage": 24,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "curriculum-standard-u4",
+          "documentId": "curriculum-standard",
+          "title": "课程内容",
+          "level": 1,
+          "startPage": 25,
+          "endPage": 43,
+          "children": [
+            {
+              "id": "curriculum-standard-u4-n1",
+              "documentId": "curriculum-standard",
+              "title": "主题与载体形式",
+              "level": 2,
+              "startPage": 25,
+              "endPage": 26,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u4-n2",
+              "documentId": "curriculum-standard",
+              "title": "语言文字积累与梳理",
+              "level": 2,
+              "startPage": 27,
+              "endPage": 29,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u4-n3",
+              "documentId": "curriculum-standard",
+              "title": "实用性阅读与交流",
+              "level": 2,
+              "startPage": 30,
+              "endPage": 32,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u4-n4",
+              "documentId": "curriculum-standard",
+              "title": "文学阅读与创意表达",
+              "level": 2,
+              "startPage": 33,
+              "endPage": 35,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u4-n5",
+              "documentId": "curriculum-standard",
+              "title": "思辨性阅读与表达",
+              "level": 2,
+              "startPage": 36,
+              "endPage": 38,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u4-n6",
+              "documentId": "curriculum-standard",
+              "title": "整本书阅读",
+              "level": 2,
+              "startPage": 39,
+              "endPage": 40,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u4-n7",
+              "documentId": "curriculum-standard",
+              "title": "跨学科学习",
+              "level": 2,
+              "startPage": 41,
+              "endPage": 43,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "curriculum-standard-u5",
+          "documentId": "curriculum-standard",
+          "title": "学业质量",
+          "level": 1,
+          "startPage": 44,
+          "endPage": 50,
+          "children": [
+            {
+              "id": "curriculum-standard-u5-n1",
+              "documentId": "curriculum-standard",
+              "title": "学业质量内涵",
+              "level": 2,
+              "startPage": 44,
+              "endPage": 43,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u5-n2",
+              "documentId": "curriculum-standard",
+              "title": "学业质量描述",
+              "level": 2,
+              "startPage": 44,
+              "endPage": 48,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u5-n3",
+              "documentId": "curriculum-standard",
+              "title": "第四学段（7—9年级）",
+              "level": 2,
+              "startPage": 49,
+              "endPage": 50,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "curriculum-standard-u6",
+          "documentId": "curriculum-standard",
+          "title": "课程实施",
+          "level": 1,
+          "startPage": 51,
+          "endPage": 64,
+          "children": [
+            {
+              "id": "curriculum-standard-u6-n1",
+              "documentId": "curriculum-standard",
+              "title": "教学建议",
+              "level": 2,
+              "startPage": 51,
+              "endPage": 52,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u6-n2",
+              "documentId": "curriculum-standard",
+              "title": "评价建议",
+              "level": 2,
+              "startPage": 53,
+              "endPage": 58,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u6-n3",
+              "documentId": "curriculum-standard",
+              "title": "教材编写建议",
+              "level": 2,
+              "startPage": 59,
+              "endPage": 59,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u6-n4",
+              "documentId": "curriculum-standard",
+              "title": "课程资源开发与利用",
+              "level": 2,
+              "startPage": 60,
+              "endPage": 61,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u6-n5",
+              "documentId": "curriculum-standard",
+              "title": "教学研究与教师培训",
+              "level": 2,
+              "startPage": 62,
+              "endPage": 64,
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "curriculum-standard-u7",
+          "documentId": "curriculum-standard",
+          "title": "附录",
+          "level": 1,
+          "startPage": 65,
+          "endPage": 109,
+          "children": [
+            {
+              "id": "curriculum-standard-u7-n1",
+              "documentId": "curriculum-standard",
+              "title": "附录1 优秀诗文背诵推荐篇目",
+              "level": 2,
+              "startPage": 65,
+              "endPage": 70,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u7-n2",
+              "documentId": "curriculum-standard",
+              "title": "附录2 关于课内外读物的建议",
+              "level": 2,
+              "startPage": 71,
+              "endPage": 71,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u7-n3",
+              "documentId": "curriculum-standard",
+              "title": "附录3 关于语法修辞知识的说明",
+              "level": 2,
+              "startPage": 72,
+              "endPage": 72,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u7-n4",
+              "documentId": "curriculum-standard",
+              "title": "附录4 识字、写字教学基本字表",
+              "level": 2,
+              "startPage": 73,
+              "endPage": 76,
+              "children": []
+            },
+            {
+              "id": "curriculum-standard-u7-n5",
+              "documentId": "curriculum-standard",
+              "title": "附录5 义务教育语文课程常用字表",
+              "level": 2,
+              "startPage": 77,
+              "endPage": 109,
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

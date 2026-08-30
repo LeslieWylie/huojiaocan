@@ -1,0 +1,9 @@
+# Test fixtures are executed locally, never deployed as Serverless Functions.
+api/*.test.js
+serverless/*.test.js
+
+# Local-only artifacts.
+qa-*.png
+scripts/
+README.md
+.env*

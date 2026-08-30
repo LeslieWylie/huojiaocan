@@ -1,0 +1,39 @@
+[
+  {
+    "total_page_number": 3
+  },
+  {
+    "total_token": 121
+  },
+  {
+    "toc_content": null,
+    "toc_page_list": [],
+    "page_index_given_in_toc": "no"
+  },
+  {
+    "message": "len(group_texts): 1"
+  },
+  {
+    "message": "generate_toc: [{'structure': '1', 'title': '\u300a\u6211\u7231\u8fd9\u571f\u5730\u300b\u4ee5\u9e1f\u7684\u6b4c\u5531\u8868\u8fbe\u5bf9\u571f\u5730\u6df1\u6c89\u7684\u7231\u3002', 'physical_index': 1}, {'structure': '2', 'title': '\u6717\u8bfb\u65f6\u8981\u628a\u63e1\u5fe7\u90c1\u3001\u60b2\u6124\u800c\u6df1\u6c89\u7684\u611f\u60c5\u57fa\u8c03\u3002', 'physical_index': 2}, {'structure': '3', 'title': '\u6559\u5b66\u4e2d\u53ef\u901a\u8fc7\u610f\u8c61\u3001\u60c5\u611f\u548c\u65f6\u4ee3\u80cc\u666f\u5f62\u6210\u95ee\u9898\u94fe\u3002', 'physical_index': 3}]"
+  },
+  {
+    "message": "convert_physical_index_to_int: [{'structure': '1', 'title': '\u300a\u6211\u7231\u8fd9\u571f\u5730\u300b\u4ee5\u9e1f\u7684\u6b4c\u5531\u8868\u8fbe\u5bf9\u571f\u5730\u6df1\u6c89\u7684\u7231\u3002', 'physical_index': 1}, {'structure': '2', 'title': '\u6717\u8bfb\u65f6\u8981\u628a\u63e1\u5fe7\u90c1\u3001\u60b2\u6124\u800c\u6df1\u6c89\u7684\u611f\u60c5\u57fa\u8c03\u3002', 'physical_index': 2}, {'structure': '3', 'title': '\u6559\u5b66\u4e2d\u53ef\u901a\u8fc7\u610f\u8c61\u3001\u60c5\u611f\u548c\u65f6\u4ee3\u80cc\u666f\u5f62\u6210\u95ee\u9898\u94fe\u3002', 'physical_index': 3}]"
+  },
+  {
+    "mode": "process_toc_with_page_numbers",
+    "accuracy": 1.0,
+    "incorrect_results": []
+  },
+  {
+    "message": "Checking title appearance in start concurrently"
+  },
+  {
+    "message": "Response: {'thinking': '\u9875\u9762\u6587\u672c\u7684\u7b2c\u4e00\u884c\u5185\u5bb9\u5c31\u662f\u5f53\u524d\u8282\u6807\u9898\uff0c\u6ca1\u6709\u5176\u4ed6\u5185\u5bb9\u51fa\u73b0\u5728\u5b83\u4e4b\u524d\uff0c\u56e0\u6b64\u8282\u6807\u9898\u786e\u5b9e\u5f00\u59cb\u4e8e\u9875\u9762\u6587\u672c\u7684\u5f00\u5934\u3002', 'start_begin': 'yes'}"
+  },
+  {
+    "message": "Response: {'thinking': '\u9875\u9762\u6587\u672c\u4e2d\uff0c\u5728\u7ae0\u8282\u6807\u9898\u4e4b\u524d\u6ca1\u6709\u4efb\u4f55\u5176\u4ed6\u5185\u5bb9\uff0c\u53ea\u6709\u6807\u8bb0\u6807\u7b7e\uff08physical_index_2, real_pdf_page_57\uff09\uff0c\u8fd9\u4e9b\u4e0d\u5c5e\u4e8e\u5b9e\u9645\u6587\u672c\u3002\u56e0\u6b64\u6807\u9898\u662f\u9875\u9762\u6587\u672c\u7684\u7b2c\u4e00\u884c\u5185\u5bb9\uff0c\u6240\u4ee5\u7ae0\u8282\u4ece\u9875\u9762\u5f00\u5934\u5f00\u59cb\u3002', 'start_begin': 'yes'}"
+  },
+  {
+    "message": "Response: {'thinking': 'The page_text contains only the <physical_index_1> and <real_pdf_page_55> markers followed by a newline and then the section title. The markers are structural tags, not content. Therefore, the section title appears as the first textual content, meaning the section starts at the beginning of the page_text.', 'start_begin': 'yes'}"
+  }
+]

@@ -1,0 +1,7 @@
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+runtime
+seed-runtime/jobs
+pageindex_vendor/PageIndex/.git
