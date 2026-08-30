@@ -103,3 +103,36 @@
 - `7dc1d4b`（已推 origin）：App.jsx 89 行 + 懒加载 + 全部话术/UX/移动端/可访问性修复。
 - 性能实测（本地）：DCL 26-38ms / FCP 60-76ms / CLS 0。
 - 全量测试 531/532（唯一失败 = 你的 `api/drafts.test.js:1237`，等你收尾）。
+
+## 9. 我方 9/03 修复与新增（合并前必读）
+
+### 已修复并提交（b9a1089、ce8e307）
+1. **ask 提问必现失效**：`src/views/ask-page.jsx` `stableCoreQuestion` 同函数二次 const 声明
+   （第 524 解构、第 583 重声明）。打包后第 546 行读的是后一个未初始化绑定 → TDZ 崩溃，
+   点击提问不发任何请求。**已删除第 583 行死绑定**（该值未在别处使用；服务端回传的
+   `answer.lesson.coreQuestion` 已通过 draftPayload 保存，无需前端再声明）。
+2. **一批视图拆分遗留的丢 import**（都是“用了但没导入”，运行即 ReferenceError）：
+   - ask-page：补 `citationByRef`(→library-page)、`draftRecoverySnapshot`(→shell-pages)、`Activity`(lucide)
+   - shell-pages：补 `readDraftRecovery as readOwnedDraftRecovery`(→teacher-finalization)
+   - lesson-pages：补 rehearsal 三函数（cards-page 补 export）
+   - lesson3-pages：补 `lessonStudyRecoveryKey`、`STUDY_DECISIONS`（lesson2-pages：后者补 export）
+   - library-page：补 `searchResultDocumentId/searchResultPage`（app-core 有导出）
+   - ui-board：补 `rootRequest`；g5-pages：`normalizeLessonIdentity`→`normalizeShareLessonIdentity`
+   - inspect-pages：补 `BookOpen/Eye/FileCheck2/Route`；cards-page：补 `CARD_GENERATION_STEPS/CARD_SUBTITLES`
+   - app-core：补 `saveAuthRecovery`、`writeDraftRecovery`、`normalizeClassroomRun`
+3. **`api/drafts.js` citationComparableText** 剥离 `U+FFFD`（OCR 两次解析的替换字符差异不再误判
+   失实引用；页码+摘录可追溯性校验仍保留）。
+4. **新守卫 `demo/scripts/check-frontend-refs.mjs`**（已接入 `npm run check`）：
+   扫描 src/ 下未解析的独立调用、`<Name>`、`icon={Name}`、大写常量成员访问（`X.map`/`X.length`）。
+   合并新页面时请用它拦截丢 import；若误报（参数重命名解构等），在脚本解析逻辑里补而非静默忽略。
+5. **`demo/server/index.js`** 增加 `/api` 请求日志行（调试用，纯日志无副作用）。
+
+### Mock 说明（本地联调）
+- `scripts/mock-supabase.mjs` 现在按**卡片提示词标记**（“板书卡生成 3—6”等）返回
+  `threeCardSuggestions`（板书/提问/评价卡全字段、E 编号绑定）；备课请求仍返回原确定性答案，
+  请勿把检测键换回 `threeCardSuggestions`（备课 schema 里也含该字符串，会误判）。
+- 三卡链路本地全真实测通过：ask→confirm→cards/generate 全部 200（演示账号见交付总结）。
+
+### 未收尾
+- 你的 `api/drafts.test.js:1244`（422 vs 200）仍未过；测试工作区我未触碰。
+- 卡片“锁定本卡”控件仅在首卡出现（其余两卡需进入编辑后再锁定）——若属预期随你安排。
