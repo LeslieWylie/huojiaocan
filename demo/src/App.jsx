@@ -396,223 +396,6 @@ const CARD_EDIT_GUIDANCE = {
   question: '建议写清“回到哪一处原文 + 观察什么 + 为什么追问”，问题要能直接带学生找到词句、意象或结构。',
   assessment: '建议写清“学生完成什么任务 + 使用哪处教材依据 + 达到什么可观察表现”，不要只停留在“能否……”的判断。'
 };
-const CARD_SUBTITLES = {
-  board: '把课题、核心问题和关键发现排成课堂中可以逐步补写的主线',
-  question: '让学生回到具体词句、意象或结构中，用原文完成有依据的回答',
-  assessment: '把朗读、理解和表达写成可观察、可核对、可反馈的课堂表现'
-};
-const CARD_GENERATION_STEPS = [
-  '读取教师定稿与教材依据',
-  '整理板书、提问和评价初稿',
-  '按课堂节奏与原文依据逐项审校',
-  '绑定原始页码并保存到当前方案'
-];
-function lessonTitleFrom(value, fallback = '') {
-  const text = String(value || '').trim();
-  const quoted = text.match(/《([^》]{2,32})》/);
-  if (quoted?.[1]) return `《${quoted[1]}》`;
-  const plain = text
-    .replace(/^(请|帮我|想要|我想)?(怎样|如何|怎么)(备课|讲|设计)?/u, '')
-    .replace(/(怎么备课|如何备课|备课方案|(?:换成|改为|调整为|拆成|拆分为).{0,8}课时(?:设计)?|生成.{0,8}(板书|一课三卡)|展开.{0,8}教师用书依据|只看.{0,8}原始依据|重新生成|继续追问)/gu, '')
-    .trim();
-  return plain && plain.length <= 24 && !/(换成|生成|展开|追问|课时设计)/u.test(plain) ? plain : String(fallback || '').trim();
-}
-function planIdentity(question, fallback = '') {
-  const title = lessonTitleFrom(question, fallback);
-  return title || '当前篇目';
-}
-function lessonRefFromUrl(params, fallbackScope = 'both') {
-  const documentId = canonicalDocumentId(params?.get('doc'));
-  const page = Number(params?.get('page'));
-  const title = String(params?.get('lesson') || '').trim();
-  if (!documentId || !Number.isInteger(page) || page < 1 || !title) return null;
-  return { documentId, nodeId: String(params.get('node') || ''), title, lessonIndex: Number(params.get('lessonIndex')) || 0, lessonTotal: Number(params.get('lessonTotal')) || 0, pageRange: [page, page], scope: fallbackScope };
-}
-function sameLessonRef(left, right) {
-  const key = value => [value?.documentId || '', String(value?.nodeId || '').replace(/^seed-/u, '')].join(':');
-  const leftKey = key(left);
-  const rightKey = key(right);
-  return !leftKey || !rightKey || leftKey === rightKey;
-}
-function unitRefFromUrl(params) {
-  const documentId = canonicalDocumentId(params?.get('doc'));
-  const nodeId = String(params?.get('unit') || '').trim();
-  const title = String(params?.get('unitTitle') || '').trim();
-  const start = Number(params?.get('unitStart'));
-  const end = Number(params?.get('unitEnd'));
-  if (!documentId || !nodeId || !title) return null;
-  return { key: `${documentId}:${nodeId}`, documentId, nodeId, title, pageRange: [Number.isInteger(start) && start > 0 ? start : null, Number.isInteger(end) && end > 0 ? end : null] };
-}
-function normalizeCards(source, citations = [], coreQuestion = '', previousCards = []) {
-  const value = source && typeof source === 'object' ? source : {};
-  const definitions = [['board','板书卡',CARD_SUBTITLES.board],['question','提问卡',CARD_SUBTITLES.question],['assessment','评价卡',CARD_SUBTITLES.assessment]];
-  return definitions.map(([type,title,subtitle]) => {
-    const previous = (Array.isArray(previousCards) ? previousCards : []).find(card => card?.type === type);
-    // A locked card is a teacher-approved artifact. Follow-up questions may
-    // change the plan, but they must not replace that card or its references.
-    if (previous?.status === 'locked') return previous;
-    // A normal follow-up may return only an explanation and omit the cards.
-    // Preserve the teacher's editable draft in that case; only the explicit
-    // single-card regeneration endpoint is allowed to replace a card with a
-    // new result.
-    if ((!Array.isArray(value[type]) || value[type].length === 0) && Array.isArray(previous?.items) && previous.items.length) {
-      return { ...previous, title: previous.title || title, subtitle: previous.subtitle || subtitle };
-    }
-    const items = Array.isArray(value[type]) ? value[type] : [];
-    const card = { id: previous?.id || `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, title, subtitle, status: 'draft', items: items.map((text,index) => { const item = text && typeof text === 'object' ? text : {}; return { id: item.id || `${type}-${index}`, text: typeof text === 'string' ? text : item.text || '', sourceType: item.sourceType || (Array.isArray(item.citationIds) && item.citationIds.length ? 'combined' : 'insufficient'), citationIds: Array.isArray(item.citationIds) ? item.citationIds : [] }; }) };
-    if (type === 'board') card.boardPlan = makeBoardPlan(card.items, coreQuestion);
-    return card;
-  });
-}
-function makeBoardPlan(items = [], coreQuestion = '') {
-  const branches = ['文本结构', '语言证据', '情感主旨'];
-  const nodes = (Array.isArray(items) ? items : [])
-    .filter(item => String(item?.text || '').trim())
-    .slice(0, 9)
-    .map(item => ({
-      ...item,
-      label: boardLabelFromText(item.text)
-    }))
-    .filter(item => item.label);
-  const rawQuestion = String(coreQuestion || '').trim();
-  const cleanTitle = planIdentity(rawQuestion, '当前篇目');
-  const safeQuestion = rawQuestion && !/(怎么备课|如何备课|怎样备课|(?:换成|改为|调整为|拆成|拆分为).{0,8}课时|生成.{0,8}(板书|三卡|方案)|重新生成)/u.test(rawQuestion)
-    ? rawQuestion
-    : `围绕${cleanTitle}，学生读完后能理解什么、说明什么？`;
-  return {
-    version: 1,
-    coreQuestion: safeQuestion || '学生读完后要带走什么？',
-    branches: branches.map((title, branchIndex) => ({
-      id: `branch-${branchIndex + 1}`,
-      title,
-      nodes: nodes.filter((_, index) => index % branches.length === branchIndex).map(item => ({ id: item.id, text: item.text, label: item.label, citationIds: item.citationIds || [] }))
-    })),
-    blankZones: ['学生关键词', '教师补写', '课堂生成结论'],
-    stage: 1
-  };
-}
-function boardLabelFromText(value, fallback = '') {
-  let text = String(value || '').replace(/\s+/g, ' ').trim();
-  if (!text) return fallback;
-  text = text
-    .replace(/^(板书(?:课题|要点)?|关键词|关键依据|文本发现|教师补写|学生补写)[:：]?/u, '')
-    .replace(/^(任务|活动|课堂归纳)\s*\d*[:：]?/u, '')
-    .trim();
-  const parts = text.split(/[；;。.!！?？]/u).map(item => item.trim()).filter(Boolean);
-  const preferred = parts.find(item => !/(教师|学生|回到|依据|教材|PDF|补写|引导|说明如何)/u.test(item)) || parts[0] || text;
-  const cleaned = preferred
-    .replace(/^(左侧书写|右侧书写|课堂中|学生回答后|教师补写)[:：]?/u, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!cleaned) return fallback;
-  return Array.from(cleaned).slice(0, 18).join('') + (Array.from(cleaned).length > 18 ? '…' : '');
-}
-function boardQuestion(value, title) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim();
-  if (!text || /学生读完后能理解什么、说明什么/u.test(text)) return `读完${title || '课文'}，你能说清什么？`;
-  const concise = text.replace(/^核心问题[:：]?/u, '').trim();
-  return Array.from(concise).slice(0, 22).join('') + (Array.from(concise).length > 22 ? '…' : '');
-}
-function withBoardPlan(cards = [], question = '') {
-  return (Array.isArray(cards) ? cards : []).map(card => {
-    const legacyItems = Array.isArray(card?.items) ? card.items : Array.isArray(card?.content)
-      ? card.content.map((item, index) => typeof item === 'string'
-        ? { id: `${card.id || card.type || 'card'}-legacy-${index}`, text: item, citationIds: [] }
-        : item)
-      : [];
-    const normalized = legacyItems.length && !Array.isArray(card?.items) ? { ...card, items: legacyItems } : card;
-    if (normalized?.type !== 'board') return normalized;
-    if (normalized?.status === 'locked') return normalized;
-    const previous = normalized.boardPlan && typeof normalized.boardPlan === 'object' ? normalized.boardPlan : {};
-    const cleanQuestion = planIdentity(question || previous.coreQuestion || '', '当前篇目');
-    const previousCore = String(previous.coreQuestion || '').trim();
-    const coreQuestion = previousCore && !/(?:换成|改为|调整为|拆成|拆分为).{0,8}课时|生成.{0,8}(板书|三卡)|怎么备课|如何备课|重新生成/u.test(previousCore)
-      ? previousCore
-      : `围绕${cleanQuestion}，学生读完后能理解什么、说明什么？`;
-    const next = makeBoardPlan(normalized.items || [], coreQuestion);
-    return {
-      ...normalized,
-      boardPlan: {
-        ...next,
-        version: Number(previous.version) || 1,
-        blankZones: Array.isArray(previous.blankZones) && previous.blankZones.length ? previous.blankZones : next.blankZones,
-        stage: Math.min(5, Math.max(1, Number(previous.stage) || 1))
-      }
-    };
-  });
-}
-function uniqueCitations(citations = [], refs = []) {
-  const list = Array.isArray(citations) ? citations : [];
-  const wanted = Array.isArray(refs) && refs.length ? refs : list.slice(0, 2).map(item => item.id);
-  const seen = new Set();
-  return wanted.map(ref => list.find(item => item.id === ref)).filter(item => {
-    if (!item) return false;
-    if (!citationPage(item)) return false;
-    const key = `${item.documentId || ''}:${citationPage(item)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-function normalizeFeedbackForm(value = {}) {
-  const cardUsage = value.cardUsage ?? value.usedCards;
-  return {
-    unfinishedQuestions: String(value.unresolvedLearning ?? value.unfinishedQuestions ?? ''),
-    timeManagement: String(value.pacingNotes ?? value.timeManagement ?? ''),
-    usedCards: Array.isArray(cardUsage) ? cardUsage.map(item => String(typeof item === 'object' ? item.type || item.label : item || '').trim()).filter(Boolean) : typeof cardUsage === 'string' ? cardUsage.split(/\r?\n/).map(item => item.trim()).filter(Boolean) : [],
-    classResponse: String(value.observedLearning ?? value.classResponse ?? ''),
-    nextStep: String(value.nextLessonAdjustment ?? value.nextStep ?? '')
-  };
-}
-function feedbackAdviceFromForm(form = {}) {
-  const result = [];
-  const usedCards = Array.isArray(form.usedCards) ? form.usedCards : [];
-  if (String(form.classResponse || '').trim().length) {
-    result.push(`先保留课堂事实：${String(form.classResponse).trim().slice(0, 70)}。复备时先核对这项表现对应的原文或课堂任务。`);
-  }
-  if (String(form.unfinishedQuestions || '').trim().length) {
-    result.push(`需要继续处理：围绕“${String(form.unfinishedQuestions).trim().slice(0, 70)}”回看教材与教师用书，再决定是拆分问题、补充朗读，还是增加比较。`);
-  }
-  if (String(form.timeManagement || '').trim().length) {
-    result.push(`节奏调整：根据“${String(form.timeManagement).trim().slice(0, 70)}”确认具体受影响的环节，优先调整活动数量和过渡方式，不预设统一时长。`);
-  }
-  if (usedCards.length) {
-    result.push(`本节实际使用了${usedCards.join('、')}。复备时保留有效条目，只重写没有推动学生回到原文或表达依据的部分。`);
-  }
-  if (String(form.nextStep || '').trim().length) {
-    result.push(`教师已确定的下次调整：${String(form.nextStep).trim().slice(0, 90).replace(/[。！？；]+$/u, '')}。生成复备方案时应优先落实这项决定。`);
-  }
-  if (!result.length) result.push('目前记录还不足以形成教学建议。可补充：学生在哪个问题上停住、回读了哪一段、哪个环节用时与预期不同。');
-  return result;
-}
-
-function feedbackStorageValue(form = {}) {
-  const normalized = normalizeFeedbackForm(form);
-  return {
-    version: 1,
-    observedLearning: normalized.classResponse,
-    unresolvedLearning: normalized.unfinishedQuestions,
-    pacingNotes: normalized.timeManagement,
-    cardUsage: normalized.usedCards,
-    nextLessonAdjustment: normalized.nextStep
-  };
-}
-
-function cardEditGuidance(type) { return CARD_EDIT_GUIDANCE[type] || '把教材依据整理成课堂中可以直接使用的动作，并保留返回原始教材的依据。'; }
-function cardItemNeedsDetail(type, text) {
-  const value = String(text || '').trim();
-  if (value.length < 18) return true;
-  if (type === 'assessment' && /^(能否|是否|可以吗|会不会)/.test(value)) return true;
-  return type === 'question' && /^(为什么|能否|是否|怎样)/.test(value) && value.length < 28;
-}
-function wrapSvgText(value, max = 13) {
-  const text = String(value || '').trim();
-  if (!text) return ['待补写'];
-  const chars = Array.from(text);
-  const lines = [];
-  for (let index = 0; index < chars.length; index += max) lines.push(chars.slice(index, index + max).join(''));
-  return lines.slice(0, 3);
-}
 function SvgLabel({ x, y, text, className = 'board-svg-label', max = 13, anchor = 'middle' }) {
   return <text x={x} y={y} textAnchor={anchor} className={className}>{wrapSvgText(text, max).map((line, index) => <tspan x={x} dy={index ? 21 : 0} key={`${line}-${index}`}>{line}</tspan>)}</text>;
 }
@@ -1486,12 +1269,28 @@ ${sourceNote}`;
   const stages = CLASSROOM_STAGE_LABELS;
   const showEmpty = !busy && !draft;
   const workflowState = deriveTeacherDraftState({ draft, cards, dirty: planDirty || dirty });
-  const classroomReady = workflowState.cardsGenerated && Boolean(board?.items?.length);
+  const allCardsLocked = cards.length > 0 && cards.every(card => card?.status === 'locked');
+  const classroomReady = workflowState.cardsGenerated && allCardsLocked && Boolean(board?.items?.length);
   const planFormReady = Boolean(planForm.title.trim() && planForm.summary.trim() && planForm.objectives.trim() && planForm.keyPoints.trim());
-  const noticeTitle = ['auth_required','auth_invalid'].includes(errorCode) ? '登录后继续编辑课堂设计' : errorCode === 'draft_missing' ? '还没有选定备课方案' : errorCode === 'draft_not_found' ? '这份备课方案暂时无法读取' : /^(gateway|deepseek|card_generation|evidence_)/u.test(errorCode) ? '三卡暂时没有生成' : '课堂设计暂时没有打开';
-  const noticeBody = ['auth_required','auth_invalid'].includes(errorCode) ? '为保护不同账号的课堂资料，只有确认当前账号后才会读取该账号自己的本机恢复副本。' : errorCode === 'draft_missing' ? '先在备课问答中提出问题，保存方案后再进入这里。' : errorCode === 'draft_not_found' ? '可能是链接已过期，或这份方案不属于当前账号。请回到备课问答重新建立方案。' : error || '请稍后重试，或回到备课问答重新建立方案。';
+  const workflowGuideStep = !workflowState.teacherConfirmed || workflowState.unsavedChanges ? 0 : !workflowState.cardsGenerated ? 1 : dirty || !allCardsLocked ? 2 : 3;
+  const workflowGuide = [
+    ['核对方案', '检查课堂主线、目标与教材依据'],
+    ['生成三卡', '依据已确认方案形成板书、提问和评价'],
+    ['编辑保存锁定', '逐张修改，保存后锁定课堂版本'],
+    ['课堂使用', '按步骤展开板书并记录课堂情况']
+  ];
+  const workflowNextCopy = [
+    planDirty ? '先保存上方修改，再确认本版。' : '核对篇目、目标和教材依据，然后确认本版。',
+    generating ? '正在生成三卡，请保留当前页面。' : '点击“生成板书与三卡”，已有方案不会丢失。',
+    dirty ? '先保存当前卡片，再继续锁定。' : '逐张检查三卡，锁定已经可以进课堂的版本。',
+    classroomReady ? '板书与三卡已经就绪，可以进入课堂模式。' : '请先补全板书卡，再进入课堂模式。'
+  ][workflowGuideStep];
+  const citationNeedsReview = errorCode === 'citation_text_mismatch';
+  const noticeTitle = ['auth_required','auth_invalid'].includes(errorCode) ? '登录后继续编辑课堂设计' : errorCode === 'draft_missing' ? '还没有选定备课方案' : errorCode === 'draft_not_found' ? '这份备课方案暂时无法读取' : citationNeedsReview ? '教材依据已更新，请重新核对' : /^(gateway|deepseek|card_generation|evidence_)/u.test(errorCode) ? '三卡暂时没有生成' : '课堂设计暂时没有打开';
+  const noticeBody = ['auth_required','auth_invalid'].includes(errorCode) ? '为保护不同账号的课堂资料，只有确认当前账号后才会读取该账号自己的本机恢复副本。' : errorCode === 'draft_missing' ? '先在备课问答中提出问题，保存方案后再进入这里。' : errorCode === 'draft_not_found' ? '可能是链接已过期，或这份方案不属于当前账号。请回到备课问答重新建立方案。' : citationNeedsReview ? '教材页码或摘录发生变化。你的方案和教师修改仍在，请重新核对教材依据后再确认。' : error || '请稍后重试，或回到备课问答重新建立方案。';
   const workflowCopy = CARD_META[currentCard?.type]?.action || '把教材依据转成课堂行动';
   const classroomCta = classroomRun.status === 'in_progress' ? '继续本节课堂' : classroomRun.status === 'pending_review' ? '完成课后复盘' : classroomRun.status === 'confirmed' ? '查看课堂记录' : '开始上课并记录';
+  const classroomButtonCopy = classroomReady ? classroomCta : !workflowState.cardsGenerated ? '请先生成三卡' : !allCardsLocked ? '请先锁定三卡' : '请先补全板书卡';
   const currentStageOutcome = classroomRun.stages.find(item => item.stage === revealed)?.outcome || '';
   const classroomReadOnly = classroomRun.status === 'confirmed';
   const planQuality = useMemo(() => analyzeTeachingPlanQuality({ ...(draft?.answer || {}), citations: draft?.citations || [] }, cards), [draft?.answer, draft?.citations, cards]);
