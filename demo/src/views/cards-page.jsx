@@ -2,12 +2,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Archive, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Download, FileCheck2, FileText, Gauge, History, Layers3, Maximize2, Menu, PanelTop, Plus, RefreshCw, Route, Share2, ShieldCheck, Sparkles, Target, X } from 'lucide-react';
 import { Badge } from '../ui-kit.jsx';
-import { AssetCoverage, PlanQualitySummary } from '../ui-panels.jsx';
+import { AssetCoverage, PlanQualitySummary, sourceCoverageLabel } from '../ui-panels.jsx';
 import { CardSourceList, MindMapBoard, PeriodPlanner, TeachingBrief, TeachingEvidenceChain } from '../ui-board.jsx';
 import { askErrorMessage, cardEditGuidance, cardItemNeedsDetail, citationPage, clearClassroomRecovery, docName, feedbackAdviceFromForm, feedbackStorageValue, normalizeFeedbackForm, queryParams, readClassroomRecovery, requestCode, rootRequest, safeDownloadStem, sourceTypeLabel, uniqueCitations, useAuthSession, withBoardPlan, writeClassroomRecovery } from '../app-core.js';
-import { CLASSROOM_STAGE_LABELS, normalizeClassroomRun } from '../../shared/classroom-run.js';
+import { addClassroomMoment, CLASSROOM_STAGE_LABELS, emptyClassroomRun, normalizeClassroomRun, removeClassroomMoment, resolveClassroomRecovery, setClassroomStageOutcome } from '../../shared/classroom-run.js';
 import { buildBoardWritingPlan } from '../../shared/board-writing-plan.js';
-import { applyPlanForm, cardsForAskDraft, deriveTeacherDraftState, isTeacherConfirmed, planFormFromDraft } from '../teacher-finalization.js';
+import { applyPlanForm, cardsForAskDraft, deriveTeacherDraftState, isTeacherConfirmed, planFormFromDraft, readDraftRecovery } from '../teacher-finalization.js';
+import { analyzeTeachingPlanQuality } from '../lesson-quality.js';
+import { classroomAdaptationAdvice } from '../../shared/classroom-adaptation.js';
+import { buildOfflineClassroomPack } from '../../shared/offline-classroom-pack.js';
+import { preClassPulseClassroomCue } from '../../shared/preclass-pulse.js';
 
 export function Cards() {
 
