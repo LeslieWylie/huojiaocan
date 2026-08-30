@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { accessToken, authOwnersConflict, canPersistAuthOwner, clearAuthRecovery, consumeAuthCallback, ensureSession, getSession, readAuthRecovery, refreshSession, resendVerification, safeAuthReturnPath, saveAuthRecovery, sessionExpired, signIn, signOut, signUp, subscribeAuth } from './auth.js';
 import { errorCopy, UI_COPY } from './copy.js';
-import { CARD_GENERATION_STEPS, CARD_SUBTITLES, boardLabelFromText, boardQuestion, cardEditGuidance, cardItemNeedsDetail, classroomRecoveryKey, clearClassroomRecovery, feedbackAdviceFromForm, feedbackStorageValue, lessonRefFromUrl, lessonTitleFrom, makeBoardPlan, normalizeCards, normalizeFeedbackForm, planIdentity, readClassroomRecovery, sameLessonRef, uniqueCitations, unitRefFromUrl, withBoardPlan, wrapSvgText, writeClassroomRecovery, sourceTypeLabel, API, fetchJson, request, rootRequest, askErrorMessage, canonicalDocumentId, citationPage, citationLink, citationText, currentPageReturn, DOC_LABELS, docName, isIndexRecoveryCode, pageText, pageTitle, pdfPageUrl, queryParams, requestCode, routeId, safeDownloadStem, statusLabel, terminalJob } from './app-core.js';
+import { useAuthSession, normalizeTree, findTreeNode, nodePageRange, firstPage, CARD_GENERATION_STEPS, CARD_SUBTITLES, boardLabelFromText, boardQuestion, cardEditGuidance, cardItemNeedsDetail, classroomRecoveryKey, clearClassroomRecovery, feedbackAdviceFromForm, feedbackStorageValue, lessonRefFromUrl, lessonTitleFrom, makeBoardPlan, normalizeCards, normalizeFeedbackForm, planIdentity, readClassroomRecovery, sameLessonRef, uniqueCitations, unitRefFromUrl, withBoardPlan, wrapSvgText, writeClassroomRecovery, sourceTypeLabel, API, fetchJson, request, rootRequest, askErrorMessage, canonicalDocumentId, citationPage, citationLink, citationText, currentPageReturn, DOC_LABELS, docName, isIndexRecoveryCode, pageText, pageTitle, pdfPageUrl, queryParams, requestCode, routeId, safeDownloadStem, statusLabel, terminalJob } from './app-core.js';
 import { Badge, Logo, SectionHead, Stat } from './ui-kit.jsx';
 import { Decision } from './views/decision-page.jsx';
 import { Pitch } from './views/pitch-page.jsx';
@@ -157,11 +157,6 @@ function rememberAuthReturn(extra = {}) {
   return `/login/?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
 }
 
-function useAuthSession() {
-  const [session, setSession] = useState(() => getSession());
-  useEffect(() => subscribeAuth(setSession), []);
-  return session;
-}
 
 function draftRecoverySnapshot(draft, cards = draft?.cards) {
   if (!draft || typeof draft !== 'object') return null;
@@ -2611,78 +2606,10 @@ function searchResultPage(result = {}) {
   result = result && typeof result === 'object' ? result : {};
   return pageNumber(result.pdfPage ?? result.pdf_page ?? result.pageNumber ?? result.page ?? result.viewer?.page ?? result.viewer?.page_number);
 }
-function firstPage(...values) {
-  for (const value of values) {
-    const page = pageNumber(value);
-    if (page > 0) return page;
-  }
-  return 0;
-}
-function nodePageRange(node = {}) {
-  const range = node.pageRange ?? node.page_range ?? node.range;
-  const rangeStart = Array.isArray(range) ? range[0] : range?.start ?? range?.from ?? range?.startPage ?? range?.start_page;
-  const rangeEnd = Array.isArray(range) ? range[1] : range?.end ?? range?.to ?? range?.endPage ?? range?.end_page;
-  const start = firstPage(
-    node.startPdfPage, node.start_pdf_page, node.startPage, node.start_page,
-    node.pdfPage, node.pdf_page, node.pageNumber, node.page, rangeStart
-  );
-  const end = firstPage(node.endPdfPage, node.end_pdf_page, node.endPage, node.end_page, rangeEnd) || start;
-  return { start, end: Math.max(start, end) };
-}
-function normalizeTree(payload) {
-  const source = payload?.data ?? payload;
-  const root = source?.tree ?? source?.root ?? source?.children ?? source?.nodes ?? source;
-  if (!root) return [];
-  const roots = Array.isArray(root) ? root : [root];
-  const walk = (nodes, parentPath = []) => nodes.flatMap((node, index) => {
-    if (!node || typeof node !== 'object') return [];
-    const id = String(node.id || node.nodeId || `${parentPath.join('-') || 'root'}-${index}`);
-    const title = String(node.title || node.name || node.label || '未命名节点');
-    const rawChildren = node.children ?? node.nodes ?? [];
-    const children = Array.isArray(rawChildren) ? walk(rawChildren, [...parentPath, id]) : [];
-    const direct = nodePageRange(node);
-    const descendantRanges = children.map(child => child.pageRange).filter(item => item?.start > 0);
-    const start = direct.start || (descendantRanges.length ? Math.min(...descendantRanges.map(item => item.start)) : 0);
-    const end = Math.max(direct.end || 0, ...(descendantRanges.length ? descendantRanges.map(item => item.end) : [start]));
-    return [{
-      ...node,
-      id,
-      title,
-      level: Number.isFinite(Number(node.level)) ? Number(node.level) : parentPath.length + 1,
-      startPage: start,
-      endPage: Math.max(start, end),
-      pageRange: { start, end: Math.max(start, end) },
-      children
-    }];
-  });
-  return walk(roots);
-}
-function findTreeNode(nodes, page, preferredId = '') {
-  let preferred = null;
-  let best = null;
-  const rank = (node, depth, range) => ({ node, depth, width: Math.max(0, range.end - range.start) });
-  const isBetter = (candidate, current) => {
-    if (!current) return true;
-    if (candidate.depth !== current.depth) return candidate.depth > current.depth;
-    if (candidate.width !== current.width) return candidate.width < current.width;
-    return String(candidate.node.id || '').localeCompare(String(current.node.id || '')) < 0;
-  };
-  const visit = (list, depth = 0) => (list || []).forEach(node => {
-    const range = node.pageRange || nodePageRange(node);
-    if (range.start && page >= range.start && page <= range.end) {
-      const candidate = rank(node, depth, range);
-      if (preferredId && String(node.id) === String(preferredId)) preferred = candidate;
-      if (isBetter(candidate, best)) best = candidate;
-      visit(node.children, depth + 1);
-    }
-  });
-  visit(nodes);
-  // Keep the user's selected node only when it is as specific as the best
-  // match. A parent node must not remain highlighted after the page moves into
-  // one of its more specific child lessons.
-  if (preferred && best && preferred.depth === best.depth && preferred.width === best.width) return preferred.node;
-  return best?.node || null;
-}
+
+
+
+
 function findTreeNodeById(nodes, id) {
   const wanted = String(id || '').trim();
   if (!wanted) return null;
