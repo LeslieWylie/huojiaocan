@@ -1,7 +1,6 @@
 import { appSource } from './test-app-source.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import {
   applyPlanForm,
   cardsForAskDraft,
@@ -90,7 +89,7 @@ test('front-end contract confirms the saved version before generating cards and 
 });
 
 test('cards page guides every generation step and keeps citation recovery teacher-facing', () => {
-  const source = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8');
+  const source = appSource;
   for (const label of ['本页使用顺序', '核对方案', '生成三卡', '编辑保存锁定', '课堂使用', '重新核对并重试']) {
     assert.match(source, new RegExp(label, 'u'));
   }

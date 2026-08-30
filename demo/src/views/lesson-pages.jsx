@@ -1,6 +1,6 @@
 // 学习配套页（Rehearsal/PreClassPulse/Worksheet/LearningEvidence，从 App.jsx 迁出）
-import { ArrowLeft, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, CircleAlert, ClipboardCheck, Download, ExternalLink, FileCheck2, FileText, Gauge, PanelTop, Quote, RefreshCw, Route, ShieldCheck, Target, useEffect, useMemo, useRef } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, CircleAlert, ClipboardCheck, Download, ExternalLink, FileCheck2, FileText, Gauge, PanelTop, Quote, RefreshCw, Route, ShieldCheck, Target } from 'lucide-react';
 import { Badge } from '../ui-kit.jsx';
 import { CardSourceList } from '../ui-board.jsx';
 import { askErrorMessage, clearPulseRecovery, planIdentity, pulseRecoveryKey, queryParams, readPulseRecovery, requestCode, rootRequest, useAuthSession } from '../app-core.js';
@@ -408,4 +408,3 @@ export function LearningEvidencePage() {
     </>}
   </div>;
 }
-
