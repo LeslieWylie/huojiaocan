@@ -438,3 +438,8 @@ export function pageNumber(value) {
   const match = String(value || '').match(/\d+/);
   return match ? Number(match[0]) : 0;
 }
+export const CARD_EDIT_GUIDANCE = {
+  board: '建议写成“关键词 → 关系或结论”，并标明教师先写什么、学生回答后再补什么，让板书可以边问边展开。',
+  question: '建议写清“回到哪一处原文 + 观察什么 + 为什么追问”，问题要能直接带学生找到词句、意象或结构。',
+  assessment: '建议写清“学生完成什么任务 + 使用哪处教材依据 + 达到什么可观察表现”，不要只停留在“能否……”的判断。'
+};
