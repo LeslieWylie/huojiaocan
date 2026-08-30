@@ -477,3 +477,9 @@ export function rememberAuthReturn(extra = {}) {
   saveAuthRecovery({ next: `${location.pathname}${location.search}`, ...extra, savedAt: new Date().toISOString() });
   return `/login/?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
 }
+export const EXAMPLES = [
+  '《我爱这土地》第二节为什么不能删？怎样设计课堂活动？',
+  '第一单元三项任务之间是什么关系？',
+  '怎样指导学生读出《我爱这土地》的重音和节奏？',
+  '某项练习在教师用书中应当如何处理？'
+];

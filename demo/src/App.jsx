@@ -109,12 +109,7 @@ const MATERIAL_NAV = [
   ['inspect', '/inspect/', FileSearch, '页面校正'],
   ['validation', '/validation/', ClipboardCheck, '质量检查']
 ];
-const EXAMPLES = [
-  '《我爱这土地》第二节为什么不能删？怎样设计课堂活动？',
-  '第一单元三项任务之间是什么关系？',
-  '怎样指导学生读出《我爱这土地》的重音和节奏？',
-  '某项练习在教师用书中应当如何处理？'
-];
+
 const JOB_STAGES = ['文件检查', '读取教材页面信息', '读取页面文字与页面识别', '整理教材目录与章节', '建立教材目录', '核对搜索与页码', '可用于问答和三卡生成'];
 
 async function uploadPdf(file, { documentType, title, extractionPolicy = 'auto' }) {

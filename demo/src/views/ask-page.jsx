@@ -12,7 +12,7 @@ import { evidenceShelfKey, mergeEvidenceShelf, removeEvidenceShelfItem } from '.
 import { pairLessonEvidence } from '../lesson-evidence.js';
 import { cardsForAskDraft } from '../teacher-finalization.js';
 import { checklistProgress, deriveWorkflowChecklist } from '../workflow-checklist.js';
-import { askErrorMessage, canonicalDocumentId, citationLink, citationPage, citationText, cacheDraftForRecovery, docName, isIndexRecoveryCode, lessonRefFromUrl, normalizeFeedbackForm, planIdentity, rememberAuthReturn, request, requestCode, rootRequest, sameLessonRef, unitRefFromUrl, useAuthSession } from '../app-core.js';
+import { EXAMPLES, askErrorMessage, canonicalDocumentId, citationLink, citationPage, citationText, cacheDraftForRecovery, docName, isIndexRecoveryCode, lessonRefFromUrl, normalizeFeedbackForm, planIdentity, rememberAuthReturn, request, requestCode, rootRequest, sameLessonRef, unitRefFromUrl, useAuthSession } from '../app-core.js';
 import { teachingDeliberationIsStale } from '../../shared/teaching-deliberation.js';
 import { normalizePreviousLessonCarryover } from '../../shared/classroom-carryover.js';
 
