@@ -787,7 +787,7 @@ export function AskPage() {
           <form className="ask-large" onSubmit={ask}>
             <MessageCircle/>
             <textarea ref={composerRef} value={question} onChange={event => setQuestion(event.target.value)} placeholder={messages.length ? '继续追问，例如：教师用书建议对应学生教材哪一段？' : '例如：怎样备课《沁园春·雪》？'}/>
-            <button className="primary" disabled={busy || !question.trim() || askBlocked}><Send/>{askButtonLabel}</button>
+            <button type="submit" className="primary" disabled={busy || !question.trim() || askBlocked}><Send/>{askButtonLabel}</button>
           </form>
           {!session && <div className="ask-auth-note"><ShieldCheck/><span>公共教材可以浏览；登录后才能发起连续问答、保存方案和生成三卡。</span><a href={loginHref} onClick={rememberCurrentAsk}>立即登录</a></div>}
           {session && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
