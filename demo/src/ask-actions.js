@@ -15,7 +15,8 @@ export function normalizeAskAction(directQuestion, options = {}, fallbackQuestio
   };
   const directText = typeof directQuestion === 'string' ? directQuestion : '';
   const text = String(action.prompt || directText || fallbackQuestion || '').trim();
-  const inferredPeriods = !action.operation && directText ? inferredPeriodChange(directText) : null;
+  const mayInferFromComposer = !directQuestion || typeof directQuestion === 'string';
+  const inferredPeriods = !action.operation && mayInferFromComposer ? inferredPeriodChange(text) : null;
   if (inferredPeriods) {
     action = {
       ...action,

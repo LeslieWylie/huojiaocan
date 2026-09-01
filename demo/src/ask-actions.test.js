@@ -25,7 +25,9 @@ test('plain questions still use the current composer text', () => {
 });
 
 test('typed period changes update the operation and saved lesson context', () => {
-  const result = normalizeAskAction('保持篇目不变，改为两课时。', {}, '原问题');
+  // A normal form submit passes the current textarea as fallbackQuestion;
+  // directQuestion is reserved for quick-action buttons.
+  const result = normalizeAskAction(undefined, {}, '保持篇目不变，改为两课时。');
   assert.deepEqual(result.options.operation, { type: 'change_periods', periods: 2 });
   assert.deepEqual(result.options.lessonContextPatch, { periods: 2 });
   assert.equal(result.text, '保持篇目不变，改为两课时。');
