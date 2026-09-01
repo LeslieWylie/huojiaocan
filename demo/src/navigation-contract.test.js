@@ -69,6 +69,15 @@ test('teacher-facing copy does not expose internal feature version numbers', asy
   assert.doesNotMatch(app, /活教参\s+\d+\.\d+\s*·/u);
 });
 
+test('starting another lesson uses a recoverable in-page confirmation', async () => {
+  const ask = await source(new URL('./views/ask-page.jsx', import.meta.url));
+  assert.doesNotMatch(ask, /window\.confirm/u, 'native confirmation dialogs block browser recovery and must not be used');
+  assert.match(ask, /role="dialog"/u);
+  assert.match(ask, /保留草稿，另起一课/u);
+  assert.match(ask, /当前草稿、教材依据和历史问答都会保留在账号中/u);
+  assert.equal((ask.match(/<h1>\{UI_COPY\.ask\.title\}/gu) || []).length, 1, 'ask page should render one primary heading');
+});
+
 test('URL lesson identity normalization is consistent with tree matching normalization', async () => {
   const app = appSource;
 

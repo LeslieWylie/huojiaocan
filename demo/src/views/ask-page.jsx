@@ -236,6 +236,7 @@ export function AskPage() {
   const [restoredFromLocal, setRestoredFromLocal] = useState(Boolean(canResumeLocal && (initialQuestion || Boolean(recoveredMessages.length))));
   const [evidenceShelf, setEvidenceShelf] = useState([]);
   const [evidenceShelfReady, setEvidenceShelfReady] = useState(false);
+  const [newConversationPromptOpen, setNewConversationPromptOpen] = useState(false);
   const shelfReadyForDraft = useRef('');
   const shelfSyncHash = useRef('');
   const shelfSyncTimer = useRef(null);
@@ -704,8 +705,8 @@ export function AskPage() {
     link.click();
     URL.revokeObjectURL(url);
   };
-  const startNewConversation = () => {
-    if (typeof window !== 'undefined' && messages.length && !window.confirm('另起一场备课会保留当前草稿，但会清空本页对话。是否继续？')) return;
+  const confirmStartNewConversation = () => {
+    setNewConversationPromptOpen(false);
     clearConversationSnapshot(session?.user?.id || initialUser);
     setMessages([]); setConversationHistory([]); setExistingDraft(null); setDraftId(''); setQuestion(''); setPlanQuestion(''); setLessonRef(null); setRestoredAt(''); setRestoredFromLocal(false);
     const url = new URL(location.href);
@@ -715,6 +716,21 @@ export function AskPage() {
     url.search = '?new=1';
     history.replaceState(null, '', `${url.pathname}${url.search}`);
   };
+  const startNewConversation = () => {
+    if (messages.length) {
+      setNewConversationPromptOpen(true);
+      return;
+    }
+    confirmStartNewConversation();
+  };
+  useEffect(() => {
+    if (!newConversationPromptOpen) return undefined;
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') setNewConversationPromptOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [newConversationPromptOpen]);
   const askReaderReturn = draftId ? `/ask/?draftId=${encodeURIComponent(draftId)}` : 'ask';
   const emptyState = !busy && messages.length === 0 ? (
     <div className="ask-empty">
@@ -813,6 +829,7 @@ export function AskPage() {
         {contextChanged && <div className="context-recompute"><div><b>备课条件已变化</b><p>当前方案仍按上一组条件生成。重新整理后，会同步调整课堂流程、问题链、评价和三张卡；已锁定的卡片不会被覆盖。</p></div><button type="button" className="primary" disabled={busy || askBlocked} onClick={() => ask(null, { prompt: '请根据当前备课条件重新整理完整课堂方案。保持当前篇目与核心问题不变；先核对教师用书的教学建议，再回到学生教材核对原文，并结合当前班情取舍。请同步更新课堂流程、问题链、评价和未锁定的三张卡。', operation: { type: 'recompute_plan' } })}>重新整理本方案</button></div>}
       </section>
       <DualSourceEvidenceDesk title={pairedLessonTitle} evidence={pairedEvidence} busy={pairedEvidenceBusy} error={pairedEvidenceError} onSave={saveEvidence} returnTo={askReaderReturn}/>
+      {newConversationPromptOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setNewConversationPromptOpen(false)}><section className="panel ask-new-conversation-modal" role="dialog" aria-modal="true" aria-labelledby="ask-new-conversation-title" onMouseDown={event => event.stopPropagation()}><header><div><span>开始新的备课</span><h2 id="ask-new-conversation-title">要另起一课吗？</h2></div><button type="button" onClick={() => setNewConversationPromptOpen(false)} aria-label="关闭"><X/></button></header><p>当前草稿、教材依据和历史问答都会保留在账号中；这里只会清空本页正在进行的对话，方便你选择另一篇课文重新开始。</p><div className="ask-new-conversation-preserved"><CheckCircle2/><div><b>{activeLessonLabel}</b><small>{draftId ? '当前方案仍可从备课记录中继续打开' : '当前对话记录仍会保留'}</small></div></div><footer><button type="button" autoFocus onClick={() => setNewConversationPromptOpen(false)}>继续当前备课</button><button type="button" className="primary" onClick={confirmStartNewConversation}>保留草稿，另起一课</button></footer></section></div>}
     </div>
   );
 }
