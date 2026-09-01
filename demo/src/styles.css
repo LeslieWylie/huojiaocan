@@ -572,3 +572,26 @@
 @media (width<=620px){.view-stack{min-width:0}.view-stack>*{min-width:0;max-width:100%}.hero,.compact-hero,.deliberation-hero,.guidance-hero{min-width:0;max-width:100%;padding-left:20px;padding-right:20px}.hero-actions{flex-wrap:wrap;justify-content:flex-start}.hero-actions>a,.hero-actions>button{max-width:100%}.dropzone,.upload-panel>button,.upload-panel .wide-action{max-width:100%;min-width:0}}
 
 .page-error-boundary{text-align:center;padding:44px 24px;gap:12px;display:grid;justify-items:center}.page-error-boundary .page-error-icon{color:#c06a52}.page-error-boundary h2{color:#20574d;font-size:24px;margin:0}.page-error-boundary p{color:#71857f;max-width:520px;margin:0;font-size:14px;line-height:1.8}.page-error-actions{display:flex;gap:10px;margin-top:8px}.page-error-actions button{color:#317566;border:1px solid #d5e5df;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:750;cursor:pointer;background:#fff}.page-error-actions button.primary{color:#fff;background:#23695d;border-color:#23695d}.page-error-detail{color:#9aa9a3;font-size:11px;word-break:break-all}
+
+/* 1.4 · 问题优先：打开备课页先提问，完整条件与双源依据随后核对 */
+.ask-page .compact-hero{min-height:190px;padding:27px 32px}
+.ask-page .compact-hero h1{margin:12px 0 9px;font-size:28px;line-height:1.28}
+.ask-page .compact-hero p{font-size:13px;line-height:1.72}
+.ask-page .compact-hero .hero-actions{margin-top:16px}
+.ask-page .scope-switch{max-width:420px;background:#153f398f;border-color:#ffffff2b;align-content:center}
+.ask-page .scope-switch button{color:#c8ddd7;min-height:36px;font-size:11px}
+.ask-page .scope-switch button.active{color:#1c6157;background:#fff}
+.ask-page .ask-main{padding:18px;min-height:420px}
+.ask-context-summary{background:linear-gradient(120deg,#f7fbf9,#fffaf0);border:1px solid #d8e5df;border-left:4px solid #c59542;border-radius:12px;grid-template-columns:minmax(110px,1.3fr) minmax(130px,1.1fr) minmax(125px,1fr) auto;align-items:center;gap:10px;margin-bottom:12px;padding:12px 13px;display:grid}
+.ask-context-summary>div{min-width:0}
+.ask-context-summary span,.ask-context-summary b{display:block}
+.ask-context-summary span{color:#9a712d;letter-spacing:.08em;font-size:10px;font-weight:850}
+.ask-context-summary b{color:#2a574f;margin-top:4px;font-size:12.5px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.ask-context-summary button{color:#28695d!important;white-space:nowrap;background:#fff!important;border-color:#cbded7!important;min-height:40px;font-size:12px!important}
+.ask-page .ask-large{background:#fff;border-color:#bcd6cd;box-shadow:0 10px 28px #173f3810}
+.ask-page .ask-large textarea{min-height:64px;font-size:15px;line-height:1.65}
+.ask-page .ask-large button{min-width:118px;font-size:13px}
+.ask-page #lesson-context-panel{scroll-margin-top:84px}
+@media(max-width:1100px){.ask-context-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.ask-context-summary button{justify-content:center}}
+@media(max-width:700px){.ask-page .compact-hero{min-height:0;padding:21px 18px}.ask-page .compact-hero h1{font-size:24px}.ask-page .compact-hero p{font-size:12px;line-height:1.65}.ask-page .scope-switch{max-width:none;width:100%}.ask-context-summary{grid-template-columns:minmax(0,1fr) auto}.ask-context-summary b{font-size:12px}.ask-page .ask-main{padding:14px}.ask-page .ask-large{grid-template-columns:1fr;padding:11px}.ask-page .ask-large>svg{display:none}.ask-page .ask-large button{min-height:46px}.ask-page .ask-large textarea{min-height:86px;padding:7px}}
+@media(max-width:900px){.ask-page .conversation-side{order:0}}

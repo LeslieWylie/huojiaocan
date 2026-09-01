@@ -29,6 +29,20 @@ const indexApiSource = fs.readFileSync(path.resolve(process.cwd(), 'api/index.js
 const classroomAdaptationSource = fs.readFileSync(path.resolve(process.cwd(), 'shared/classroom-adaptation.js'), 'utf8');
 const boardWritingPlanSource = fs.readFileSync(path.resolve(process.cwd(), 'shared/board-writing-plan.js'), 'utf8');
 
+test('the ask-first workflow exposes the real question before secondary settings', () => {
+  const summaryIndex = appSource.indexOf('className="ask-context-summary"');
+  const composerIndex = appSource.indexOf('className="ask-large"');
+  const settingsIndex = appSource.indexOf('id="lesson-context-panel"');
+  const evidenceIndex = appSource.indexOf('<DualSourceEvidenceDesk');
+
+  assert.ok(summaryIndex >= 0, 'current lesson and material scope should be summarized');
+  assert.ok(composerIndex > summaryIndex, 'the question composer should follow the compact context summary');
+  assert.ok(settingsIndex > composerIndex, 'full lesson settings should follow the primary question');
+  assert.ok(evidenceIndex > settingsIndex, 'dual-source details should remain available after settings');
+  assert.match(appSource, />修改条件<\/button>/u);
+  assert.match(stylesSource, /\.ask-page \.ask-large textarea\{[^}]*font-size:15px/u);
+});
+
 test('3.1 adds a teacher-confirmed curriculum-standard alignment flow', () => {
   const report = buildCurriculumAlignment({
     lessonTitle: '《岳阳楼记》',

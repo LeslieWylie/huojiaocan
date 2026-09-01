@@ -744,6 +744,14 @@ export function AskPage() {
       </div>
     </>
   ) : null;
+  const activeLessonLabel = pairedLessonTitle || lessonRef?.title || (planQuestion ? planIdentity(planQuestion, '') : '') || '尚未选择篇目';
+  const scopeLabel = {
+    all: '课标、学生教材与教师用书',
+    both: '学生教材与教师用书',
+    textbook: '学生教材',
+    'teacher-guide': '教师用书',
+    'curriculum-standard': '课程标准'
+  }[scope] || '教材材料';
   return (
     <div className="view-stack ask-page">
       <section className="hero compact-hero">
@@ -765,7 +773,30 @@ export function AskPage() {
       {priorCarryover.items.length > 0 && <section className={`prior-carryover-panel ${priorCarryover.status}`}><header><div><span>上一课待接事项</span><h2>{priorCarryover.status === 'completed' ? '上一课留下的问题已经全部处理' : `还有 ${priorCarryover.items.filter(item => item.status !== 'done').length} 项需要在本课接住`}</h2><p>这些事项由教师在上一课复盘时明确选择，不属于教材结论。处理时仍要回到本课学生教材与教师用书。</p></div><Badge tone={priorCarryover.status === 'completed' ? 'green' : 'orange'}>{priorCarryover.status === 'completed' ? '已完成' : '课堂待办'}</Badge></header><div>{priorCarryover.items.map(item => <button type="button" key={item.sourceMomentId} className={item.status === 'done' ? 'done' : ''} disabled={Boolean(carryoverWorking)} onClick={() => updateCarryover(item)}><span>{item.status === 'done' ? <CheckCircle2/> : <span className="carryover-checkbox"/>}</span><b>{item.text}</b><small>{carryoverWorking === item.sourceMomentId ? '正在保存…' : item.status === 'done' ? '已在本课处理，点击可撤回' : '处理后点一下完成'}</small></button>)}</div></section>}
       {priorLearningSummary?.itemCount > 0 && <section className="prior-learning-banner"><ClipboardCheck/><div><span>上一课作业回流</span><b>{priorLearningSummary.itemCount} 道任务，单题最多 {priorLearningSummary.submittedCount} 份；按题累计：完整 {priorLearningSummary.counts?.secure || 0}，部分 {priorLearningSummary.counts?.partial || 0}，尚未达成 {priorLearningSummary.counts?.not_yet || 0}</b><p>这是教师确认的班级聚合学情，只解释“为什么调整”；本课在哪里落实，仍要重新查找学生教材和教师用书。</p></div><a href={`/learning/?draftId=${encodeURIComponent(priorLearning.sourceDraftId || draftId)}`}>查看汇总</a></section>}
       {currentDeliberation && <section className="prior-deliberation-banner"><Route/><div><span>本课备课取舍已确认</span><b>{currentDeliberation.decisions.map(item => item.options.find(option => option.id === item.selectedOptionId)?.label).filter(Boolean).join(' · ')}</b><p>后续问答会遵守这些教师决定；教材结论仍只来自当前学生教材和教师用书。</p></div><a href={`/deliberation/?draftId=${encodeURIComponent(draftId)}`}>查看取舍</a></section>}
-      <section className="panel lesson-context">
+      <div className="ask-layout">
+        <section className="panel ask-main">
+          <div className="ask-context-summary" aria-label="当前备课范围">
+            <div><span>当前篇目</span><b>{activeLessonLabel}</b></div>
+            <div><span>课堂条件</span><b>{lessonContext.periods} 课时 · {lessonContext.classLevel} · {lessonContext.teachingGoal}</b></div>
+            <div><span>教材范围</span><b>{scopeLabel}</b></div>
+            <button type="button" onClick={() => document.getElementById('lesson-context-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>修改条件</button>
+          </div>
+          <form className="ask-large" onSubmit={ask}>
+            <MessageCircle/>
+            <textarea ref={composerRef} value={question} onChange={event => setQuestion(event.target.value)} placeholder={messages.length ? '继续追问，例如：教师用书建议对应学生教材哪一段？' : '例如：怎样备课《沁园春·雪》？'}/>
+            <button type="submit" className="primary" disabled={busy || !question.trim() || askBlocked}><Send/>{askButtonLabel}</button>
+          </form>
+          {!session && <div className="ask-auth-note"><ShieldCheck/><span>公共教材可以浏览；登录后才能发起连续问答、保存方案和生成三卡。</span><a href={loginHref} onClick={rememberCurrentAsk}>立即登录</a></div>}
+          {session && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
+          {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
+          {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
+          {busy && <div className="answer-loading"><span/><span/><span/><p>{UI_COPY.ask.loading}</p></div>}
+          {emptyState}
+          {conversationState}
+        </section>
+        <ConversationSide messages={messages} history={conversationHistory} lessonTitle={lessonRef?.title || (planQuestion ? planIdentity(planQuestion, '') : '')} scope={scope} lessonContext={lessonContext} existingDraft={existingDraft} draftId={draftId} restoredAt={restoredAt} restoredFromLocal={restoredFromLocal} recentDrafts={recentDrafts} localSessions={localSessions} onContinue={focusComposer} onQuickAsk={value => ask(null, value)} onNewConversation={startNewConversation} onExportConversation={exportConversation} shelf={evidenceShelf} onRemoveShelf={removeShelfItem} onClearShelf={() => setEvidenceShelf([])} readerReturnTo={askReaderReturn}/>
+      </div>
+      <section className="panel lesson-context" id="lesson-context-panel">
         <div className="lesson-context-heading">
           <div><span>备课条件</span><b>先确定课堂的边界，再生成方案</b></div>
           <small>这些选择会影响课堂流程、问题难度和评价方式</small>
@@ -782,24 +813,6 @@ export function AskPage() {
         {contextChanged && <div className="context-recompute"><div><b>备课条件已变化</b><p>当前方案仍按上一组条件生成。重新整理后，会同步调整课堂流程、问题链、评价和三张卡；已锁定的卡片不会被覆盖。</p></div><button type="button" className="primary" disabled={busy || askBlocked} onClick={() => ask(null, { prompt: '请根据当前备课条件重新整理完整课堂方案。保持当前篇目与核心问题不变；先核对教师用书的教学建议，再回到学生教材核对原文，并结合当前班情取舍。请同步更新课堂流程、问题链、评价和未锁定的三张卡。', operation: { type: 'recompute_plan' } })}>重新整理本方案</button></div>}
       </section>
       <DualSourceEvidenceDesk title={pairedLessonTitle} evidence={pairedEvidence} busy={pairedEvidenceBusy} error={pairedEvidenceError} onSave={saveEvidence} returnTo={askReaderReturn}/>
-      <div className="ask-layout">
-        <section className="panel ask-main">
-          <form className="ask-large" onSubmit={ask}>
-            <MessageCircle/>
-            <textarea ref={composerRef} value={question} onChange={event => setQuestion(event.target.value)} placeholder={messages.length ? '继续追问，例如：教师用书建议对应学生教材哪一段？' : '例如：怎样备课《沁园春·雪》？'}/>
-            <button type="submit" className="primary" disabled={busy || !question.trim() || askBlocked}><Send/>{askButtonLabel}</button>
-          </form>
-          {!session && <div className="ask-auth-note"><ShieldCheck/><span>公共教材可以浏览；登录后才能发起连续问答、保存方案和生成三卡。</span><a href={loginHref} onClick={rememberCurrentAsk}>立即登录</a></div>}
-          {session && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
-          {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
-          {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
-          {busy && <div className="answer-loading"><span/><span/><span/><p>{UI_COPY.ask.loading}</p></div>}
-          {emptyState}
-          {conversationState}
-        </section>
-        <ConversationSide messages={messages} history={conversationHistory} lessonTitle={lessonRef?.title || (planQuestion ? planIdentity(planQuestion, '') : '')} scope={scope} lessonContext={lessonContext} existingDraft={existingDraft} draftId={draftId} restoredAt={restoredAt} restoredFromLocal={restoredFromLocal} recentDrafts={recentDrafts} localSessions={localSessions} onContinue={focusComposer} onQuickAsk={value => ask(null, value)} onNewConversation={startNewConversation} onExportConversation={exportConversation} shelf={evidenceShelf} onRemoveShelf={removeShelfItem} onClearShelf={() => setEvidenceShelf([])} readerReturnTo={askReaderReturn}/>
-      </div>
     </div>
   );
 }
-
