@@ -558,6 +558,26 @@ async function assertCitationsTrusted(user, citations, context, options) {
   return assertCitationTextMatchesSource(citations, options);
 }
 
+function persistedCitationKey(citation) {
+  const documentId = String(citation?.documentId || citation?.document_id || '');
+  const page = Number(citation?.pdfPage ?? citation?.pageNumber ?? citation?.page);
+  const quote = citationComparableText(citation?.quote || citation?.text || '');
+  return `${documentId}:${page}:${quote}`;
+}
+
+async function assertUpdatedCitationsTrusted(user, citations, currentCitations, context) {
+  const persisted = new Set((Array.isArray(currentCitations) ? currentCitations : []).map(persistedCitationKey));
+  return Promise.all((Array.isArray(citations) ? citations : []).map(async citation => {
+    // A citation already stored on this owned draft may predate a public OCR
+    // refresh. It may use the bounded public-drift repair, but a new or edited
+    // client quote remains exact-only.
+    const [trusted] = await assertCitationsTrusted(user, [citation], context, {
+      allowPublicDrift: persisted.has(persistedCitationKey(citation))
+    });
+    return trusted;
+  }));
+}
+
 function lessonName(value) {
   return String(value || '').replace(/^\d+\s*/u, '').trim().slice(0, 120);
 }
@@ -1149,7 +1169,12 @@ export default async function handler(req, res) {
         for (const key of ['questionRehearsal', 'questionRehearsalHistory', 'learningEvidence', 'learningEvidenceHistory', 'teachingDeliberation', 'teachingDeliberationHistory', 'teachingSlides', 'layeredHomework', 'homeworkReview', 'homeworkReviewHistory']) delete answer[key];
         update.answer = answer;
       } else if (Object.prototype.hasOwnProperty.call(update, 'citations')) {
-        await assertCitationsTrusted(user, update.citations, update.lesson_context || current.lesson_context);
+        update.citations = await assertUpdatedCitationsTrusted(
+          user,
+          update.citations,
+          current.citations,
+          update.lesson_context || current.lesson_context
+        );
       }
       if (Object.keys(update).some(key => ['title', 'question', 'answer', 'cards'].includes(key))) {
         const prepared = repairDraftForClassroom({ ...current, ...update }).draft;

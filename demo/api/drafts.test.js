@@ -1234,6 +1234,23 @@ test('client citation writes remain exact even when most of the quote resembles 
   assert.equal(result.calls.some(call => call.options.method === 'PATCH'), false);
 });
 
+test('follow-up save repairs unchanged persisted public OCR drift but not new client text', async () => {
+  const current = apiDraft();
+  current.citations = [{
+    id: 'E1', documentId: 'textbook', documentType: 'textbook', pdfPage: 56,
+    quote: '本文题为《岳阳楼记》，但并未具体描写岳阳楼本身，这是为什么？查阅相关资料，并参照注释读课文，看看文中写了哪些内容。'
+  }];
+  const result = await invokeApi({
+    method: 'PATCH', url: '/api/drafts/draft-1', draft: current,
+    body: { version: 8, citations: current.citations, answer: current.answer }
+  });
+  assert.equal(result.statusCode, 200);
+  const write = result.calls.find(call => call.options.method === 'PATCH');
+  const saved = JSON.parse(write.options.body);
+  assert.match(saved.citations[0].quote, /这是为什么呢/u);
+  assert.equal(saved.citations[0].text, saved.citations[0].quote);
+});
+
 test('confirm repairs a persisted public OCR drift with a canonical local-page quote', async () => {
   const current = apiDraft();
   current.citations = [{

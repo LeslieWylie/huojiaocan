@@ -17,6 +17,7 @@ import { checklistProgress, deriveWorkflowChecklist } from '../workflow-checklis
 import { EXAMPLES, askErrorMessage, canonicalDocumentId, citationLink, citationPage, citationText, cacheDraftForRecovery, docName, isIndexRecoveryCode, lessonRefFromUrl, normalizeFeedbackForm, planIdentity, rememberAuthReturn, request, requestCode, rootRequest, sameLessonRef, unitRefFromUrl, useAuthSession } from '../app-core.js';
 import { teachingDeliberationIsStale } from '../../shared/teaching-deliberation.js';
 import { normalizePreviousLessonCarryover } from '../../shared/classroom-carryover.js';
+import { mergeFollowUpCitations } from '../citation-merge.js';
 
 export function CitationChips({ citations, refs, returnTo = 'ask', limit = 4 }) {
   const items = citationByRef(citations, refs);
@@ -584,15 +585,17 @@ export function AskPage() {
       const previousCitations = sameLesson
         ? (Array.isArray(existingDraft?.citations) ? existingDraft.citations : messages.flatMap(item => Array.isArray(item.response?.citations) ? item.response.citations : []))
         : [];
-      const nextCitations = [...previousCitations, ...(response.citations || [])];
-      const nextTurn = { role: 'user', question: currentQuestion, operationLabel: requestOptions.prompt || '', response };
+      const mergedEvidence = mergeFollowUpCitations(previousCitations, response);
+      const normalizedResponse = mergedEvidence.response;
+      const nextCitations = mergedEvidence.citations;
+      const nextTurn = { role: 'user', question: currentQuestion, operationLabel: requestOptions.prompt || '', response: normalizedResponse };
       const nextHistory = conversationHistory.length
-        ? [...conversationHistory, { role: 'user', content: currentQuestion }, { role: 'assistant', content: response.answer?.reply || response.answer?.summary || '' }].slice(-10)
+        ? [...conversationHistory, { role: 'user', content: currentQuestion }, { role: 'assistant', content: normalizedResponse.answer?.reply || normalizedResponse.answer?.summary || '' }].slice(-10)
         : buildConversationHistory([...messages, nextTurn]);
       pendingTurn = nextTurn;
       pendingHistory = nextHistory;
       const nextConversationTurns = [...messages, nextTurn].map(persistedConversationTurn).filter(Boolean).slice(-12);
-      const draftPayload = { title: lessonTitle, question: nextIdentityQuestion, scope: scopeDocumentIds(selectedScope), lessonContext: { ...nextLessonContext, ...(nextLessonRef ? { lessonRef: nextLessonRef } : {}) }, answer: { ...(response.answer || {}), ...(sameLesson && existingDraft?.answer?.planApproval ? { planApproval: { ...existingDraft.answer.planApproval, hasUnconfirmedChanges: true } } : {}), sourceCoverage: response.sourceCoverage || response.answer?.sourceCoverage, conversationHistory: nextHistory, conversationTurns: nextConversationTurns, evidenceShelf, ...(sameLesson && existingDraft?.answer?.previousLessonReflection ? { previousLessonReflection: existingDraft.answer.previousLessonReflection } : {}), ...(sameLesson && existingDraft?.answer?.lessonReflection ? { lessonReflection: existingDraft.answer.lessonReflection } : {}) }, citations: nextCitations, cards: sameLesson ? cardsForAskDraft(existingDraft) : [] };
+      const draftPayload = { title: lessonTitle, question: nextIdentityQuestion, scope: scopeDocumentIds(selectedScope), lessonContext: { ...nextLessonContext, ...(nextLessonRef ? { lessonRef: nextLessonRef } : {}) }, answer: { ...(normalizedResponse.answer || {}), ...(sameLesson && existingDraft?.answer?.planApproval ? { planApproval: { ...existingDraft.answer.planApproval, hasUnconfirmedChanges: true } } : {}), sourceCoverage: normalizedResponse.sourceCoverage || normalizedResponse.answer?.sourceCoverage, conversationHistory: nextHistory, conversationTurns: nextConversationTurns, evidenceShelf, ...(sameLesson && existingDraft?.answer?.previousLessonReflection ? { previousLessonReflection: existingDraft.answer.previousLessonReflection } : {}), ...(sameLesson && existingDraft?.answer?.lessonReflection ? { lessonReflection: existingDraft.answer.lessonReflection } : {}) }, citations: nextCitations, cards: sameLesson ? cardsForAskDraft(existingDraft) : [] };
       let savedDraftId = draftId;
       let savedDraft = null;
       if (!draftId) { const created = await rootRequest('/api/drafts', { method: 'POST', body: draftPayload }); savedDraft = created?.draft || null; savedDraftId = savedDraft?.id || ''; setDraftId(savedDraftId); } else { const updated = await rootRequest(`/api/drafts/${draftId}`, { method: 'PATCH', body: { ...draftPayload, version: existingDraft?.version } }); savedDraft = updated?.draft || null; }
@@ -617,7 +620,7 @@ export function AskPage() {
         // visible immediately; the next refresh will hydrate its full title.
         setRecentDrafts(items => [{ id: savedDraftId, title: lessonTitle, question: nextIdentityQuestion, updated_at: new Date().toISOString() }, ...items.filter(item => String(item.id) !== String(savedDraftId))].slice(0, 6));
       }
-      response.draftId = savedDraftId;
+      normalizedResponse.draftId = savedDraftId;
       setConversationHistory(nextHistory);
       setRestoredAt('');
       setRestoredFromLocal(false);
