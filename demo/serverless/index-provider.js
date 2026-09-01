@@ -830,7 +830,8 @@ export class LocalFullTextIndexProvider {
     const requested = String(query || question || '').trim();
     if (!requested) throw new Error('query_required');
     const search = await this.search({ query: requested, scope, limit, ...rest });
-    const evidence = safeEvidence(search.results).filter(result => hasQueryCoverage(result, requested));
+    const evidence = safeEvidence(search.results).filter(result => hasQueryCoverage(result, requested)
+      || hasLessonTargetHit([result], requested, [result.documentId]));
     return { provider: this.id, query: requested, scope: search.scope, evidenceSufficient: evidence.length > 0, total: evidence.length, results: evidence };
   }
   async ask({ question, retrievalQuery, teachingFocus = '', scope, limit = 8, history = [], teacherReflectionContext = '', deepseek, lessonContext, lessonIdentity, followUpInstruction, operation, deadlineAt } = {}) {
@@ -1099,7 +1100,8 @@ export class PageIndexProvider {
       curriculumResults.slice(0, curriculumQuota)
     );
     const results = safeEvidence(combined)
-      .filter(result => !query || hasQueryCoverage(result, query))
+      .filter(result => !query || hasQueryCoverage(result, query)
+        || hasLessonTargetHit([result], query, [result.documentId]))
       .slice(0, requestedLimit);
     const { results: _rawResults, hits: _rawHits, contexts: _rawContexts, ...metadata } = body;
     return { ...metadata, provider: this.id, query, scope: payload.documentIds, evidenceSufficient: results.length > 0, total: results.length, results };

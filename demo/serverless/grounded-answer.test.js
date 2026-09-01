@@ -96,6 +96,14 @@ test('prompt keeps three material roles distinct and asks for a complete evidenc
         lesson: { title: '《我爱这土地》', coreQuestion: '诗人如何表达对土地的深情？' },
         answer: {
           summary: '先读原文，再依据教师用书组织朗读与探究。',
+          objectives: ['能够借助意象说明诗歌情感', '能够引用原文完成朗读说明'],
+          keyPoints: ['重点：意象与情感的关系'],
+          lessonPlan: [
+            { title: '诵读入境', durationMinutes: 8, studentTask: '圈画意象', expectedEvidence: '读出感情基调', evidenceRefs: ['E1'] },
+            { title: '比较意象', durationMinutes: 18, studentTask: '比较词语', expectedEvidence: '说明意象关系', evidenceRefs: ['E1'] },
+            { title: '评价收束', durationMinutes: 10, studentTask: '完成出口表达', expectedEvidence: '引用原文说明结论', evidenceRefs: ['E1'] }
+          ],
+          assessment: ['能够引用原文说明意象与情感的关系'],
           questionChain: [{ question: '回到诗歌中的关键意象', observation: '比较意象的色彩和动作', expectedResponse: '学生能引用具体词语', followUp: '这些词语怎样推进情感？', evidenceRefs: ['E1'] }]
         }
       }) } }]
@@ -265,7 +273,14 @@ test('two-period plan enters a bounded third revision when order and time are no
     const lessonPlan = calls < 3 ? badPlan : fixedPlan;
     return new Response(JSON.stringify({ model: 'test-model', choices: [{ message: { content: JSON.stringify({
       lesson: { title: calls === 1 ? '换成两课时' : '《岳阳楼记》', coreQuestion: '如何理解先忧后乐？' },
-      answer: { summary: '依据教师用书组织两课时教学。', lessonPlan, evidenceRefs: ['E1'] }
+      answer: {
+        summary: '依据教师用书组织两课时教学。',
+        objectives: ['能够疏通文意并把握结构', '能够说明先忧后乐的价值判断'],
+        keyPoints: ['重点：由写景进入价值判断'],
+        lessonPlan,
+        assessment: ['能够引用关键句说明古仁人之心'],
+        evidenceRefs: ['E1']
+      }
     }) } }] }), { status: 200 });
   };
   const result = await generateGroundedAnswer({
@@ -285,4 +300,47 @@ test('two-period plan enters a bounded third revision when order and time are no
   assert.match(thirdPayload.task, /第三轮定向修订/u);
   assert.ok(thirdPayload.teachingIssues.some(item => /教学顺序倒置/u.test(item)));
   assert.ok(thirdPayload.teachingIssues.some(item => /第1课时的主要任务约28分钟/u.test(item)));
+});
+
+test('a real lesson-planning request cannot finish with an empty Cards draft', async t => {
+  const originalFetch = global.fetch;
+  let calls = 0;
+  t.after(() => { global.fetch = originalFetch; });
+  const complete = {
+    lesson: { title: '《沁园春·雪》', coreQuestion: '景、情、志怎样逐层展开？' },
+    answer: {
+      reply: '以诵读、意象比较和语言品味推进课堂。',
+      summary: '由景入情，由情见志。',
+      objectives: ['能够借助领字梳理上阕画面', '能够结合关键词说明下阕的价值判断'],
+      keyPoints: ['重点：说明景、情、志的推进关系'],
+      lessonPlan: [
+        { period: 1, title: '诵读入境', durationMinutes: 8, content: '教师示范并组织诵读。', studentTask: '圈画领字并读出节奏。', expectedEvidence: '能够读出“望”和“惜”的转折。', evidenceRefs: ['E1'] },
+        { period: 1, title: '比较意象', durationMinutes: 18, content: '追问意象怎样组成画面。', studentTask: '比较两组意象。', expectedEvidence: '能够说明画面与胸襟的关系。', evidenceRefs: ['E1'] },
+        { period: 1, title: '评价收束', durationMinutes: 10, content: '回扣风流人物。', studentTask: '用原词完成出口表达。', expectedEvidence: '能够引用关键词说明景情志关系。', evidenceRefs: ['E1'] }
+      ],
+      assessment: ['能够引用至少两个关键词说明景、情、志的推进关系。'],
+      evidenceRefs: ['E1']
+    }
+  };
+  global.fetch = async () => {
+    calls += 1;
+    const value = calls < 3
+      ? { lesson: { title: '1 沁园春·雪', coreQuestion: '景、情、志怎样逐层展开？' }, answer: { reply: '组织一课时教学。', summary: '由景入情，由情见志。', objectives: [], keyPoints: [], lessonPlan: [], assessment: [], evidenceRefs: ['E1'] } }
+      : complete;
+    return new Response(JSON.stringify({ model: 'test-model', choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
+  };
+  const result = await generateGroundedAnswer({
+    question: '请设计《沁园春·雪》一课时教学，给出课堂流程和评价观察点。',
+    lessonIdentity: { title: '1 沁园春·雪', coreQuestion: '景、情、志怎样逐层展开？' },
+    lessonContext: { periods: 1 },
+    scope: ['textbook'],
+    evidence: [{ ...evidence[0], title: '1 沁园春·雪', sectionPath: ['第一单元', '1 沁园春·雪'] }],
+    env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-secret', LLM_GATEWAY_MODEL: 'test-model', LLM_ANSWER_MODE: 'gateway' }
+  });
+  assert.equal(calls, 3);
+  assert.equal(result.answer.lesson.title, '《沁园春·雪》');
+  assert.equal(result.answer.objectives.length, 2);
+  assert.equal(result.answer.lessonPlan.length, 3);
+  assert.equal(result.answer.assessment.length, 1);
+  assert.deepEqual(result.teachingPlanIssues, []);
 });

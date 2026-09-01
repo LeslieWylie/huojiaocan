@@ -519,6 +519,26 @@ test('remote PageIndex lesson reranking removes directory and unrelated-unit hit
   ]);
 });
 
+test('long teaching prompts retain verified pages from both sides of a recognized lesson', async t => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({
+    results: [
+      { documentId: 'teacher-guide', pdfPage: 31, title: '1 沁园春·雪', text: '1 沁园春·雪 教学建议：抓领字，比较意象，反复诵读。', score: 0.92 }
+    ]
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  t.after(() => { global.fetch = originalFetch; });
+
+  const provider = new PageIndexProvider({ baseUrl: 'https://pageindex.test' });
+  const retrieved = await provider.retrieve({
+    query: '《沁园春·雪》请围绕数风流人物还看今朝设计一课时教学并给出课堂流程和评价观察点',
+    scope: ['textbook', 'teacher-guide'],
+    limit: 8
+  });
+  assert.ok(retrieved.results.some(result => result.documentId === 'teacher-guide'));
+  assert.ok(retrieved.results.some(result => result.documentId === 'textbook'), 'recognized lesson must retain its verified student-textbook page');
+  assert.ok(retrieved.results.every(result => /沁园春·雪/u.test(`${result.title}${result.sectionPath.join(' ')}`)));
+});
+
 test('课文简称会优先定位教师用书教学重点和学生教材课文起始页', async t => {
   const originalFetch = global.fetch;
   global.fetch = async () => new Response(JSON.stringify({
