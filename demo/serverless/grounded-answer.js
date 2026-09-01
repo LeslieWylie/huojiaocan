@@ -539,6 +539,25 @@ export function ensureUsablePlanningAnswer(answer, question, lessonContext = {},
   return next;
 }
 
+/** Keep a multi-period request from being persisted as a one-period plan when
+ * the model ignores its own `period` field. Content and order stay untouched;
+ * only the allocation is repaired for the teacher's period planner. */
+export function ensureLessonPeriodCoverage(answer, lessonContext = {}) {
+  if (!answer || typeof answer !== 'object') return answer;
+  const periods = Math.max(1, Math.min(4, Number(lessonContext?.periods) || 1));
+  const plan = Array.isArray(answer.lessonPlan) ? answer.lessonPlan : [];
+  if (periods === 1 || plan.length < periods) return answer;
+  const covered = new Set(plan.map(item => Number(item?.period)).filter(period => period >= 1 && period <= periods));
+  if (covered.size === periods) return answer;
+  return {
+    ...answer,
+    lessonPlan: plan.map((item, index) => ({
+      ...item,
+      period: Math.min(periods, Math.floor(index * periods / plan.length) + 1)
+    }))
+  };
+}
+
 /**
  * Deterministic checks for the three classroom cards.  The model may draft
  * and review prose, but it does not get to decide whether a card is ready for
@@ -804,6 +823,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     answer.lesson.coreQuestion = fixedCoreQuestion;
   }
   answer = ensureUsablePlanningAnswer(answer, planningQuestion, lessonContext, citations);
+  answer = ensureLessonPeriodCoverage(answer, lessonContext);
   const guideIndexes = orderedEvidence.map((item, index) => normalizeDocumentType(item.documentType) === 'teacher_guide' ? index : -1).filter(index => index >= 0);
   const textbookIndexes = orderedEvidence.map((item, index) => normalizeDocumentType(item.documentType) === 'textbook' ? index : -1).filter(index => index >= 0);
   const standardIndexes = orderedEvidence.map((item, index) => normalizeDocumentType(item.documentType) === 'curriculum_standard' ? index : -1).filter(index => index >= 0);

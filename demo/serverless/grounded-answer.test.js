@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { generateGroundedAnswer } from './grounded-answer.js';
+import { ensureLessonPeriodCoverage, generateGroundedAnswer } from './grounded-answer.js';
 
 const evidence = [
   {
@@ -16,6 +16,24 @@ const evidence = [
     viewer: { pdfUrl: '/materials/guide.pdf#page=56', page: 56 }
   }
 ];
+
+test('multi-period answers cover every requested period even when the model repeats period one', () => {
+  const source = {
+    lessonPlan: [
+      { period: 1, title: '疏通文意' },
+      { period: 1, title: '比较悲喜两景' },
+      { period: 1, title: '聚焦古仁人与先忧后乐' }
+    ]
+  };
+  const repaired = ensureLessonPeriodCoverage(source, { periods: 2 });
+  assert.deepEqual(repaired.lessonPlan.map(item => item.period), [1, 1, 2]);
+  assert.deepEqual(repaired.lessonPlan.map(item => item.title), source.lessonPlan.map(item => item.title));
+});
+
+test('complete model period allocation is preserved', () => {
+  const source = { lessonPlan: [{ period: 1, title: '第一课时' }, { period: 2, title: '第二课时' }] };
+  assert.equal(ensureLessonPeriodCoverage(source, { periods: 2 }), source);
+});
 
 test('grounded gateway prose cannot replace trusted citation identity', async t => {
   const originalFetch = global.fetch;
