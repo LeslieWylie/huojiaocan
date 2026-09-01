@@ -444,11 +444,15 @@ function rerankProviderResults(results = [], query, scope) {
     const compactQuery = clean(query).replace(/[·・\s]/gu, '');
     const compactTitle = clean(target.title).replace(/[·・\s]/gu, '');
     const recognizedQueryTitle = LESSON_QUERY_ALIASES.get(compactQuery) || compactQuery;
-    const exactLessonQuery = recognizedQueryTitle === compactTitle;
+    // A distinctive title fragment such as “巴特勒上尉” is still a concrete
+    // lesson lookup. Prefer the verified lesson head over a later page whose
+    // semantic score happens to be slightly higher.
+    const recognizedLessonQuery = recognizedQueryTitle === compactTitle
+      || (compactQuery.length >= 4 && compactTitle.includes(compactQuery));
     const lessonStart = page === target.startPage;
-    const guideFocusHeading = exactLessonQuery && result.documentId === 'teacher-guide'
+    const guideFocusHeading = recognizedLessonQuery && result.documentId === 'teacher-guide'
       && /(教学重点|教学目标|教学建议|教学设计)/u.test(content);
-    const guideLessonHeading = exactLessonQuery && result.documentId === 'teacher-guide'
+    const guideLessonHeading = recognizedLessonQuery && result.documentId === 'teacher-guide'
       && content.slice(0, 320).includes(target.title);
     // Teacher-guide headings can begin a couple of physical pages before the
     // generated tree node (front matter and page headers). Keep that narrow
@@ -461,13 +465,13 @@ function rerankProviderResults(results = [], query, scope) {
       + (inTarget ? 1000 : 0)
       + (exactTitle ? 250 : 0)
       + (hasLessonInPageText ? 180 : 0)
-      + (exactLessonQuery && lessonStart ? 220 : 0)
+      + (recognizedLessonQuery && lessonStart ? 220 : 0)
       + (guideFocusHeading ? 240 : 0)
       + (guideLessonHeading ? 120 : 0)
       // A teacher-guide directory label is copied onto every page in the
       // lesson window. Pages that only mention a neighboring text (for
       // example another 岳阳楼 poem) must not outrank the lesson treatment.
-      - (exactLessonQuery && result.documentId === 'teacher-guide' && !hasLessonInPageText && !guideFocusHeading && !guideLessonHeading ? 180 : 0);
+      - (recognizedLessonQuery && result.documentId === 'teacher-guide' && !hasLessonInPageText && !guideFocusHeading && !guideLessonHeading ? 180 : 0);
     decorated.push({ result, rank, inTarget });
   }
   // Once a concrete lesson is recognized, an empty filtered set is stronger

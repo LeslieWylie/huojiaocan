@@ -566,6 +566,25 @@ test('课文简称会优先定位教师用书教学重点和学生教材课文�
   assert.equal(searched.results.some(result => result.pdfPage === 471), false);
 });
 
+test('课文标题中的辨识性短语也优先返回课头页', async t => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({
+    results: [
+      { documentId: 'textbook', pdfPage: 127, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '课后任务 巴特勒上尉', score: 0.95 },
+      { documentId: 'textbook', pdfPage: 124, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '21 就英法联军远征中国致巴特勒上尉的信 雨果', score: 0.7 },
+      { documentId: 'teacher-guide', pdfPage: 429, title: '21 就英法联军远征中国致巴特勒上尉的信', text: '21 就英法联军远征中国致巴特勒上尉的信 教学重点', score: 0.6 }
+    ]
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  t.after(() => { global.fetch = originalFetch; });
+
+  const provider = new PageIndexProvider({ baseUrl: 'https://pageindex.test' });
+  const searched = await provider.search({ query: '巴特勒上尉', scope: ['textbook', 'teacher-guide'], limit: 6 });
+  assert.deepEqual(searched.results.slice(0, 2).map(result => [result.documentId, result.pdfPage]), [
+    ['teacher-guide', 429],
+    ['textbook', 124]
+  ]);
+});
+
 test('remote PageIndex excludes a neighboring teacher-guide lesson page from a broad tree node', async t => {
   const originalFetch = global.fetch;
   global.fetch = async () => new Response(JSON.stringify({
