@@ -544,6 +544,7 @@ export function AskPage() {
       }
       if (!aiReady) throw Object.assign(new Error('ai_checking'), { code: 'ai_checking' });
       if (!keyId && !gatewayAvailable) throw Object.assign(new Error('key_not_found'), { code: 'key_not_found' });
+      if (draftId && !existingDraft?.version) throw Object.assign(new Error('draft_loading'), { code: 'draft_loading' });
       const selectedScope = requestOptions.scope || scope;
       const lessonIdentity = {
         title: resolvedIdentityTitle,
@@ -658,8 +659,9 @@ export function AskPage() {
   }, [aiReady, existingDraft?.id]);
   const alternateScope = scope === 'textbook' ? 'teacher-guide' : 'textbook';
   const recovery = isIndexRecoveryCode(lastErrorCode);
-  const canAsk = Boolean(session && aiReady && (keyId || gatewayAvailable));
-  const askBlocked = Boolean(session && (!aiReady || !keyId && !gatewayAvailable));
+  const draftReady = !requestedDraftId || Boolean(existingDraft?.version);
+  const canAsk = Boolean(session && aiReady && draftReady && (keyId || gatewayAvailable));
+  const askBlocked = Boolean(session && (!aiReady || !draftReady || !keyId && !gatewayAvailable));
   const savedContext = existingDraft?.lesson_context || existingDraft?.lessonContext;
   const priorReflection = existingDraft?.answer?.previousLessonReflection || null;
   const priorReflectionForm = normalizeFeedbackForm(priorReflection?.feedback || {});
@@ -669,7 +671,7 @@ export function AskPage() {
   const currentDeliberation = existingDraft?.answer?.teachingDeliberation?.status === 'confirmed' && !teachingDeliberationIsStale(existingDraft) ? existingDraft.answer.teachingDeliberation : null;
   const contextChanged = Boolean(messages.length && savedContext && ['periods', 'className', 'classLevel', 'teachingGoal', 'teachingMode'].some(key => String(savedContext[key] ?? '') !== String(lessonContext[key] ?? '')));
   const selectedClassProfile = classProfiles.find(item => item.className === String(lessonContext.className || '').trim()) || null;
-  const askButtonLabel = busy ? '正在查阅并整理' : !session ? '登录后开始提问' : !aiReady ? '正在检查 AI 服务' : !keyId && !gatewayAvailable ? '请先配置 AI' : '开始提问';
+  const askButtonLabel = busy ? '正在查阅并整理' : !session ? '登录后开始提问' : !aiReady ? '正在检查 AI 服务' : !draftReady ? '正在读取上次备课' : !keyId && !gatewayAvailable ? '请先配置 AI' : '开始提问';
   const loginHref = `/login/?next=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
   const rememberCurrentAsk = () => saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next: `${location.pathname}${location.search}`, question, planQuestion, scope, lessonContext, lessonRef, draftId, messages: messages.slice(-12), conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
   const retryableTarget = retryTarget || retryQuestion || question;
@@ -806,7 +808,8 @@ export function AskPage() {
             <button type="submit" className="primary" disabled={busy || !question.trim() || askBlocked}><Send/>{askButtonLabel}</button>
           </form>
           {!session && <div className="ask-auth-note"><ShieldCheck/><span>公共教材可以浏览；登录后才能发起连续问答、保存方案和生成三卡。</span><a href={loginHref} onClick={rememberCurrentAsk}>立即登录</a></div>}
-          {session && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
+          {session && !draftReady && <div className="ask-auth-note"><Activity/><span>正在读取上次保存的篇目、对话和版本，完成后即可继续追问。</span></div>}
+          {session && draftReady && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
           {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
           {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
           {busy && <div className="answer-loading"><span/><span/><span/><p>{UI_COPY.ask.loading}</p></div>}

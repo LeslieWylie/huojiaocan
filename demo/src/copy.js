@@ -20,6 +20,7 @@ export const UI_COPY = Object.freeze({
   },
   errors: {
     ai_checking: '正在检查 AI 服务，请稍候再开始提问。',
+    draft_loading: '正在读取上次保存的备课，请稍候再继续追问。',
     auth_required: '登录后才能生成备课方案，请先登录。',
     auth_invalid: '登录已过期，请重新登录后继续。',
     auth_rate_limited: '验证请求过于频繁，请稍后再试。',

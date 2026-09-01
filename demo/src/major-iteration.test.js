@@ -503,6 +503,8 @@ test('依据夹升级为草稿级持久化，并支持整场备课记录导出',
   assert.match(appSource, /data\.drafts\.slice\(0, 50\)/u);
   assert.match(appSource, /回答已经生成，但暂时没有保存到账号/u);
   assert.match(appSource, /const recoveredMessages = \[\.\.\.messages, pendingTurn\]/u);
+  assert.match(appSource, /const draftReady = !requestedDraftId \|\| Boolean\(existingDraft\?\.version\)/u);
+  assert.match(appSource, /正在读取上次备课/u);
 });
 
 test('依据夹拒绝无效物理页，并按文档和页码去重', () => {
