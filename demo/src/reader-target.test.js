@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildPdfPageUrl, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity, normalizeReaderPagePayload, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveCrossDocTarget, resolveReaderReturn, stripPdfHash, validReaderPage } from './reader-target.js';
+import { buildPdfPageUrl, buildPreparationHref, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity, normalizeReaderPagePayload, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveCrossDocTarget, resolveReaderReturn, stripPdfHash, validReaderPage } from './reader-target.js';
 // The tree matching functions internally use reader-target's own
 // normalizeLessonIdentity, which strips leading digits so that
 // "21 标题" and "标题" match the same node.  Query normalization
@@ -53,6 +53,20 @@ test('citation links carry the same document, page and lesson location contract'
     '/document/?doc=teacher-guide&page=220&node=lesson-11&lesson=11+%E5%B2%B3%E9%98%B3%E6%A5%BC%E8%AE%B0&scope=both&return=ask'
   );
   assert.equal(buildReaderHref({ documentId: 'teacher-guide', page: 0 }), '');
+});
+
+test('library preparation links keep lesson identity while changing only the search scope', () => {
+  assert.equal(
+    buildPreparationHref({
+      scope: 'teacher-guide',
+      documentId: 'textbook',
+      page: 58,
+      nodeId: 'seed-textbook-u3-n1',
+      lessonTitle: '11 岳阳楼记'
+    }),
+    '/ask/?scope=teacher-guide&doc=textbook&page=58&node=seed-textbook-u3-n1&lesson=11+%E5%B2%B3%E9%98%B3%E6%A5%BC%E8%AE%B0'
+  );
+  assert.equal(buildPreparationHref({ scope: 'teacher-guide', documentId: '', page: 58 }), '/ask/');
 });
 
 test('paired reading switches only between the student textbook and teacher guide', () => {

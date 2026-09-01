@@ -175,6 +175,27 @@ export function buildReaderHref({ documentId, page, nodeId = '', lessonTitle = '
   return `/document/?${params}`;
 }
 
+/**
+ * Build the hand-off from the library reader to the preparation workspace.
+ * `scope` controls which materials are searched, while `documentId`/`page`
+ * retain the lesson page the teacher was actually reading.  Keeping those
+ * concepts separate prevents a source-card action from dropping the selected
+ * lesson and starting an unrelated conversation.
+ */
+export function buildPreparationHref({ scope = 'both', documentId, page, nodeId = '', lessonTitle = '' } = {}) {
+  const doc = String(documentId || '').trim();
+  const physicalPage = validReaderPage(page);
+  if (!doc || !physicalPage) return '/ask/';
+  const params = new URLSearchParams({
+    scope: String(scope || 'both'),
+    doc,
+    page: String(physicalPage)
+  });
+  if (nodeId) params.set('node', String(nodeId));
+  if (lessonTitle) params.set('lesson', String(lessonTitle));
+  return `/ask/?${params}`;
+}
+
 const READER_RETURN_TARGETS = Object.freeze({
   ask: { href: '/ask/', label: '返回本课问答' },
   cards: { href: '/cards/', label: '返回课堂设计' },

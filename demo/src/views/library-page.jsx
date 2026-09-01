@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, BookOpen, ChevronRight, CircleAlert, ExternalLink, FileSearch, FileText, Library, Search } from 'lucide-react';
 import { Badge, SectionHead } from '../ui-kit.jsx';
 import { canonicalDocumentId, citationText, currentPageReturn, docName, findTreeNode, nodePageRange, normalizeCatalogItem, normalizeTree, pageTitle, pdfPageUrl, queryParams, request, searchResultDocumentId, searchResultPage, statusLabel, uniqueCitations } from '../app-core.js';
-import { buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity as normalizeReaderLessonIdentity, resolveCrossDocTarget } from '../reader-target.js';
+import { buildPreparationHref, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity as normalizeReaderLessonIdentity, resolveCrossDocTarget } from '../reader-target.js';
 
 
 
@@ -267,6 +267,13 @@ export function LibraryPage() {
   const pagePdf=String(page?.viewer?.pdfUrl||page?.pdfUrl||currentDoc?.pdfUrl||'').split('#')[0];
   const maxPage=currentDoc?.pageCount||1;
   const goPage = next => openReaderTarget({ documentId: doc, pageNumber: next });
+  const preparationHref = sourceScope => buildPreparationHref({
+    scope: sourceScope,
+    documentId: doc,
+    page: pageNo,
+    nodeId: selectedNode,
+    lessonTitle: selectedLessonTitle || pageTitle(page)
+  });
   return (
     <div className="view-stack index-page">
       <section className="hero index-hero">
@@ -285,7 +292,7 @@ export function LibraryPage() {
               <span className="source-choice-copy"><strong>{item.title}</strong><small>{kind} · {item.pageCount} 页</small><em>{statusLabel(item.indexStatus)} · {indexed}/{item.pageCount || indexed} 页可搜索</em></span>
               {selected && <Badge tone="green">当前阅读</Badge>}
             </button>
-            <div className="source-choice-actions"><button type="button" onClick={() => switchDocument(item.id)}>查看目录</button><a href={`/ask/?scope=${encodeURIComponent(item.id)}`}>进入备课问答 <ArrowRight/></a></div>
+            <div className="source-choice-actions"><button type="button" onClick={() => switchDocument(item.id)}>查看目录</button><a href={preparationHref(item.id)}>进入备课问答 <ArrowRight/></a></div>
           </article>;
         }) : <div className="catalog-empty"><FileSearch/><b>{docsError || "正在读取教材目录…"}</b><div className="catalog-empty-actions">{docsError === '登录已过期，请重新登录后继续。' ? <a className="primary" href={"/login/?next=" + encodeURIComponent(location.pathname + location.search)}>重新登录</a> : <button type="button" onClick={loadDocs}>重新读取</button>}</div></div>}</div>
       </section>
@@ -298,7 +305,7 @@ export function LibraryPage() {
         <aside className="index-outline"><header><span>教材目录</span><small>点击篇目标题定位起始页 · 教材页码范围</small></header><Tree nodes={tree} current={selectedNode} onPick={pick} error={treeError} loading={treeBusy} retry={loadTree}/></aside>
         <section className="index-reader">
           <header><div><Badge tone={currentDoc?.tone || "green"}>{currentDoc?.short || "教材"}</Badge><h2>{pageTitle(page)}</h2><small>第 {pageNo} 页 {page?.printedPage ? `· 书页 ${page.printedPage}` : ""}</small></div>
-            <div><button type="button" disabled={pageNo <= 1} onClick={() => goPage(pageNo - 1)}>上一页</button><input aria-label="教材页码" value={pageNo} onChange={e => goPage(Math.max(1, Math.min(maxPage, Number(e.target.value) || 1)))}/><button type="button" disabled={pageNo >= maxPage} onClick={() => goPage(pageNo + 1)}>下一页</button><a className="reader-prepare-link" href={`/ask/?scope=${encodeURIComponent(scope)}&doc=${encodeURIComponent(doc)}&page=${pageNo}${selectedNode ? `&node=${encodeURIComponent(selectedNode)}` : ''}&lesson=${encodeURIComponent(selectedLessonTitle || pageTitle(page))}`}>从当前篇目开始备课 <ArrowRight/></a><a href={buildReaderHref({ documentId: doc, page: pageNo, nodeId: selectedNode, lessonTitle: selectedLessonTitle || pageTitle(page), scope, returnTo: currentPageReturn() })}><ExternalLink/>核验原始教材</a></div>
+            <div><button type="button" disabled={pageNo <= 1} onClick={() => goPage(pageNo - 1)}>上一页</button><input aria-label="教材页码" value={pageNo} onChange={e => goPage(Math.max(1, Math.min(maxPage, Number(e.target.value) || 1)))}/><button type="button" disabled={pageNo >= maxPage} onClick={() => goPage(pageNo + 1)}>下一页</button><a className="reader-prepare-link" href={preparationHref(scope)}>从当前篇目开始备课 <ArrowRight/></a><a href={buildReaderHref({ documentId: doc, page: pageNo, nodeId: selectedNode, lessonTitle: selectedLessonTitle || pageTitle(page), scope, returnTo: currentPageReturn() })}><ExternalLink/>核验原始教材</a></div>
           </header>
           <article className="library-pdf-article"><div className="library-pdf-meta"><span>原始教材是唯一可核验的依据</span><b>第 {pageNo} 页 · 书页 {page?.printedPage || "未标注"}</b></div>{pagePdf ? <iframe key={`${doc}-${pageNo}`} title={`${currentDoc?.short || "教材"} 第 ${pageNo} 页`} src={pdfPageUrl(pagePdf,pageNo)}/> : <div className="index-empty"><FileText/><b>当前文档暂时没有可用教材页面</b><p>请稍后重试；如果问题持续，请检查文档存储配置。</p></div>}</article>
         </section>
