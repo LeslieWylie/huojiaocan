@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildPdfPageUrl, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveCrossDocTarget, resolveReaderReturn, stripPdfHash, validReaderPage } from './reader-target.js';
+import { buildPdfPageUrl, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity, normalizeReaderPagePayload, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveCrossDocTarget, resolveReaderReturn, stripPdfHash, validReaderPage } from './reader-target.js';
 // The tree matching functions internally use reader-target's own
 // normalizeLessonIdentity, which strips leading digits so that
 // "21 标题" and "标题" match the same node.  Query normalization
@@ -95,6 +95,18 @@ test('stripPdfHash removes any hash fragment from PDF URLs', () => {
   assert.equal(stripPdfHash('/materials/guide.pdf'), '/materials/guide.pdf');
   assert.equal(stripPdfHash(''), '');
   assert.equal(stripPdfHash('https://example.com/file.pdf#page=5'), 'https://example.com/file.pdf');
+});
+
+test('page response keeps the trusted envelope PDF viewer with page text', () => {
+  const page = normalizeReaderPagePayload({
+    documentId: 'textbook',
+    page: { pdfPageNumber: 58, pageTitle: '11 岳阳楼记', retrievalText: '先天下之忧而忧' },
+    viewer: { pdfUrl: '/materials/textbook.pdf#page=58', page: 58 }
+  });
+
+  assert.equal(page.pageTitle, '11 岳阳楼记');
+  assert.equal(page.viewer.pdfUrl, '/materials/textbook.pdf#page=58');
+  assert.equal(page.pdfUrl, '/materials/textbook.pdf#page=58');
 });
 
 test('buildReaderHref preserves return path and draftId through URL params', () => {

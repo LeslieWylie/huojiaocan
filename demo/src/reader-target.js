@@ -18,6 +18,24 @@ export function buildPdfPageUrl(value, page, { zoom = '', view = 'FitH' } = {}) 
 }
 
 /**
+ * The page endpoint returns page text in `page`, while the trusted PDF viewer
+ * location belongs to the response envelope. Keep both together so the
+ * reader does not depend on a second catalogue request before it can show the
+ * original page.
+ */
+export function normalizeReaderPagePayload(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  const page = payload.page && typeof payload.page === 'object' ? payload.page : payload;
+  const envelopeViewer = payload.viewer && typeof payload.viewer === 'object' ? payload.viewer : null;
+  const pageViewer = page.viewer && typeof page.viewer === 'object' ? page.viewer : null;
+  return {
+    ...page,
+    viewer: pageViewer || envelopeViewer,
+    pdfUrl: page.pdfUrl || payload.pdfUrl || pageViewer?.pdfUrl || envelopeViewer?.pdfUrl || ''
+  };
+}
+
+/**
  * Normalize a lesson title for cross-document matching.
  *
  * Strips lesson number prefix ("5 " / "21 "), book title marks, punctuation

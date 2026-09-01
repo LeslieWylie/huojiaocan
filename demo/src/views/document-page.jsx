@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowLeft, ArrowRight, BookOpen, CircleAlert, ClipboardCheck, Download, ExternalLink, Maximize2, Search, ZoomIn, ZoomOut } from 'lucide-react';
 import { Badge } from '../ui-kit.jsx';
 import { canonicalDocumentId, citationLink, citationText, docName, focusedCurriculumExcerpt, normalizeCatalogItem, questionState, queryParams, request, requestCode, searchResultDocumentId, searchResultPage } from '../app-core.js';
-import { buildPdfPageUrl, buildReaderHref, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveReaderReturn } from '../reader-target.js';
+import { buildPdfPageUrl, buildReaderHref, normalizeReaderPagePayload, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveReaderReturn } from '../reader-target.js';
 import { buildDualSourceTeachingCard } from '../../shared/dual-source-teaching-card.js';
 import { pairLessonEvidence } from '../lesson-evidence.js';
 
@@ -62,7 +62,7 @@ export function DocumentPage() {
   const frame = useRef(null);
 
   const info = catalog.find(item => item.id === doc) || null;
-  const maxPage = info?.pageCount || 1;
+  const maxPage = Number(info?.pageCount) > 0 ? Number(info.pageCount) : null;
   const counterpartId = pairedDocumentId(doc);
   const explicitLesson = String(params.get('lesson') || '').trim();
   const lessonQuery = pairedLessonQuery({
@@ -73,17 +73,27 @@ export function DocumentPage() {
   const pairedSearchQuery = pairedFocusQuery({ lessonTitle: lessonQuery, focus: pairedFocus });
 
   useEffect(() => {
-    request('/documents').then(data => setCatalog((data.documents || []).map(normalizeCatalogItem).filter(Boolean))).catch(() => {});
+    let cancelled = false;
+    let retryTimer;
+    const loadCatalog = attempt => request('/documents')
+      .then(data => {
+        if (!cancelled) setCatalog((data.documents || []).map(normalizeCatalogItem).filter(Boolean));
+      })
+      .catch(() => {
+        if (!cancelled && attempt === 0) retryTimer = window.setTimeout(() => loadCatalog(1), 800);
+      });
+    loadCatalog(0);
+    return () => { cancelled = true; if (retryTimer) window.clearTimeout(retryTimer); };
   }, []);
   useEffect(() => {
-    if (info) setPage(value => Math.min(info.pageCount || 1, Math.max(1, value)));
+    if (maxPage) setPage(value => Math.min(maxPage, Math.max(1, value)));
   }, [info?.id, info?.pageCount]);
   useEffect(() => {
     if (!doc) return undefined;
     const controller = new AbortController();
     setLoading(true); setError('');
     request(`/page/${encodeURIComponent(doc)}/${page}`, { signal: controller.signal })
-      .then(data => setRecord(data?.page || data || null))
+      .then(data => setRecord(normalizeReaderPagePayload(data)))
       .catch(err => {
         if (err.name !== 'AbortError') {
           setRecord(null);
@@ -123,7 +133,8 @@ export function DocumentPage() {
   }, [paired, counterpartId, pairedSearchQuery, pairedRetry]);
 
   const goto = value => {
-    const next = Math.max(1, Math.min(maxPage, Number(value) || 1));
+    const requested = Math.max(1, Number(value) || 1);
+    const next = maxPage ? Math.min(maxPage, requested) : requested;
     const nextParams = new URLSearchParams(location.search);
     nextParams.set('doc', doc); nextParams.set('page', String(next));
     history.replaceState(null, '', `/document/?${nextParams}`);
@@ -222,7 +233,7 @@ export function DocumentPage() {
       <form onSubmit={applyPairedFocus}><Search/><label><span className="sr-only">输入需要追踪的句段</span><input value={focusInput} onChange={event => setFocusInput(event.target.value)} maxLength={100} placeholder="例如：先天下之忧而忧，后天下之乐而乐"/></label><button type="submit" disabled={!focusInput.trim() || pairedLoading}>{pairedLoading && pairedFocus ? '正在追踪…' : '追踪这一句'}</button>{pairedFocus && <button type="button" className="quiet" onClick={clearPairedFocus}>回到篇目起点</button>}</form>
       {pairedFocus && <div className="paired-focus-status"><b>当前追踪：</b><span>{pairedFocus}</span><small>{pairedLoading ? '正在搜索对应教学处理…' : pairedResult && pairedPage ? `已定位到${docName(counterpartId)} 第 ${pairedPage} 页` : '暂未找到对应页面'}</small></div>}
     </section>}
-    <section className="pdf-toolbar"><button onClick={() => goto(page - 1)} disabled={page <= 1}>上一页</button><label>教材页码 <input value={page} onChange={event => goto(event.target.value)}/> / {maxPage}</label><button onClick={() => goto(page + 1)} disabled={page >= maxPage}>下一页</button><i/><button onClick={() => setZoom(value => Math.max(70, value - 10))}><ZoomOut/>缩小</button><span>{zoom}%</span><button onClick={() => setZoom(value => Math.min(160, value + 10))}><ZoomIn/>放大</button><button onClick={() => frame.current?.requestFullscreen?.()}><Maximize2/>全屏</button></section>
+    <section className="pdf-toolbar"><button onClick={() => goto(page - 1)} disabled={page <= 1}>上一页</button><label>教材页码 <input value={page} onChange={event => goto(event.target.value)}/> / {maxPage || '读取中'}</label><button onClick={() => goto(page + 1)} disabled={Boolean(maxPage && page >= maxPage)}>下一页</button><i/><button onClick={() => setZoom(value => Math.max(70, value - 10))}><ZoomOut/>缩小</button><span>{zoom}%</span><button onClick={() => setZoom(value => Math.min(160, value + 10))}><ZoomIn/>放大</button><button onClick={() => frame.current?.requestFullscreen?.()}><Maximize2/>全屏</button></section>
     <div className={`verification-workbench${paired ? ' paired-reading-workbench' : ''}`}>
       <section className="pdf-frame" ref={frame}>{rawPdfUrl && !pdfError ? <iframe key={`${doc}-${page}-${zoom}`} title={`${info?.short || '教材'} 第 ${page} 页`} src={pdfSrc} onError={() => setPdfError(true)}/> : <div className="index-empty"><CircleAlert/><b>原始教材页面暂时无法显示</b><p>请重试或在新窗口打开原始文件。</p>{rawPdfUrl && <a className="primary" href={buildPdfPageUrl(rawPdfUrl, page)} target="_blank" rel="noreferrer">新窗口打开</a>}</div>}</section>
       {paired ? <section className="paired-pdf-pane">
@@ -233,7 +244,7 @@ export function DocumentPage() {
         {loading && <div className="evidence-missing"><Activity/><div><b>正在读取页面信息</b><small>左侧原始教材可继续查看。</small></div></div>}
         {!loading && error && <div className="evidence-missing"><CircleAlert/><div><b>本页暂时没有可用教材依据</b><small>{error}。左侧仍显示原始教材。</small></div></div>}
         {!loading && !error && tab === 'evidence' && <><Badge tone={info?.tone || 'green'}>{info?.short || '教材'}依据</Badge><h2>{title}</h2>{retrievalText ? <details open><summary>查看原文片段</summary><blockquote>{retrievalText}</blockquote></details> : <div className="evidence-missing"><CircleAlert/><div><b>暂无可复制片段</b><small>请以左侧原始页面为准。</small></div></div>}<div className="source-meta"><span>教材页码</span><b>{physicalPage}</b><span>书页</span><b>{printedPage}</b><span>文本来源</span><b>{sourceLabel}</b><span>质量</span><b>{qualityLabel}</b></div></>}
-        {!loading && !error && tab === 'context' && <div className="related-citations"><b>相邻原页</b><p>相邻页面仅供核验，不会自动纳入本次依据。</p>{[page - 1, page + 1].filter(value => value >= 1 && value <= maxPage).map(value => <button onClick={() => goto(value)} key={value}><b>打开 第 {value} 页</b></button>)}</div>}
+        {!loading && !error && tab === 'context' && <div className="related-citations"><b>相邻原页</b><p>相邻页面仅供核验，不会自动纳入本次依据。</p>{[page - 1, page + 1].filter(value => value >= 1 && (!maxPage || value <= maxPage)).map(value => <button onClick={() => goto(value)} key={value}><b>打开 第 {value} 页</b></button>)}</div>}
         {!loading && !error && tab === 'text' && <textarea readOnly value={retrievalText || '本页暂无可复制解析文本。'}/>}<div className="document-switch"><b>关联材料</b><span>点击“打开双源对照”，在同一屏核对两份原始教材。</span></div>
       </aside>}
     </div>
@@ -248,5 +259,4 @@ export function DocumentPage() {
     </section>}
   </div>;
 }
-
 
