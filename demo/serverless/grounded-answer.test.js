@@ -188,7 +188,9 @@ test('unknown model evidence references are removed instead of looking verified'
   });
 
   assert.deepEqual(result.answer.evidenceRefs, []);
-  assert.deepEqual(result.answer.lessonPlan[0].evidenceRefs, []);
+  assert.ok(result.answer.lessonPlan.length >= 3);
+  assert.ok(result.answer.lessonPlan.every(step => step.evidenceRefs.every(ref => ['E1', 'E2'].includes(ref))));
+  assert.equal(result.answer.lessonPlan.some(step => step.evidenceRefs.includes('E99')), false);
   assert.deepEqual(result.answer.questionChain[0].evidenceRefs, ['E1']);
   assert.deepEqual(result.cardSuggestionItems.board[0].citationIds, []);
 });
@@ -343,4 +345,35 @@ test('a real lesson-planning request cannot finish with an empty Cards draft', a
   assert.equal(result.answer.lessonPlan.length, 3);
   assert.equal(result.answer.assessment.length, 1);
   assert.deepEqual(result.teachingPlanIssues, []);
+});
+
+test('grounded reply is deterministically repaired when every model round omits plan fields', async t => {
+  const originalFetch = global.fetch;
+  let calls = 0;
+  t.after(() => { global.fetch = originalFetch; });
+  global.fetch = async () => {
+    calls += 1;
+    const value = {
+      lesson: { title: '《沁园春·雪》', coreQuestion: '景、情、志怎样逐层展开？' },
+      answer: {
+        reply: '课堂流程建议为：诵读入境，圈画领字→比较意象，形成画面→品味关键词，理解志向→完成出口表达，回扣景情志关系。',
+        summary: '由景入情，由情见志。',
+        objectives: [], keyPoints: [], lessonPlan: [], assessment: [], evidenceRefs: ['E1']
+      }
+    };
+    return new Response(JSON.stringify({ model: 'test-model', choices: [{ message: { content: JSON.stringify(value) } }] }), { status: 200 });
+  };
+  const result = await generateGroundedAnswer({
+    question: '请设计《沁园春·雪》一课时教学，给出课堂流程和评价观察点。',
+    lessonIdentity: { title: '1 沁园春·雪', coreQuestion: '景、情、志怎样逐层展开？' },
+    lessonContext: { periods: 1 }, scope: ['textbook'],
+    evidence: [{ ...evidence[0], documentType: 'textbook', title: '1 沁园春·雪', sectionPath: ['第一单元', '1 沁园春·雪'] }],
+    env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-secret', LLM_GATEWAY_MODEL: 'test-model', LLM_ANSWER_MODE: 'gateway' }
+  });
+  assert.equal(calls, 3);
+  assert.equal(result.answer.objectives.length, 2);
+  assert.equal(result.answer.lessonPlan.length, 4);
+  assert.equal(result.answer.assessment.length, 1);
+  assert.equal(result.answer.planCompletion.mode, 'grounded-structure-repair');
+  assert.ok(result.answer.lessonPlan.every(step => step.evidenceRefs.includes('E1')));
 });

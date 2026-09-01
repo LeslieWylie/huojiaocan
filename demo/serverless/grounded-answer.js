@@ -447,6 +447,73 @@ export function teachingPlanCompletenessIssues(value, question = '') {
   return issues;
 }
 
+function planningFlowSegments(reply = '') {
+  const text = String(reply || '').replace(/\s+/gu, ' ').trim();
+  const flow = text.match(/课堂流程(?:建议)?(?:为|如下)?[：:]([\s\S]+)/u)?.[1] || '';
+  const arrow = flow.split(/[→➜]/u).map(item => item.trim().replace(/[。；;]+$/u, '')).filter(Boolean);
+  if (arrow.length >= 3) return arrow.slice(0, 6);
+  const numbered = [...text.matchAll(/(?:第[一二三四五六]|[1-6])[个 ]?环节[：:]?(.+?)(?=(?:第[一二三四五六]|[1-6])[个 ]?环节|$)/gu)]
+    .map(match => match[1].trim().replace(/[。；;]+$/u, ''))
+    .filter(Boolean);
+  return numbered.length >= 3 ? numbered.slice(0, 6) : [];
+}
+
+/** Last-resort structural repair.  It does not invent new textbook claims:
+ * it turns the already generated grounded reply into the fields required by
+ * the Cards workflow and binds every derived step to trusted citation IDs. */
+export function ensureUsablePlanningAnswer(answer, question, lessonContext = {}, citations = []) {
+  if (!requestsCompleteLessonPlan(question) || !answer || typeof answer !== 'object') return answer;
+  const next = { ...answer };
+  const trusted = Array.isArray(citations) ? citations : [];
+  const textbook = trusted.find(item => normalizeDocumentType(item.documentType) === 'textbook');
+  const guide = trusted.find(item => normalizeDocumentType(item.documentType) === 'teacher_guide');
+  const fallbackRefs = [...new Set([textbook?.id, guide?.id].filter(Boolean))].slice(0, 2);
+  const coreQuestion = textField(next.lesson?.coreQuestion, textField(question, '本课核心问题'));
+
+  if (!Array.isArray(next.objectives) || next.objectives.length < 2) {
+    next.objectives = [
+      '能够从学生教材原文中找出支持本课判断的关键词句。',
+      `能够结合原文证据说明：${coreQuestion}`
+    ];
+  }
+  if (!Array.isArray(next.keyPoints) || !next.keyPoints.length) {
+    next.keyPoints = [
+      '重点：用准确的原文词句形成有依据的文本判断。',
+      '难点：说明语言表达与文本情感、观点或价值判断之间的关系。'
+    ];
+  }
+  if (!Array.isArray(next.lessonPlan) || next.lessonPlan.length < 3) {
+    const specific = planningFlowSegments(next.reply || next.summary);
+    const segments = specific.length ? specific : [
+      '回到教材，圈画与本课问题直接相关的关键词句',
+      '比较词句的表达差异，说明语言与意义之间的关系',
+      '引用原文完成核心问题回应，并根据同伴追问修正判断'
+    ];
+    const periods = Math.max(1, Math.min(4, Number(lessonContext?.periods) || 1));
+    const plannedPerPeriod = 36;
+    next.lessonPlan = segments.map((segment, index) => {
+      const title = segment.split(/[（(：:，,]/u)[0].replace(/^第[一二三四五六1-6][个 ]?环节/u, '').trim().slice(0, 24) || `课堂环节${index + 1}`;
+      return {
+        period: Math.min(periods, Math.floor(index * periods / segments.length) + 1),
+        title,
+        durationMinutes: Math.max(6, Math.floor(plannedPerPeriod * periods / segments.length)),
+        duration: `${Math.max(6, Math.floor(plannedPerPeriod * periods / segments.length))} 分钟`,
+        content: segment,
+        studentTask: index === 0 ? '回到学生教材原文圈画、朗读并标注依据。' : index === segments.length - 1 ? '引用原文完成口头或书面回应，并根据追问修正。' : '比较具体词句，说明它们怎样推进情感、观点或价值判断。',
+        expectedEvidence: '学生能够引用教材原文，并说明词句与本环节判断之间的关系。',
+        teacherGuideBasis: guide ? '参考本轮已核验的教师用书页面组织教学推进。' : '本轮未取得教师用书直接处理建议，具体组织方式待教师确认。',
+        evidenceRefs: fallbackRefs
+      };
+    });
+  }
+  if (!Array.isArray(next.assessment) || !next.assessment.length) {
+    next.assessment = ['学生能够引用至少一处学生教材原文说明判断；引用准确、关系说明清楚为达成，只摘录未说明关系为部分达成。'];
+  }
+  next.type = 'lesson-plan';
+  next.planCompletion = { mode: 'grounded-structure-repair', evidenceRefs: fallbackRefs };
+  return next;
+}
+
 /**
  * Deterministic checks for the three classroom cards.  The model may draft
  * and review prose, but it does not get to decide whether a card is ready for
@@ -703,13 +770,14 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   const standard = citations.filter(item => normalizeDocumentType(item.documentType) === 'curriculum_standard');
   const textbook = citations.filter(item => normalizeDocumentType(item.documentType) === 'textbook');
   const guide = citations.filter(item => normalizeDocumentType(item.documentType) === 'teacher_guide');
-  const answer = normalizeAnswer(parsed, question, orderedEvidence);
+  let answer = normalizeAnswer(parsed, question, orderedEvidence);
   sanitizeAnswerRefs(answer, citations);
   // The model may improve the core question, but it cannot rename the lesson.
   answer.lesson.title = fixedLessonIdentity;
   if (!answer.lesson.coreQuestion || /(?:换成|改为|调整为|拆成|拆分为).{0,8}课时|生成.{0,8}(板书|三卡)|怎么备课|如何备课/u.test(answer.lesson.coreQuestion)) {
     answer.lesson.coreQuestion = fixedCoreQuestion;
   }
+  answer = ensureUsablePlanningAnswer(answer, question, lessonContext, citations);
   const guideIndexes = orderedEvidence.map((item, index) => normalizeDocumentType(item.documentType) === 'teacher_guide' ? index : -1).filter(index => index >= 0);
   const textbookIndexes = orderedEvidence.map((item, index) => normalizeDocumentType(item.documentType) === 'textbook' ? index : -1).filter(index => index >= 0);
   const standardIndexes = orderedEvidence.map((item, index) => normalizeDocumentType(item.documentType) === 'curriculum_standard' ? index : -1).filter(index => index >= 0);
@@ -758,8 +826,8 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     generationTrace,
     generationRounds: generationTrace.filter(item => item.status === 'completed').length,
     teachingPlanIssues: [
-      ...teachingPlanCompletenessIssues(parsed, question),
-      ...teachingPlanIssues(parsed, lessonContext),
+      ...teachingPlanCompletenessIssues({ answer }, question),
+      ...teachingPlanIssues({ answer }, lessonContext),
       ...cardGenerationIssues(parsed, expectedCardTypes)
     ].slice(0, 10),
     evidenceSufficient: citations.length > 0,
