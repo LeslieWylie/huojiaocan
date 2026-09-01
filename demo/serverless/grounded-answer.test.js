@@ -130,9 +130,10 @@ test('prompt keeps three material roles distinct and asks for a complete evidenc
   assert.deepEqual(userPayload.workflow.slice(0, 4), ['定位篇目与相关页段', '按需读取课程标准，确认学段要求、任务群与学业质量原文', '核对教师用书，理解编写意图与可供取舍的教学建议', '回到学生教材核对原文证据']);
   assert.equal(result.answer.sourceLayers.curriculumStandard.available, false);
   assert.match(result.answer.questionChain[0].purpose, /观察：比较意象的色彩和动作；预期回答/u);
-  assert.equal(requestBodies.length, 2);
-  assert.equal(result.generationRounds, 2);
+  assert.equal(requestBodies.length, 3);
+  assert.equal(result.generationRounds, 3);
   assert.match(requestBodies[1].messages[0].content, /教材依据与课堂可用性审校员/u);
+  assert.match(requestBodies[2].messages[0].content, /最终修订员/u);
 });
 
 test('curriculum-standard evidence stays a separate source layer with trusted page identity', async t => {
@@ -320,6 +321,10 @@ test('a real lesson-planning request cannot finish with an empty Cards draft', a
         { period: 1, title: '比较意象', durationMinutes: 18, content: '追问意象怎样组成画面。', studentTask: '比较两组意象。', expectedEvidence: '能够说明画面与胸襟的关系。', evidenceRefs: ['E1'] },
         { period: 1, title: '评价收束', durationMinutes: 10, content: '回扣风流人物。', studentTask: '用原词完成出口表达。', expectedEvidence: '能够引用关键词说明景情志关系。', evidenceRefs: ['E1'] }
       ],
+      questionChain: [
+        { question: '“望”字统领了哪些画面？', purpose: '梳理上阕意象。', evidenceRefs: ['E1'] },
+        { question: '“惜”字怎样转入历史评价？', purpose: '理解下阕转折。', evidenceRefs: ['E1'] }
+      ],
       assessment: ['能够引用至少两个关键词说明景、情、志的推进关系。'],
       evidenceRefs: ['E1']
     }
@@ -343,6 +348,7 @@ test('a real lesson-planning request cannot finish with an empty Cards draft', a
   assert.equal(result.answer.lesson.title, '《沁园春·雪》');
   assert.equal(result.answer.objectives.length, 2);
   assert.equal(result.answer.lessonPlan.length, 3);
+  assert.equal(result.answer.questionChain.length, 2);
   assert.equal(result.answer.assessment.length, 1);
   assert.deepEqual(result.teachingPlanIssues, []);
 });
@@ -373,6 +379,7 @@ test('grounded reply is deterministically repaired when every model round omits 
   assert.equal(calls, 3);
   assert.equal(result.answer.objectives.length, 2);
   assert.equal(result.answer.lessonPlan.length, 4);
+  assert.equal(result.answer.questionChain.length, 3);
   assert.equal(result.answer.assessment.length, 1);
   assert.equal(result.answer.planCompletion.mode, 'grounded-structure-repair');
   assert.ok(result.answer.lessonPlan.every(step => step.evidenceRefs.includes('E1')));
