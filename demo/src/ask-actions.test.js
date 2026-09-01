@@ -23,3 +23,14 @@ test('plain questions still use the current composer text', () => {
   assert.equal(normalizeAskAction('怎样组织朗读？', {}, '旧问题').text, '怎样组织朗读？');
   assert.equal(normalizeAskAction(null, {}, '当前篇目').text, '当前篇目');
 });
+
+test('typed period changes update the operation and saved lesson context', () => {
+  const result = normalizeAskAction('保持篇目不变，改为两课时。', {}, '原问题');
+  assert.deepEqual(result.options.operation, { type: 'change_periods', periods: 2 });
+  assert.deepEqual(result.options.lessonContextPatch, { periods: 2 });
+  assert.equal(result.text, '保持篇目不变，改为两课时。');
+});
+
+test('ordinary mentions of a period do not silently change the lesson context', () => {
+  assert.equal(normalizeAskAction('第一课时怎样导入？', {}, '原问题').options.operation, undefined);
+});
