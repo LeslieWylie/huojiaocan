@@ -106,3 +106,19 @@ test('refactored cards page imports progress copy and recovers concurrent genera
   assert.match(source, /recoveredConcurrentGeneration/u);
   assert.match(source, /已读取刚刚完成的三卡/u);
 });
+
+test('generated cards focus the main classroom work and keep supporting tools progressive', () => {
+  const source = readFileSync(new URL('./views/cards-page.jsx', import.meta.url), 'utf8');
+  assert.match(source, /继续检查三卡/u);
+  assert.match(source, /id="card-workspace"/u);
+  assert.match(source, /id="board-preview"/u);
+  assert.match(source, /supportToolsOpen/u);
+  assert.match(source, /修改已确认方案/u);
+  assert.match(source, /锁定“\$\{card\.title\}”后将不能继续编辑或重新生成/u);
+});
+
+test('library search does not show an empty result while a request is running', () => {
+  const source = readFileSync(new URL('./views/library-page.jsx', import.meta.url), 'utf8');
+  assert.match(source, /busy \? <div className="index-empty search-loading"/u);
+  assert.match(source, /结果返回前不会显示“没有找到”/u);
+});
