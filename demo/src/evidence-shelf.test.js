@@ -26,11 +26,13 @@ test('依据夹按账号和草稿隔离，并拒绝无效页码', () => {
 test('旧依据夹只保留本课教材页和当前草稿已核验页', () => {
   const filtered = evidenceShelfForLesson([
     { documentId: 'teacher-guide', pdfPage: 100, sectionPath: ['第一单元', '1 沁园春·雪'] },
+    { documentId: 'teacher-guide', pdfPage: 223, sectionPath: ['第三单元', '11 岳阳楼记'] },
     { documentId: 'teacher-guide', pdfPage: 224, sectionPath: ['第三单元', '11 岳阳楼记'] },
     { documentId: 'textbook', pdfPage: 57, sectionPath: [] },
     { documentId: 'curriculum-standard', pdfPage: 21, sectionPath: ['第四学段'] }
   ], {
     lessonTitle: '《岳阳楼记》',
+    lessonRef: { documentId: 'teacher-guide', pageRange: [224, 237] },
     citations: [{ documentId: 'textbook', pdfPage: 57 }]
   });
 

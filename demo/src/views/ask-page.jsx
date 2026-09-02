@@ -388,7 +388,7 @@ export function AskPage() {
       setRestoredFromLocal(false);
       const savedShelf = Array.isArray(draft.answer?.evidenceShelf) ? draft.answer.evidenceShelf : [];
       const currentLessonTitle = draft.lesson_context?.lessonRef?.title || draft.answer?.lesson?.title || draft.title || '';
-      const lessonShelf = evidenceShelfForLesson(savedShelf, { lessonTitle: currentLessonTitle, citations: draft.citations });
+      const lessonShelf = evidenceShelfForLesson(savedShelf, { lessonTitle: currentLessonTitle, lessonRef: draft.lesson_context?.lessonRef, citations: draft.citations });
       setEvidenceShelf(lessonShelf);
       setEvidenceShelfReady(true);
       shelfReadyForDraft.current = String(draftId);

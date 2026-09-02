@@ -20,13 +20,18 @@ function normalizedLessonTitle(value) {
  * but require textbook and teacher-guide pages to belong to the current
  * lesson or to the draft's verified citation set.
  */
-export function evidenceShelfForLesson(items, { lessonTitle = '', citations = [] } = {}) {
+export function evidenceShelfForLesson(items, { lessonTitle = '', lessonRef = null, citations = [] } = {}) {
   const title = normalizedLessonTitle(lessonTitle);
+  const rangeStart = Number(lessonRef?.pageRange?.[0]);
+  const rangeEnd = Number(lessonRef?.pageRange?.[1] || rangeStart);
+  const hasCanonicalRange = lessonRef?.documentId && rangeStart > 0 && rangeEnd >= rangeStart;
   const verifiedPages = new Set((Array.isArray(citations) ? citations : [])
     .filter(item => item?.documentId && Number(item?.pdfPage) > 0)
     .map(item => `${item.documentId}:${Number(item.pdfPage)}`));
   return (Array.isArray(items) ? items : []).filter(item => {
     if (!['textbook', 'teacher-guide'].includes(String(item?.documentId || ''))) return true;
+    if (hasCanonicalRange && String(item.documentId) === String(lessonRef.documentId)
+      && (Number(item.pdfPage) < rangeStart || Number(item.pdfPage) > rangeEnd)) return false;
     if (verifiedPages.has(`${item.documentId}:${Number(item.pdfPage)}`)) return true;
     if (!title) return true;
     const identityText = [item?.title, item?.documentTitle, ...(Array.isArray(item?.sectionPath) ? item.sectionPath : [])]
