@@ -31,13 +31,14 @@ test('the public main path keeps one clear action and preserves the lesson hando
 
   expect(await px(choices.first().locator('.source-choice-copy strong'))).toBeGreaterThanOrEqual(14);
   expect(await px(choices.first().locator('.source-choice-copy small'))).toBeGreaterThanOrEqual(12);
-  expect(await px(choices.first().locator('.source-choice-actions a'))).toBeGreaterThanOrEqual(12);
+  expect(await px(choices.first().locator('.source-prepare-disabled'))).toBeGreaterThanOrEqual(12);
 
   await page.getByRole('button', { name: /11 岳阳楼记/ }).first().click({ noWaitAfter: true });
   await expect(page).toHaveURL(/doc=textbook/);
   await expect(page).toHaveURL(/page=56/);
+  expect(await px(choices.first().locator('.source-choice-actions a'))).toBeGreaterThanOrEqual(12);
 
-  const prepare = page.getByRole('link', { name: '围绕本篇开始备课' });
+  const prepare = page.getByRole('link', { name: '从当前内容开始备课' });
   await expect(prepare).toHaveAttribute('href', /lesson=11(?:\+|%20)%E5%B2%B3%E9%98%B3%E6%A5%BC%E8%AE%B0/);
   await prepare.click();
   await expect(page).toHaveURL(/\/ask\//);
@@ -47,6 +48,17 @@ test('the public main path keeps one clear action and preserves the lesson hando
 
 test('library search controls and page actions stay readable and operational', async ({ page }) => {
   await page.goto('/library/');
+
+  await expect(page.locator('.reader-prepare-disabled')).toHaveText('先从目录选择内容');
+  await expect(page.locator('.reader-prepare-disabled')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.getByRole('link', { name: '从当前内容开始备课' })).toHaveCount(0);
+
+  const searchToolbar = page.locator('.index-toolbar');
+  if ((await page.viewportSize()).width >= 900) {
+    const toolbarWidth = await searchToolbar.evaluate(element => element.getBoundingClientRect().width);
+    const pageWidth = (await page.viewportSize()).width;
+    expect(toolbarWidth).toBeLessThan(pageWidth * 0.8);
+  }
 
   const search = page.getByRole('textbox', { name: '搜索篇名、章节或教学问题' });
   expect(await px(search)).toBeGreaterThanOrEqual(14);
@@ -59,6 +71,7 @@ test('library search controls and page actions stay readable and operational', a
   await hit.click({ noWaitAfter: true });
   await expect(page).toHaveURL(/doc=textbook/);
   await expect(page).toHaveURL(/page=56/);
+  await expect(page.getByRole('link', { name: '从当前内容开始备课' })).toBeVisible();
 
   expect(await px(page.getByRole('button', { name: '上一页', exact: true }))).toBeGreaterThanOrEqual(13);
   expect(await px(page.getByRole('link', { name: '核验原始教材' }))).toBeGreaterThanOrEqual(13);

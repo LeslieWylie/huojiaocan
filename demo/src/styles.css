@@ -620,3 +620,13 @@
 .ask-page .compact-hero p{font-size:15px}.ask-page .scope-switch button{font-size:13px}.ask-page .lesson-context-heading>div span,.ask-page .lesson-context-heading>small{font-size:12px}.ask-context-summary span{font-size:11px}.ask-context-summary b{font-size:14px}.ask-context-summary button{font-size:13px!important}.conversation-history-fold>summary{font-size:13px}.conversation-latest>header small{font-size:12px}.conversation-side .section-head p,.conversation-dossier>p,.workflow-steps article p{font-size:13px}.conversation-secondary>summary{font-size:13px}.dual-source-desk>header p,.dual-source-grid p{font-size:14px}.dual-source-grid footer small,.dual-source-grid footer a{font-size:12px}
 .cards-workflow-guide li small,.cards-focus-nav small{font-size:13px}.cards-focus-nav span{font-size:12px}.cards-focus-actions button,.card-actions .primary{font-size:13px}.citation-unavailable{font-size:12px}
 @media(max-width:700px){.topbar{padding-inline:14px}.top-actions{gap:6px}.top-actions>a,.top-actions>button{min-width:44px;padding-inline:10px}.index-toolbar form{grid-template-columns:1fr}.search-actions{display:grid;grid-template-columns:1fr auto}.source-choice-copy strong{font-size:15px}.ask-page .compact-hero p{font-size:14px}.ask-context-summary b{font-size:13px}}
+
+/* 1.7 · 教材库任务条：搜索是工具，不再占据一整张空白大卡。 */
+.index-page .index-toolbar{align-self:start;width:min(920px,100%);max-width:100%;padding:12px 14px;border:1px solid #d7e4de;border-radius:14px;background:#fff;box-shadow:0 10px 24px #173f380c}
+.index-page .index-toolbar form{width:100%;grid-template-columns:minmax(220px,270px) minmax(300px,1fr) auto;gap:10px}
+.index-page .search-scope,.index-page .search-input{min-height:46px}
+.index-page .search-actions{align-self:end}
+.source-prepare-disabled{display:inline-flex;align-items:center;min-height:42px;padding:0 12px;border:1px dashed #d4dfda;border-radius:9px;color:#81928c;background:#f7faf8;font-size:12px;font-weight:750}
+.index-reader>header .reader-prepare-disabled{display:inline-flex;align-items:center;min-height:40px;padding:0 12px;border:1px dashed #d2ddd8;border-radius:9px;color:#82928d;background:#f4f7f5;font-size:13px;font-weight:750;cursor:not-allowed}
+@media(max-width:900px){.index-page .index-toolbar{width:100%}.index-page .index-toolbar form{grid-template-columns:minmax(190px,240px) minmax(0,1fr) auto}}
+@media(max-width:700px){.index-page .index-toolbar{padding:12px}.index-page .index-toolbar form{grid-template-columns:1fr}.index-page .search-actions{grid-template-columns:1fr auto}.source-prepare-disabled{justify-content:center;width:100%}}

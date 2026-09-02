@@ -286,6 +286,12 @@ export function LibraryPage() {
     nodeId: selectedNode,
     lessonTitle: selectedLessonTitle || pageTitle(page)
   });
+  const hasReadingTarget = Boolean(
+    selectedNode &&
+    selectedLessonTitle &&
+    pageNo > 1 &&
+    !/(?:目录|版权|封面)/u.test(selectedLessonTitle)
+  );
   const visibleSearchGroups = groupSearchResults(results.slice(0, visibleResults));
   return (
     <div className="view-stack index-page">
@@ -305,11 +311,11 @@ export function LibraryPage() {
               <span className="source-choice-copy"><strong>{item.title}</strong><small>{kind} · {item.pageCount} 页</small><em>{statusLabel(item.indexStatus)} · {indexed}/{item.pageCount || indexed} 页可搜索</em></span>
               {selected && <Badge tone="green">当前阅读</Badge>}
             </button>
-            <div className="source-choice-actions"><button type="button" aria-label={`查看${item.short || item.title}目录`} onClick={() => switchDocument(item.id)}>查看目录</button><a href={preparationHref(item.id)}>进入备课问答 <ArrowRight/></a></div>
+            <div className="source-choice-actions"><button type="button" aria-label={`查看${item.short || item.title}目录`} onClick={() => switchDocument(item.id)}>查看目录</button>{hasReadingTarget ? <a href={preparationHref(item.id)}>带着当前内容去备课 <ArrowRight/></a> : <span className="source-prepare-disabled">先从目录选择内容</span>}</div>
           </article>;
         }) : <div className="catalog-empty"><FileSearch/><b>{docsError || "正在读取教材目录…"}</b><div className="catalog-empty-actions">{docsError === '登录已过期，请重新登录后继续。' ? <a className="primary" href={"/login/?next=" + encodeURIComponent(location.pathname + location.search)}>重新登录</a> : <button type="button" onClick={loadDocs}>重新读取</button>}</div></div>}</div>
       </section>
-      <div className="index-toolbar"><form onSubmit={search}>
+      <div className="index-toolbar"><form onSubmit={search} aria-label="教材搜索">
         <label className="search-scope"><span>搜索范围</span><select value={scope} onChange={e => setScope(e.target.value)}><option value="all">课标、学生教材与教师用书</option><option value="both">学生教材与教师用书</option>{docs.map(item => <option value={item.id} key={item.id}>{item.short}</option>)}</select></label>
         <label className="search-input"><Search/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="搜索篇名、章节或教学问题" aria-label="搜索篇名、章节或教学问题"/></label>
         <div className="search-actions"><button type="submit" disabled={busy}>{busy ? "正在搜索…" : "搜索"}</button>{(searched || query) && <button type="button" className="search-clear" onClick={clearSearch}>清除</button>}</div>
@@ -318,7 +324,7 @@ export function LibraryPage() {
         <aside className="index-outline"><header><span>教材目录</span><small>点击篇目标题定位起始页 · 教材页码范围</small></header><Tree nodes={tree} current={selectedNode} onPick={pick} error={treeError} loading={treeBusy} retry={loadTree}/></aside>
         <section className="index-reader">
           <header><div><Badge tone={currentDoc?.tone || "green"}>{currentDoc?.short || "教材"}</Badge><h2>{pageTitle(page)}</h2><small>第 {pageNo} 页 {page?.printedPage ? `· 书页 ${page.printedPage}` : ""}</small></div>
-            <div><button type="button" disabled={pageNo <= 1} onClick={() => goPage(pageNo - 1)}>上一页</button><input aria-label="教材页码" inputMode="numeric" value={pageInput} onChange={event => setPageInput(event.target.value.replace(/\D/gu, ''))} onBlur={commitPageInput} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitPageInput(); event.currentTarget.blur(); } }}/><button type="button" disabled={pageNo >= maxPage} onClick={() => goPage(pageNo + 1)}>下一页</button><a className="reader-prepare-link" href={preparationHref(scope)}>围绕本篇开始备课 <ArrowRight/></a><a href={buildReaderHref({ documentId: doc, page: pageNo, nodeId: selectedNode, lessonTitle: selectedLessonTitle || pageTitle(page), scope, returnTo: currentPageReturn() })}><ExternalLink/>核验原始教材</a></div>
+            <div><button type="button" disabled={pageNo <= 1} onClick={() => goPage(pageNo - 1)}>上一页</button><input aria-label="教材页码" inputMode="numeric" value={pageInput} onChange={event => setPageInput(event.target.value.replace(/\D/gu, ''))} onBlur={commitPageInput} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitPageInput(); event.currentTarget.blur(); } }}/><button type="button" disabled={pageNo >= maxPage} onClick={() => goPage(pageNo + 1)}>下一页</button>{hasReadingTarget ? <a className="reader-prepare-link" href={preparationHref(scope)}>从当前内容开始备课 <ArrowRight/></a> : <span className="reader-prepare-disabled" aria-disabled="true">先从目录选择内容</span>}<a href={buildReaderHref({ documentId: doc, page: pageNo, nodeId: selectedNode, lessonTitle: selectedLessonTitle || pageTitle(page), scope, returnTo: currentPageReturn() })}><ExternalLink/>核验原始教材</a></div>
           </header>
           <article className="library-pdf-article"><div className="library-pdf-meta"><span>原始教材是唯一可核验的依据</span><b>第 {pageNo} 页 · 书页 {page?.printedPage || "未标注"}</b></div>{pageBusy ? <div className="index-empty" role="status"><Activity/><b>正在打开教材第 {pageNo} 页</b><p>目录与页码保持不变，页面读取完成后会自动显示。</p></div> : pagePdf && !pdfError ? <iframe key={`${doc}-${pageNo}-${pageRetry}`} title={`${currentDoc?.short || "教材"} 第 ${pageNo} 页`} src={pdfPageUrl(pagePdf,pageNo)} onError={() => setPdfError(true)}/> : <div className="index-empty"><FileText/><b>{pageError || '当前教材页面暂时无法显示'}</b><p>可以重试当前页，或在新窗口打开原始 PDF。</p><div className="cards-alert-actions"><button type="button" onClick={() => { setPdfError(false); setPageRetry(value => value + 1); }}>重试当前页</button>{pagePdf && <a className="primary" href={pdfPageUrl(pagePdf,pageNo)} target="_blank" rel="noreferrer">新窗口打开</a>}</div></div>}</article>
         </section>
