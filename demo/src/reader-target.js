@@ -216,7 +216,15 @@ const READER_RETURN_TARGETS = Object.freeze({
 export function resolveReaderReturn(returnTarget, { libraryHref = '/library/' } = {}) {
   const value = String(returnTarget || '').trim();
   if (value.startsWith('/') && !value.startsWith('//')) {
-    return { href: value, label: '返回原页面' };
+    const pathname = value.split('?')[0];
+    const label = pathname.startsWith('/ask/')
+      ? '返回本课问答'
+      : pathname.startsWith('/cards/')
+        ? '返回一课三卡'
+        : pathname.startsWith('/library/')
+          ? '返回教材库'
+          : '返回原页面';
+    return { href: value, label };
   }
   if (value === 'library' || !value) {
     return { href: libraryHref || '/library/', label: '返回教材库' };

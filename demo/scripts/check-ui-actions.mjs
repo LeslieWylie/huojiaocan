@@ -91,6 +91,10 @@ for (const path of walk(srcRoot)) {
       || /\btype\s*=\s*["'](?:submit|reset)["']/u.test(tag.opening);
     if (!actionable) failures.push(`${where} button has no click, submit, reset, or form action`);
     if (/\bonClick\s*=\s*\{\s*\(?.*?\)?\s*=>\s*\{\s*\}\s*\}/su.test(tag.opening)) failures.push(`${where} button has an empty click handler`);
+    // A button without an explicit type silently becomes a submit button when
+    // a later refactor moves it inside a form. Requiring the type keeps every
+    // teacher action deterministic instead of depending on DOM placement.
+    if (!/\btype\s*=/u.test(tag.opening)) failures.push(`${where} button has no explicit type`);
     const accessible = /\baria-label\s*=/u.test(tag.opening)
       || /\btitle\s*=/u.test(tag.opening)
       || visibleButtonName(tag.body).length > 0;
@@ -107,6 +111,13 @@ for (const path of walk(srcRoot)) {
     if (route) internalRouteCount += 1;
     if (route && !routes.has(route)) failures.push(`${where} points to an undeclared page route ${route}`);
     if (route === '/cards/' && !/[?&]draftId=|:value/u.test(href || '')) failures.push(`${where} opens cards without binding a draftId`);
+    if (route === '/document/' && !/[?&]doc=|:value/u.test(href || '')) failures.push(`${where} opens the reader without binding a document`);
+    if (route === '/document/' && !/[?&]page=|:value/u.test(href || '')) failures.push(`${where} opens the reader without binding a physical page`);
+  }
+
+  for (const tag of openingTags(source, 'iframe')) {
+    const where = `${file}:${lineAt(source, tag.start)}`;
+    if (!/\btitle\s*=/u.test(tag.opening)) failures.push(`${where} iframe has no accessible title`);
   }
 }
 

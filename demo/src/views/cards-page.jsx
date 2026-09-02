@@ -29,6 +29,7 @@ export function Cards() {
   const [planDirty, setPlanDirty] = useState(false);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [copying, setCopying] = useState(false);
   const [generating, setGenerating] = useState('');
   const [generationStage, setGenerationStage] = useState(0);
   const [dirty, setDirty] = useState(false);
@@ -357,6 +358,30 @@ export function Cards() {
     }
   };
 
+  const saveAndViewNext = async () => {
+    const saved = dirty ? await save(cards) : draft;
+    if (!saved) return;
+    setActiveCard(index => Math.min(index + 1, Math.max(0, cards.length - 1)));
+    requestAnimationFrame(() => document.getElementById('card-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
+
+  const copyVersion = async () => {
+    if (!draftId || !draft?.version || copying) return;
+    setCopying(true);
+    setError(''); setErrorCode('');
+    try {
+      const data = await rootRequest(`/api/assets/${encodeURIComponent(draftId)}/copy`, {
+        method: 'POST',
+        body: { version: draft.version }
+      });
+      if (!data?.asset?.draftId) throw Object.assign(new Error('copy_failed'), { code: 'copy_failed' });
+      location.href = `/cards/?draftId=${encodeURIComponent(data.asset.draftId)}`;
+    } catch (err) {
+      setError(askErrorMessage(err)); setErrorCode(requestCode(err));
+      setCopying(false);
+    }
+  };
+
   const regenerate = async card => {
     if (card.status === 'locked' || generating) return;
     const current = dirty ? await save(cards) : draft;
@@ -389,7 +414,7 @@ export function Cards() {
     const url = new URL(location.href);
     if (active) url.searchParams.set('classroom', '1');
     else url.searchParams.delete('classroom');
-    history.replaceState(null, '', url);
+    globalThis.history?.replaceState?.(null, '', url);
   };
 
   const saveClassroomRun = async (requested = classroomRun, { complete = false } = {}) => {
@@ -824,7 +849,7 @@ ${sourceNote}`;
       <div className="hero-actions"><button type="button" className="primary" onClick={startClassroom} disabled={!classroomReady}><PanelTop/>{classroomButtonCopy}</button><button type="button" onClick={exportMd} disabled={!cards.length}><Download/>导出方案</button><button type="button" onClick={publishAsset} disabled={!draftId || !workflowState.teacherConfirmed || !workflowState.cardsGenerated}><Archive/>收进教研资产库</button><details className="hero-more-tools"><summary><Menu/>更多课堂工具</summary><div className="hero-more-tools-grid">{draftId && <a href={`/alignment/?draftId=${encodeURIComponent(draftId)}`}><Target/>核对课标</a>}{draftId && workflowState.teacherConfirmed && workflowState.cardsGenerated && <a href={`/share/?draftId=${encodeURIComponent(draftId)}`}><Share2/>发布共备快照</a>}{draftId && workflowState.cardsGenerated && <a href={`/slides/?draftId=${encodeURIComponent(draftId)}`}><PanelTop/>生成课堂课件</a>}{draftId && workflowState.cardsGenerated && <a href={`/homework/?draftId=${encodeURIComponent(draftId)}`}><ClipboardCheck/>生成分层作业</a>}{draftId && workflowState.cardsGenerated && <a href={`/pulse/?draftId=${encodeURIComponent(draftId)}`}><Gauge/>课前学情摸底</a>}{draftId && workflowState.cardsGenerated && <a href={`/rehearsal/?draftId=${encodeURIComponent(draftId)}`}><Route/>预演问题链</a>}{draftId && workflowState.cardsGenerated && <a href={`/reflection/?draftId=${encodeURIComponent(draftId)}`}><History/>查看课后复盘</a>}</div></details></div>
     </section>
     {error && <section className="cards-alert" role="alert"><div className="cards-alert-icon"><CircleAlert/></div><div className="cards-alert-copy"><b>{noticeTitle}</b><p>{noticeBody}</p></div><div className="cards-alert-actions">{['auth_required','auth_invalid'].includes(errorCode) && <a className="primary" href={'/login/?next=' + encodeURIComponent(location.pathname + location.search)} onClick={() => rememberAuthReturn({ draftId })}>重新登录</a>}{citationNeedsReview && <button type="button" className="primary" onClick={confirmAndGenerate} disabled={Boolean(generating) || saving}><RefreshCw/>{generating ? '正在重试' : '重新核对并重试'}</button>}{isTeacherConfirmed(draft) && !workflowState.cardsGenerated && /^(gateway|deepseek|card_generation|evidence_)/u.test(errorCode) && <button type="button" className="primary" onClick={confirmAndGenerate} disabled={Boolean(generating)}><RefreshCw/>重试生成三卡</button>}<a href={draftId ? `/ask/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}>{citationNeedsReview ? '回到本课问答核对依据' : draftId ? '返回本课问答' : '返回备课问答'}</a>{errorCode === 'draft_not_found' && <button type="button" onClick={() => location.reload()}><RefreshCw/>重新读取</button>}</div></section>}
-    {busy ? <div className="panel answer-loading"><p>正在读取账号草稿…</p></div> : showEmpty ? null : <>
+    {busy ? <section className="panel cards-loading-skeleton" aria-label="正在读取课堂设计" aria-busy="true"><span className="sr-only">正在读取课堂设计…</span><div className="skeleton-line skeleton-title"/><div className="skeleton-line skeleton-copy"/><div className="skeleton-card-row"><i/><i/><i/></div></section> : showEmpty ? null : <>
       {assetMessage && <section className="quality-box"><CheckCircle2/><span>{assetMessage}</span><a href="/assets/">查看教研资产库</a></section>}
       {repairMessage && <section className="cards-repair-notice" role="status"><CheckCircle2/><span>{repairMessage}</span></section>}
       {exportNotice && <section className="quality-box offline-pack-notice"><CheckCircle2/><span>{exportNotice}</span><small>下载的 HTML 可以离线打开和打印；导出不会改动账号中的课堂记录。</small></section>}
@@ -883,7 +908,7 @@ ${sourceNote}`;
             <div className="card-ribbon"><span>{workflowCopy}</span><i/></div>
             <div className="card-editor-guidance"><Sparkles/><div><b>这一张卡怎么写</b><p>{cardEditGuidance(currentCard.type)}</p></div></div>
             <ul className="card-items">{(currentCard.items || []).length ? (currentCard.items || []).map((item, itemIndex) => <li key={item.id || (currentCard.id + '-' + itemIndex)}><div className="card-item-mark"><Check/></div><div className="card-item-body"><textarea rows={3} value={item.text || ''} disabled={currentCard.status === 'locked'} onChange={event => updateItem(activeCard, itemIndex, event.target.value)} aria-label={currentCard.title + '第' + (itemIndex + 1) + '项'}/><div className="card-item-meta"><span>0{itemIndex + 1}</span><span className="source-type-chip">{sourceTypeLabel(item.sourceType)}</span>{cardItemNeedsDetail(currentCard.type, item.text) && currentCard.status !== 'locked' && <span className="detail-needed-chip">建议补全</span>}<CardSourceList citations={(draft && draft.citations) || []} refs={item.citationIds} returnTo={cardsReaderReturn}/></div></div></li>) : <li className="card-empty"><Sparkles/><span>这张卡暂时还没有内容。可以回到备课问答重新生成，也可以先保留这张卡，稍后补写。</span></li>}</ul>
-            <footer className="card-actions"><span className={'save-state ' + (dirty ? 'pending' : '')}>{saving ? '正在保存…' : dirty ? '有未保存修改' : '内容已保存'}</span>{currentCard.status !== 'locked' && <><button type="button" onClick={() => save(cards)} disabled={saving || !dirty}>{saving ? '保存中' : '保存修改'}</button><button type="button" onClick={() => regenerate(currentCard)} disabled={Boolean(generating)}>{generating === currentCard.id ? '正在依据中生成' : currentCard.items?.some(item => cardItemNeedsDetail(currentCard.type, item.text)) ? '补全本卡' : '重新生成本卡'}</button><button type="button" onClick={() => lock(currentCard)} disabled={saving}>锁定本卡</button></>}<a href={draftId ? `/ask/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}>回到本课问答</a></footer>
+            <footer className="card-actions"><span className={'save-state ' + (dirty ? 'pending' : '')}>{saving ? '正在保存…' : dirty ? '有未保存修改' : '内容已保存'}</span>{currentCard.status !== 'locked' ? <>{activeCard < cards.length - 1 ? <button type="button" className="primary" onClick={saveAndViewNext} disabled={saving}>{saving ? '保存中…' : '保存并查看下一张'}</button> : <button type="button" onClick={() => save(cards)} disabled={saving || !dirty}>{saving ? '保存中' : '保存修改'}</button>}<button type="button" onClick={() => regenerate(currentCard)} disabled={Boolean(generating)}>{generating === currentCard.id ? '正在依据中生成' : currentCard.items?.some(item => cardItemNeedsDetail(currentCard.type, item.text)) ? '补全本卡' : '重新生成本卡'}</button><button type="button" onClick={() => lock(currentCard)} disabled={saving}>锁定本卡</button></> : <button type="button" className="copy-version-action" onClick={copyVersion} disabled={copying}><Plus/>{copying ? '正在复制…' : '复制为新版本'}</button>}<a href={draftId ? `/ask/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}>回到本课问答</a></footer>
           </article>}
           <aside className="card-editor-rail"><div className="rail-note"><span>当前动作</span><b>{workflowCopy}</b><p>{CARD_META[currentCard?.type]?.rail || '把教材依据转成可以直接使用的课堂行动。'}</p></div><div className="rail-note rail-paper"><span>依据提示</span><b>优先看教师用书</b><p>教师用书中的教学建议优先作为课堂组织参考；学生教材用于锁定原文、任务和学习证据。</p></div></aside>
         </div>

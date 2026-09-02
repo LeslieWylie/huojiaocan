@@ -57,13 +57,13 @@ export function Unit() {
     setSelectedUnitId(String(selectedUnit.id));
     const url = new URL(location.href);
     url.searchParams.set('unit', String(selectedUnit.id));
-    history.replaceState(null, '', url);
+    globalThis.history?.replaceState?.(null, '', url);
   }, [selectedUnit?.id, selectedUnitId]);
 
   const selectUnit = id => {
     const url = new URL(location.href);
     url.searchParams.set('unit', id);
-    history.replaceState(null, '', url);
+    globalThis.history?.replaceState?.(null, '', url);
     setSelectedUnitId(id);
   };
   const unitRefQuery = (unit, lesson) => new URLSearchParams({

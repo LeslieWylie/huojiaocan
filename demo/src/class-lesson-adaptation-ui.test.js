@@ -16,7 +16,7 @@ test('10.0 combines multi-class reuse and teacher handoff without adding navigat
   assert.match(app, /buildSubstituteTeachingPack/u);
   assert.match(app, /下载代课交接单/u);
   const primaryNav = app.match(/const PRIMARY_NAV = \[([\s\S]*?)\n\];/u)?.[1] || '';
-  assert.equal((primaryNav.match(/^\s*\[/gmu) || []).length, 6);
+  assert.equal((primaryNav.match(/^\s*\[/gmu) || []).length, 4);
 });
 
 test('class adaptation preserves pending work and continues inside the same ask flow', () => {

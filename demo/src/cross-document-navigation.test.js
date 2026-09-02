@@ -169,12 +169,12 @@ test('首次跨教材切换不依赖预缓存：openReaderTarget 必须先取回
   const OPEN_READER_TARGET = appBlock(/const openReaderTarget\s*=/u, 2600);
   assert.ok(OPEN_READER_TARGET, '没有找到 openReaderTarget');
 
-  // 只有跨文档且带着篇目身份时才需要补目标教材目录——同文档翻页或没有篇目标题时，
-  // resolveCrossDocTarget 用不上目标树，不必为它多等一次网络请求。
+  // 跨文档时必须拿到目标教材树：有篇名时用来对位，搜索结果带 nodeId
+  // 时用来确认该节点真的属于目标教材，不能因为“跨教材”就直接丢掉它。
   assert.match(
     OPEN_READER_TARGET,
-    /if\s*\(canonicalId\s*!==\s*doc\s*&&\s*nextLessonTitle\)\s*\{/u,
-    'openReaderTarget 必须只在跨文档且有篇目身份时才去补目标教材目录'
+    /if\s*\(canonicalId\s*!==\s*doc\s*&&\s*!targetTree\)\s*\{/u,
+    'openReaderTarget 必须在首次跨文档时取回目标教材目录，再校验搜索节点或篇名'
   );
   assert.match(
     OPEN_READER_TARGET,

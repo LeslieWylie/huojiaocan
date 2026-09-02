@@ -46,9 +46,11 @@ export function MindMapBoard({ title, items = [], stage = 1, filterId = 'chalkGl
 export function CardSourceList({ citations = [], refs = [], returnTo = 'cards' }) {
   const items = uniqueCitations(citations, refs);
   if (!items.length) return <span className="card-source-empty">尚未绑定教材依据</span>;
-  const first = items[0];
-  const rest = items.slice(1);
-  const chip = item => { const href = citationLink(item, returnTo); return href ? <a href={href} key={String(item.documentId) + '-' + citationPage(item)}><Quote size={12}/>{docName(item.documentId)} · 第 {citationPage(item)}页</a> : null; };
+  const linkedItems = items.map(item => ({ item, href: citationLink(item, returnTo) })).filter(entry => entry.href);
+  if (!linkedItems.length) return <span className="card-source-empty">教材页码待确认</span>;
+  const first = linkedItems[0];
+  const rest = linkedItems.slice(1);
+  const chip = entry => <a href={entry.href} key={String(entry.item.documentId) + '-' + citationPage(entry.item)}><Quote size={12}/>{docName(entry.item.documentId)} · 第 {citationPage(entry.item)}页</a>;
   return <div className="card-source-list"><span className="card-source-label">教材依据</span>{chip(first)}{rest.length > 0 && <details><summary>另有 {rest.length} 个依据</summary><div>{rest.map(chip)}</div></details>}</div>;
 }
 export function TeachingBrief({ brief }) {

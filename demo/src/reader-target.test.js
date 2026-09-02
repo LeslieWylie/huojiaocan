@@ -144,8 +144,9 @@ test('buildReaderHref with paired flag preserves the paired setting', () => {
 test('reader return targets preserve the exact originating workflow', () => {
   assert.deepEqual(
     resolveReaderReturn('/cards/?draftId=draft-1&classroom=1'),
-    { href: '/cards/?draftId=draft-1&classroom=1', label: '返回原页面' }
+    { href: '/cards/?draftId=draft-1&classroom=1', label: '返回一课三卡' }
   );
+  assert.deepEqual(resolveReaderReturn('/ask/?draftId=draft-1'), { href: '/ask/?draftId=draft-1', label: '返回本课问答' });
   assert.deepEqual(resolveReaderReturn('unit'), { href: '/unit/', label: '返回单元接力' });
   assert.deepEqual(resolveReaderReturn('alignment'), { href: '/alignment/', label: '返回课标对齐' });
   assert.deepEqual(resolveReaderReturn('share'), { href: '/share/', label: '返回共备方案' });

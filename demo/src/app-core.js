@@ -476,6 +476,20 @@ export function prioritizeSearchResults(items = []) {
   return [...items].sort((left, right) => sourceRank(left) - sourceRank(right));
 }
 
+export function groupSearchResults(items = []) {
+  const groups = [
+    { id: 'textbook', label: '学生教材原文', items: [] },
+    { id: 'teacher-guide', label: '教师用书解析', items: [] },
+    { id: 'other', label: '其他教学材料', items: [] }
+  ];
+  for (const item of Array.isArray(items) ? items : []) {
+    const documentId = canonicalDocumentId(searchResultDocumentId(item));
+    const group = groups.find(candidate => candidate.id === documentId) || groups[2];
+    group.items.push(item);
+  }
+  return groups.filter(group => group.items.length > 0);
+}
+
 export function cacheDraftForRecovery(userId, id, draft, cards = draft?.cards) {
   try { writeDraftRecovery(localStorage, userId, id, draft, cards); } catch {}
 }

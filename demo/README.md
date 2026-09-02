@@ -43,6 +43,18 @@ npm run build
 
 `npm run check` 会执行服务端语法检查、前端未解析引用守卫和生产构建；`npm test` 覆盖 API、索引、问答、引用、导航、草稿、三卡和课堂工具。
 
+浏览器端到端验证：
+
+```bash
+npm run e2e:install
+npm run test:e2e
+npm run test:e2e:headed
+npm run test:smoke:production
+npm run verify
+```
+
+详细覆盖、环境变量和生产 smoke 说明见 [`e2e/README.md`](./e2e/README.md)。
+
 ## AI、账号与连续问答
 
 系统默认使用服务端配置的 OpenAI 兼容模型网关。用户也可以在 `/settings/` 添加自己的 DeepSeek 连接；数据库只保存 AES-256-GCM 加密结果，前端只看到末四位和记录 ID。个人连接固定请求 `https://api.deepseek.com/chat/completions`，只允许 `deepseek-v4-flash` 和 `deepseek-v4-pro`。

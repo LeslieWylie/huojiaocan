@@ -15,9 +15,9 @@ test('8.0 makes the teacher next action and class continuity a first-class home 
   assert.match(app, /\['dashboard', '\/', Route, '教学任务'\]/u);
   assert.match(app, /TASK_PHASE_META/u);
   const primaryNav = app.match(/const PRIMARY_NAV = \[([\s\S]*?)\n\];/u)?.[1] || '';
-  assert.equal((primaryNav.match(/^\s*\[/gmu) || []).length, 6);
-  assert.match(app, /sidebar-tool-group/u);
-  assert.match(app, /课堂与教研工具/u);
+  assert.equal((primaryNav.match(/^\s*\[/gmu) || []).length, 4);
+  assert.match(app, /MORE_TOOL_NAV/u);
+  assert.match(app, /更多工具/u);
   assert.match(app, /TASK_PHASE_META\[task\.phase\] \|\| TASK_PHASE_META\.continue_preparation/u);
 });
 

@@ -69,10 +69,10 @@ export function ConversationTurn({ turn, draftId, onQuickAsk, onSaveEvidence }) 
   const cardsDraftId = draftId || response.draftId || '';
   const cardsHref = cardsDraftId ? `/cards/?draftId=${encodeURIComponent(cardsDraftId)}` : '';
   const askReturnTo = cardsDraftId ? `/ask/?draftId=${encodeURIComponent(cardsDraftId)}` : 'ask';
-  return <article className="conversation-turn"><div className="turn-question"><small>你的问题</small><p>{turn.question}</p>{turn.operationLabel && <span className="turn-operation">本轮调整：{turn.operationLabel.replace(/请保持当前篇目与核心问题，/u, '').replace(/。$/u, '')}</span>}{response.conversation?.historyUsed && <span className="turn-context-used"><CheckCircle2 size={13}/>已沿用本场对话上下文</span>}</div>{response.retrievalMode === 'stable_snapshot' && <div className="snapshot-banner"><CheckCircle2/><div><b>{UI_COPY.recovery.snapshotBanner}</b><small>{UI_COPY.recovery.snapshotBody}{response.fallbackAt ? ` 快照时间：${new Date(response.fallbackAt).toLocaleString()}` : ''}</small></div></div>}{blocked ? <div className="answer-blocked compact-blocked"><div className="answer-blocked-head"><CircleAlert/><div><Badge tone="orange">依据不足，已停止生成</Badge><h2>{UI_COPY.ask.blockedTitle}</h2><p>{UI_COPY.ask.blockedBody}</p></div></div></div> : <>{Number(response.generationRounds) > 1 && <div className="agent-review-note"><CheckCircle2 size={16}/><span><b>{Number(response.generationRounds) >= 3 ? '已完成教材校核与课堂可用性修订' : '已完成两轮教材校核'}</b><small>{Number(response.generationRounds) >= 3 ? '初稿仍有顺序或时间问题时，系统已增加一轮定向修订。' : '先形成课堂初稿，再按教师用书、学生教材与真实页码逐项修订。'}</small></span></div>}{Array.isArray(response.teachingPlanIssues) && response.teachingPlanIssues.length > 0 && <div className="agent-teaching-warning"><CircleAlert/><div><b>当前流程仍需教师确认</b><ul>{response.teachingPlanIssues.slice(0, 3).map(item => <li key={item}>{item}</li>)}</ul></div></div>}<div className="understanding-card"><small>问题理解</small><p>{response.understanding || response.question}</p></div><RouteTrace route={response.route}/><PlanAnswer answer={response.answer} citations={response.citations || []} cardSuggestions={response.cardSuggestionItems || response.cardSuggestions || response.threeCardSuggestions} draftId={cardsDraftId} returnTo={askReturnTo}/><div className="turn-followups"><button onClick={() => onQuickAsk({ prompt: '请优先展开教师用书中的教学建议，并保留当前篇目。' })}>展开教师用书依据</button><button onClick={() => onQuickAsk({ prompt: '请只呈现最直接的原始教材依据，并保留当前篇目。' })}>只看原始依据</button><button onClick={() => onQuickAsk({ prompt: '请调整为两课时课堂节奏。', operation: { type: 'change_periods', periods: 2 }, lessonContextPatch: { periods: 2 } })}>换成两课时</button>{cardsHref ? <a className="turn-followup-primary" href={cardsHref}>查看并定稿方案 <ArrowRight size={14}/></a> : <button onClick={() => onQuickAsk({ prompt: '请先保存当前备课方案，再进入教师定稿。' })}>保存方案后定稿</button>}</div><div className="turn-evidence-actions"><button type="button" onClick={() => onSaveEvidence?.(response.citations || [])}><Plus size={14}/>加入本课依据夹</button><small>把本轮已核验页面收好，之后可从右侧直接回看。</small></div><details className="raw-evidence"><summary>查看原文片段与页码</summary><div>{(response.citations || []).slice(0, 6).map(item => <a href={citationLink(item, askReturnTo)} key={item.id}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}</small><p>{citationText(item)}</p></a>)}</div></details></>}</article>;
+  return <article className="conversation-turn"><div className="turn-question"><small>你的问题</small><p>{turn.question}</p>{turn.operationLabel && <span className="turn-operation">本轮调整：{turn.operationLabel.replace(/请保持当前篇目与核心问题，/u, '').replace(/。$/u, '')}</span>}{response.conversation?.historyUsed && <span className="turn-context-used"><CheckCircle2 size={13}/>已沿用本场对话上下文</span>}</div>{response.retrievalMode === 'stable_snapshot' && <div className="snapshot-banner"><CheckCircle2/><div><b>{UI_COPY.recovery.snapshotBanner}</b><small>{UI_COPY.recovery.snapshotBody}{response.fallbackAt ? ` 快照时间：${new Date(response.fallbackAt).toLocaleString()}` : ''}</small></div></div>}{blocked ? <div className="answer-blocked compact-blocked"><div className="answer-blocked-head"><CircleAlert/><div><Badge tone="orange">依据不足，已停止生成</Badge><h2>{UI_COPY.ask.blockedTitle}</h2><p>{UI_COPY.ask.blockedBody}</p></div></div></div> : <>{Number(response.generationRounds) > 1 && <div className="agent-review-note"><CheckCircle2 size={16}/><span><b>{Number(response.generationRounds) >= 3 ? '已完成教材校核与课堂可用性修订' : '已完成两轮教材校核'}</b><small>{Number(response.generationRounds) >= 3 ? '初稿仍有顺序或时间问题时，系统已增加一轮定向修订。' : '先形成课堂初稿，再按教师用书、学生教材与真实页码逐项修订。'}</small></span></div>}{Array.isArray(response.teachingPlanIssues) && response.teachingPlanIssues.length > 0 && <div className="agent-teaching-warning"><CircleAlert/><div><b>当前流程仍需教师确认</b><ul>{response.teachingPlanIssues.slice(0, 3).map(item => <li key={item}>{item}</li>)}</ul></div></div>}<div className="understanding-card"><small>问题理解</small><p>{response.understanding || response.question}</p></div><RouteTrace route={response.route}/><PlanAnswer answer={response.answer} citations={response.citations || []} cardSuggestions={response.cardSuggestionItems || response.cardSuggestions || response.threeCardSuggestions} draftId={cardsDraftId} returnTo={askReturnTo}/><div className="turn-followups"><button type="button" onClick={() => onQuickAsk({ prompt: '请优先展开教师用书中的教学建议，并保留当前篇目。' })}>展开教师用书依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请只呈现最直接的原始教材依据，并保留当前篇目。' })}>只看原始依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请调整为两课时课堂节奏。', operation: { type: 'change_periods', periods: 2 }, lessonContextPatch: { periods: 2 } })}>换成两课时</button>{cardsHref ? <a className="turn-followup-primary" href={cardsHref}>查看并定稿方案 <ArrowRight size={14}/></a> : <button type="button" onClick={() => onQuickAsk({ prompt: '请先保存当前备课方案，再进入教师定稿。' })}>保存方案后定稿</button>}</div><div className="turn-evidence-actions"><button type="button" onClick={() => onSaveEvidence?.(response.citations || [])}><Plus size={14}/>加入本课依据夹</button><small>把本轮已核验页面收好，之后可从右侧直接回看。</small></div><details className="raw-evidence"><summary>查看原文片段与页码</summary><div>{(response.citations || []).slice(0, 6).map(item => { const href = citationLink(item, askReturnTo); return href ? <a href={href} key={item.id}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}</small><p>{citationText(item)}</p></a> : <span className="citation-unavailable" key={item.id || `${item.documentId}-${item.pdfPage}`}>该依据的教材页码待确认</span>; })}</div></details></>}</article>;
 }
 export function EvidenceShelf({ items, onRemove, onClear, returnTo = 'ask' }) {
-  return <section className="evidence-shelf"><header><div><b>本课依据夹</b><small>{items.length ? `${items.length} 个已核验页面` : '把重要页面收在这里'}</small></div>{items.length ? <button type="button" onClick={onClear}>清空</button> : null}</header>{items.length ? <div className="evidence-shelf-list">{items.map(item => <div className="evidence-shelf-item" key={`${item.documentId}:${item.pdfPage}`}><a href={citationLink(item, returnTo)}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}{item.printedPage ? ` · 书页 ${item.printedPage}` : ''}</small></a><button type="button" aria-label="移除依据" onClick={() => onRemove(item)}><X size={13}/></button></div>)}</div> : <p>在回答下方点击“加入本课依据夹”，把需要反复核对的教师用书和教材页面集中起来。</p>}</section>;
+  return <section className="evidence-shelf"><header><div><b>本课依据夹</b><small>{items.length ? `${items.length} 个已核验页面` : '把重要页面收在这里'}</small></div>{items.length ? <button type="button" onClick={onClear}>清空</button> : null}</header>{items.length ? <div className="evidence-shelf-list">{items.map(item => { const href = citationLink(item, returnTo); return <div className="evidence-shelf-item" key={`${item.documentId}:${item.pdfPage}`}>{href ? <a href={href}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}{item.printedPage ? ` · 书页 ${item.printedPage}` : ''}</small></a> : <span className="citation-unavailable"><b>教材页码待确认</b><small>这条依据暂时不能打开原页</small></span>}<button type="button" aria-label="移除依据" onClick={() => onRemove(item)}><X size={13}/></button></div>; })}</div> : <p>在回答下方点击“加入本课依据夹”，把需要反复核对的教师用书和教材页面集中起来。</p>}</section>;
 }
 export function DualSourceEvidenceDesk({ title, evidence, busy, error, onSave, returnTo = 'ask' }) {
   if (!title) return null;
@@ -172,9 +172,13 @@ export function AskPage() {
   const isClassAdaptation = params.get('adapt') === '1';
   const authRecovery = useMemo(() => isNewConversation ? null : readAuthRecovery(), [isNewConversation]);
   // A lesson target from the library is a deliberate request for a new
-  // thread. Do not silently attach an older local snapshot to it.
+  // thread. Do not silently attach an older recovery payload to it. The
+  // exception is the exact path that initiated a login: that hand-off is the
+  // teacher's current question and must survive authentication.
   const hasExplicitLessonTarget = Boolean(params.get('doc') || params.get('page') || params.get('node') || params.get('lesson'));
-  const activeAuthRecovery = hasExplicitLessonTarget && !params.get('draftId') ? null : authRecovery;
+  const currentAskPath = `${location.pathname}${location.search}`;
+  const recoveryMatchesCurrentPath = Boolean(authRecovery?.next && authRecovery.next === currentAskPath);
+  const activeAuthRecovery = hasExplicitLessonTarget && !params.get('draftId') && !recoveryMatchesCurrentPath ? null : authRecovery;
   const initialUser = useMemo(() => getSession()?.user?.id || '', []);
   const requestedResumeId = isNewConversation ? '' : params.get('resume') || '';
   const localConversation = useMemo(() => readConversationSnapshot(initialUser, requestedResumeId), [initialUser, requestedResumeId]);
@@ -617,7 +621,7 @@ export function AskPage() {
         const url = new URL(location.href);
         url.searchParams.set('draftId', savedDraftId);
         url.searchParams.delete('new');
-        history.replaceState(null, '', url);
+        globalThis.history?.replaceState?.(null, '', url);
       }
       if (savedDraft) {
         setExistingDraft(savedDraft);
@@ -732,7 +736,7 @@ export function AskPage() {
     // marker explicitly prevents the browser-local active snapshot and any
     // auth hand-off from silently reopening the previous thread.
     url.search = '?new=1';
-    history.replaceState(null, '', `${url.pathname}${url.search}`);
+    globalThis.history?.replaceState?.(null, '', `${url.pathname}${url.search}`);
   };
   const startNewConversation = () => {
     if (messages.length) {
@@ -757,7 +761,7 @@ export function AskPage() {
       <p>{!aiReady ? '正在检查教材与 AI 服务…' : !session ? (gatewayAvailable ? UI_COPY.ask.loginReady : UI_COPY.ask.noProvider) : keyId ? UI_COPY.ask.personalReady : gatewayAvailable ? UI_COPY.ask.ready : UI_COPY.ask.noProvider}</p>
       <div className="ask-suggestions">
         {EXAMPLES.concat(['我怎么备课《沁园春·雪》']).map(item => (
-          <button disabled={busy || askBlocked} onClick={() => ask(null, item)} key={item}>
+          <button type="button" disabled={busy || askBlocked} onClick={() => ask(null, item)} key={item}>
             {item}<ArrowRight/>
           </button>
         ))}
@@ -772,9 +776,8 @@ export function AskPage() {
         <button type="button" onClick={focusComposer}>继续追问</button>
       </div>
       <div className="conversation-list">
-        {messages.map((turn, index) => (
-          <ConversationTurn key={`${turn.question}-${index}`} turn={turn} draftId={draftId} onQuickAsk={value => ask(null, value)} onSaveEvidence={saveEvidence}/>
-        ))}
+        {messages.length > 1 && <details className="conversation-history-fold"><summary><History size={15}/><span>展开此前 {messages.length - 1} 轮问答</span><ChevronDown size={15}/></summary><div>{messages.slice(0, -1).map((turn, index) => <ConversationTurn key={`${turn.question}-${index}`} turn={turn} draftId={draftId} onQuickAsk={value => ask(null, value)} onSaveEvidence={saveEvidence}/>)}</div></details>}
+        <section className="conversation-latest" aria-label="最新一轮问答"><header><span>最新一轮</span><small>默认先看当前结论，需要时再回看历史</small></header><ConversationTurn turn={messages.at(-1)} draftId={draftId} onQuickAsk={value => ask(null, value)} onSaveEvidence={saveEvidence}/></section>
       </div>
     </>
   ) : null;
@@ -824,7 +827,7 @@ export function AskPage() {
           {session && !draftReady && <div className="ask-auth-note"><Activity/><span>正在读取上次保存的篇目、对话和版本，完成后即可继续追问。</span></div>}
           {session && draftReady && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
           {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
-          {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
+          {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button type="button" onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button type="button" onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button type="button" onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
           {busy && <div className="answer-loading"><span/><span/><span/><p>{UI_COPY.ask.loading}</p></div>}
           {emptyState}
           {conversationState}

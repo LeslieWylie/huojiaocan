@@ -8,6 +8,17 @@
     "build": "vite build",
     "start": "node server/index.js",
     "docs:architecture": "node scripts/generate-code-architecture.mjs",
+    "e2e:install": "playwright install chromium",
+    "e2e": "playwright test --project=chromium-desktop --project=mobile-chromium",
+    "e2e:headed": "playwright test --headed --project=chromium-desktop",
+    "e2e:production": "E2E_TARGET=production playwright test --project=production-smoke",
+    "test:unit": "node --test",
+    "test:e2e": "npm run e2e",
+    "test:e2e:headed": "npm run e2e:headed",
+    "test:smoke:production": "npm run e2e:production",
+    "verify": "npm run test:unit && npm run check && npm run test:e2e",
+    "verify:browser": "npm run e2e",
+    "verify:production:browser": "npm run e2e:production",
     "verify:production": "node scripts/verify-production-provider.mjs",
     "check": "node --check shared/lesson-identity.js && node --check shared/substitute-teaching-pack.js && node --check server/index.js && node --check api/index.js && node --check api/ask.js && node --check api/drafts.js && node --check api/assets.js && node --check api/generate-image.js && node --check serverless/auth-proxy.js && node --check serverless/index-provider.js && node --check serverless/grounded-answer.js && node --check serverless/card-generation.js && node --check serverless/teaching-deliberation.js && node --check serverless/teaching-share.js && node --check serverless/teaching-share-api.js && node --check serverless/draft-revisions.js && node --check serverless/source-coverage.js && node --check serverless/asset-model.js && node --check shared/classroom-run.js && node --check shared/classroom-carryover.js && node --check shared/teaching-task-flow.js && node --check shared/class-learning-profile.js && node --check shared/class-lesson-adaptation.js && node --check shared/lesson-study.js && node --check shared/same-lesson-comparison.js && node --check shared/research-ledger.js && node --check shared/observation-protocol.js && node --check shared/teaching-slides.js && node --check shared/layered-homework.js && node --check shared/homework-review.js && node --check serverless/homework-marking.js && node scripts/check-frontend-refs.mjs && node scripts/check-ui-actions.mjs && node scripts/generate-code-architecture.mjs --check && vite build",
     "test": "node --test"
@@ -21,5 +32,7 @@
     "react-dom": "19.2.8",
     "vite": "8.2.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
 }
