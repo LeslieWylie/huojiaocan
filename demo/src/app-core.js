@@ -471,6 +471,10 @@ export function searchResultPage(result = {}) {
   result = result && typeof result === 'object' ? result : {};
   return pageNumber(result.pdfPage ?? result.pdf_page ?? result.pageNumber ?? result.page ?? result.viewer?.page ?? result.viewer?.page_number);
 }
+export function prioritizeSearchResults(items = []) {
+  const sourceRank = item => searchResultDocumentId(item) === 'textbook' ? 0 : searchResultDocumentId(item) === 'teacher-guide' ? 1 : 2;
+  return [...items].sort((left, right) => sourceRank(left) - sourceRank(right));
+}
 
 export function cacheDraftForRecovery(userId, id, draft, cards = draft?.cards) {
   try { writeDraftRecovery(localStorage, userId, id, draft, cards); } catch {}

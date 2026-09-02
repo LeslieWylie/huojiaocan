@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, BookOpen, ChevronRight, CircleAlert, ExternalLink, FileSearch, FileText, Library, Search } from 'lucide-react';
 import { Badge, SectionHead } from '../ui-kit.jsx';
-import { canonicalDocumentId, citationText, currentPageReturn, docName, findTreeNode, nodePageRange, normalizeCatalogItem, normalizeTree, pageTitle, pdfPageUrl, queryParams, request, searchResultDocumentId, searchResultPage, statusLabel, uniqueCitations } from '../app-core.js';
+import { canonicalDocumentId, citationText, currentPageReturn, docName, findTreeNode, nodePageRange, normalizeCatalogItem, normalizeTree, pageTitle, pdfPageUrl, prioritizeSearchResults, queryParams, request, searchResultDocumentId, searchResultPage, statusLabel, uniqueCitations } from '../app-core.js';
 import { buildPreparationHref, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity as normalizeReaderLessonIdentity, resolveCrossDocTarget } from '../reader-target.js';
 
 
@@ -252,7 +252,7 @@ export function LibraryPage() {
   return true;
   };
   const searchRequest = useRef(0);
-  const search=async e=>{e?.preventDefault(); const text=query.trim(); const requestId=++searchRequest.current; if(!text){setResults([]);setVisibleResults(6);setSearched(false);setSearchError('');return;} if(text.length<2){setResults([]);setVisibleResults(6);setSearched(true);setSearchError('请输入至少两个字符，再开始搜索。');return;} setBusy(true);setSearched(true);setSearchError('');try { const scopes=scope==='all'?docs.map(item=>item.id):scope==='both'?['textbook','teacher-guide']:[scope]; const data=await request('/search',{method:'POST',body:{query:text,scope:scopes,limit:12}}); if(requestId !== searchRequest.current)return; setResults(Array.isArray(data.results)?data.results:[]); setVisibleResults(6); const url=new URL(location.href);url.searchParams.set('q',text);url.searchParams.set('scope',scope);history.replaceState(null,'',url); } catch(error) { if(requestId !== searchRequest.current)return; setResults([]);setVisibleResults(6);setSearchError('搜索暂时不可用，请稍后重试。'); } finally {if(requestId === searchRequest.current)setBusy(false)} };
+  const search=async e=>{e?.preventDefault(); const text=query.trim(); const requestId=++searchRequest.current; if(!text){setResults([]);setVisibleResults(6);setSearched(false);setSearchError('');return;} if(text.length<2){setResults([]);setVisibleResults(6);setSearched(true);setSearchError('请输入至少两个字符，再开始搜索。');return;} setBusy(true);setSearched(true);setSearchError('');try { const scopes=scope==='all'?docs.map(item=>item.id):scope==='both'?['textbook','teacher-guide']:[scope]; const data=await request('/search',{method:'POST',body:{query:text,scope:scopes,limit:12}}); if(requestId !== searchRequest.current)return; setResults(prioritizeSearchResults(Array.isArray(data.results)?data.results:[])); setVisibleResults(6); const url=new URL(location.href);url.searchParams.set('q',text);url.searchParams.set('scope',scope);history.replaceState(null,'',url); } catch(error) { if(requestId !== searchRequest.current)return; setResults([]);setVisibleResults(6);setSearchError('搜索暂时不可用，请稍后重试。'); } finally {if(requestId === searchRequest.current)setBusy(false)} };
   useEffect(() => {
     // A copied library URL with `q` should restore its result rail instead of
     // leaving the teacher at an empty state. The manual search flow remains
@@ -292,7 +292,7 @@ export function LibraryPage() {
               <span className="source-choice-copy"><strong>{item.title}</strong><small>{kind} · {item.pageCount} 页</small><em>{statusLabel(item.indexStatus)} · {indexed}/{item.pageCount || indexed} 页可搜索</em></span>
               {selected && <Badge tone="green">当前阅读</Badge>}
             </button>
-            <div className="source-choice-actions"><button type="button" onClick={() => switchDocument(item.id)}>查看目录</button><a href={preparationHref(item.id)}>进入备课问答 <ArrowRight/></a></div>
+            <div className="source-choice-actions"><button type="button" aria-label={`查看${item.short || item.title}目录`} onClick={() => switchDocument(item.id)}>查看目录</button><a href={preparationHref(item.id)}>进入备课问答 <ArrowRight/></a></div>
           </article>;
         }) : <div className="catalog-empty"><FileSearch/><b>{docsError || "正在读取教材目录…"}</b><div className="catalog-empty-actions">{docsError === '登录已过期，请重新登录后继续。' ? <a className="primary" href={"/login/?next=" + encodeURIComponent(location.pathname + location.search)}>重新登录</a> : <button type="button" onClick={loadDocs}>重新读取</button>}</div></div>}</div>
       </section>
