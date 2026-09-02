@@ -60,6 +60,30 @@ test('repairDraftForClassroom restores lesson identity without overwriting teach
   assert.equal(result.draft.answer.periodPlan.repairKind, 'derived_sequence');
 });
 
+test('repairDraftForClassroom rebuilds a stale public lesson locator from the manifest', () => {
+  const draft = draftFixture();
+  draft.lesson_context = {
+    periods: 2,
+    lessonRef: {
+      documentId: 'teacher-guide',
+      nodeId: 'seed-teacher-guide-u4-n4',
+      title: '10 岳阳楼记',
+      pageRange: [329, 329]
+    },
+    unitRef: { documentId: 'teacher-guide', nodeId: 'teacher-guide-u4', title: '第四单元' }
+  };
+
+  const result = repairDraftForClassroom(draft);
+
+  assert.equal(result.changed, true);
+  assert.equal(result.draft.lesson_context.lessonRef.nodeId, 'teacher-guide-u3-n2');
+  assert.equal(result.draft.lesson_context.lessonRef.title, '11 岳阳楼记');
+  assert.deepEqual(result.draft.lesson_context.lessonRef.pageRange, [224, 237]);
+  assert.equal(result.draft.lesson_context.unitRef.nodeId, 'teacher-guide-u3');
+  assert.equal(result.draft.lesson_context.lessonRef.lessonIndex, 0);
+  assert.equal(result.draft.lesson_context.lessonRef.lessonTotal, 4);
+});
+
 test('repairDraftForClassroom does not disturb a normal manually named plan', () => {
   const draft = draftFixture();
   draft.title = '《岳阳楼记》两课时备课方案';

@@ -280,8 +280,14 @@ function boardPlanFromItems(items, coreQuestion, previous = {}) {
  */
 export function repairDraftForClassroom(draft) {
   if (!draft || typeof draft !== 'object') return { draft, changed: false };
+  const rawContext = draft.lesson_context || draft.lessonContext || {};
+  const rawLessonRef = rawContext?.lessonRef;
+  const manifestDocument = getManifest().documents.find(item => String(item.id) === String(rawLessonRef?.documentId || ''));
+  const manifestRef = rawLessonRef ? findManifestNode(rawLessonRef.documentId, rawLessonRef.nodeId) : null;
+  const publicRefIsConsistent = !manifestDocument || (manifestRef
+    && normalizedLessonName(manifestRef.node?.title) === normalizedLessonName(rawLessonRef?.title));
   const resolvedIdentity = resolveLessonIdentity({
-    lessonRef: draft.lesson_context?.lessonRef || draft.lessonContext?.lessonRef,
+    lessonRef: publicRefIsConsistent ? rawLessonRef : null,
     title: draft.title,
     answerTitle: draft.answer?.lesson?.title,
     question: draft.question,
@@ -299,6 +305,42 @@ export function repairDraftForClassroom(draft) {
     ? sourceTitle
     : cleanLessonTitle(lesson.title, sourceTitle);
   const coreQuestion = safeCoreQuestion(lesson.coreQuestion, sourceTitle);
+
+  // Public textbook references are canonical navigation state. If an older
+  // draft carries a stale node/page (for example a lesson title paired with a
+  // different unit node), rebuild the whole locator from the current manifest.
+  const canonicalLesson = manifestDocument
+    ? findManifestLessonByTitle(manifestDocument.id, sourceTitle)
+    : null;
+  if (canonicalLesson) {
+    const { document, node, parent, lessonIndex, lessonTotal } = canonicalLesson;
+    const numberMatch = String(node.title || '').match(/^\s*(\d+)/u);
+    const canonicalRef = {
+      ...(rawLessonRef || {}),
+      documentId: document.id,
+      nodeId: node.id,
+      title: node.title,
+      ...(numberMatch ? { lessonNumber: Number(numberMatch[1]) } : {}),
+      pageRange: [Number(node.startPage), Number(node.endPage || node.startPage)],
+      lessonIndex,
+      lessonTotal
+    };
+    const canonicalContext = {
+      ...rawContext,
+      lessonRef: canonicalRef,
+      ...(parent ? { unitRef: {
+        ...(rawContext.unitRef || {}),
+        documentId: document.id,
+        nodeId: parent.id,
+        title: parent.title,
+        pageRange: [Number(parent.startPage), Number(parent.endPage || parent.startPage)]
+      } } : {})
+    };
+    if (JSON.stringify(canonicalContext) !== JSON.stringify(rawContext)) {
+      next.lesson_context = canonicalContext;
+      changed = true;
+    }
+  }
 
   if (String(lesson.title || '') !== lessonTitle || String(lesson.coreQuestion || '') !== coreQuestion) {
     answer.lesson = { ...lesson, title: lessonTitle, coreQuestion };
@@ -378,6 +420,25 @@ function lessonIdentityKey(context = {}) {
 
 function normalizedLessonName(value) {
   return String(value || '').replace(/^\s*\d+\s*/u, '').replace(/[《》]/gu, '').trim();
+}
+
+function findManifestLessonByTitle(documentId, title) {
+  const document = getManifest().documents.find(item => String(item.id) === String(documentId));
+  const wanted = normalizedLessonName(title);
+  if (!document || !wanted) return null;
+  const stack = (document.tree || []).map(node => ({ node, parent: null }));
+  while (stack.length) {
+    const { node, parent } = stack.shift();
+    if (Number(node?.level) >= 2 && Number(node?.startPage) > 0 && normalizedLessonName(node?.title) === wanted) {
+      const siblings = Array.isArray(parent?.children)
+        ? parent.children.filter(item => Number(item?.level) >= 2 && /^\s*\d+/u.test(String(item?.title || '')))
+        : [node];
+      const lessonIndex = Math.max(0, siblings.findIndex(item => String(item.id) === String(node.id)));
+      return { document, node, parent, lessonIndex, lessonTotal: siblings.length };
+    }
+    stack.push(...(Array.isArray(node?.children) ? node.children.map(child => ({ node: child, parent: node })) : []));
+  }
+  return null;
 }
 
 function lessonCitationRanges(context = {}) {

@@ -1,7 +1,39 @@
 const STORAGE_PREFIX = 'huojiaocan.evidence-shelf.v1';
 
-export function evidenceShelfKey(userId = 'guest') {
-  return `${STORAGE_PREFIX}.${userId || 'guest'}`;
+export function evidenceShelfKey(userId = 'guest', draftId = 'new') {
+  const owner = encodeURIComponent(String(userId || 'guest'));
+  const lesson = encodeURIComponent(String(draftId || 'new'));
+  return `${STORAGE_PREFIX}.${owner}.${lesson}`;
+}
+
+function normalizedLessonTitle(value) {
+  return String(value || '')
+    .replace(/[《》]/gu, '')
+    .replace(/^\s*\d+\s*/u, '')
+    .replace(/\s+/gu, '')
+    .trim();
+}
+
+/**
+ * Older builds stored one evidence shelf per account, so opening another
+ * lesson could show pages from the previous text. Keep non-textbook material,
+ * but require textbook and teacher-guide pages to belong to the current
+ * lesson or to the draft's verified citation set.
+ */
+export function evidenceShelfForLesson(items, { lessonTitle = '', citations = [] } = {}) {
+  const title = normalizedLessonTitle(lessonTitle);
+  const verifiedPages = new Set((Array.isArray(citations) ? citations : [])
+    .filter(item => item?.documentId && Number(item?.pdfPage) > 0)
+    .map(item => `${item.documentId}:${Number(item.pdfPage)}`));
+  return (Array.isArray(items) ? items : []).filter(item => {
+    if (!['textbook', 'teacher-guide'].includes(String(item?.documentId || ''))) return true;
+    if (verifiedPages.has(`${item.documentId}:${Number(item.pdfPage)}`)) return true;
+    if (!title) return true;
+    const identityText = [item?.title, item?.documentTitle, ...(Array.isArray(item?.sectionPath) ? item.sectionPath : [])]
+      .map(normalizedLessonTitle)
+      .join('');
+    return identityText.includes(title);
+  });
 }
 
 export function normalizeShelfItem(item) {

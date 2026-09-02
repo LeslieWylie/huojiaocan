@@ -8,7 +8,7 @@ import { authOwnersConflict, canPersistAuthOwner, clearAuthRecovery, ensureSessi
 import { buildAskContext, buildConversationHistory } from '../conversation-context.js';
 import { clearConversationSnapshot, readConversationSnapshot, readRecentConversationSnapshots, saveConversationSnapshot } from '../conversation-recovery.js';
 import { UI_COPY } from '../copy.js';
-import { evidenceShelfKey, mergeEvidenceShelf, removeEvidenceShelfItem } from '../evidence-shelf.js';
+import { evidenceShelfForLesson, evidenceShelfKey, mergeEvidenceShelf, removeEvidenceShelfItem } from '../evidence-shelf.js';
 import { pairLessonEvidence } from '../lesson-evidence.js';
 import { citationByRef } from './library-page.jsx';
 import { draftRecoverySnapshot } from './shell-pages.jsx';
@@ -282,15 +282,18 @@ export function AskPage() {
   }, [session?.user?.id]);
   useEffect(() => {
     if (!ownerPersistenceAllowed()) return;
+    // A saved draft is hydrated from the server below. Reading the old
+    // account-wide key here would leak another lesson's pages into it.
+    if (draftId) return;
     let stored = [];
-    try { stored = JSON.parse(localStorage.getItem(evidenceShelfKey(session?.user?.id)) || '[]'); } catch {}
+    try { stored = JSON.parse(localStorage.getItem(evidenceShelfKey(session?.user?.id, 'new')) || '[]'); } catch {}
     setEvidenceShelf(Array.isArray(stored) ? stored : []);
     setEvidenceShelfReady(true);
-  }, [session?.user?.id]);
+  }, [session?.user?.id, draftId]);
   useEffect(() => {
     if (!evidenceShelfReady || !ownerPersistenceAllowed()) return;
-    try { localStorage.setItem(evidenceShelfKey(session?.user?.id), JSON.stringify(evidenceShelf)); } catch {}
-  }, [evidenceShelf, evidenceShelfReady, session?.user?.id]);
+    try { localStorage.setItem(evidenceShelfKey(session?.user?.id, draftId || 'new'), JSON.stringify(evidenceShelf)); } catch {}
+  }, [evidenceShelf, evidenceShelfReady, session?.user?.id, draftId]);
   useEffect(() => () => {
     if (shelfSyncTimer.current) clearTimeout(shelfSyncTimer.current);
   }, []);
@@ -384,9 +387,14 @@ export function AskPage() {
       setExistingDraft(draft);
       setRestoredFromLocal(false);
       const savedShelf = Array.isArray(draft.answer?.evidenceShelf) ? draft.answer.evidenceShelf : [];
-      setEvidenceShelf(savedShelf);
+      const currentLessonTitle = draft.lesson_context?.lessonRef?.title || draft.answer?.lesson?.title || draft.title || '';
+      const lessonShelf = evidenceShelfForLesson(savedShelf, { lessonTitle: currentLessonTitle, citations: draft.citations });
+      setEvidenceShelf(lessonShelf);
+      setEvidenceShelfReady(true);
       shelfReadyForDraft.current = String(draftId);
-      shelfSyncHash.current = JSON.stringify(savedShelf || (Array.isArray(evidenceShelf) ? evidenceShelf : []));
+      // Compare with the stored value so an obvious legacy cross-lesson shelf
+      // is cleaned on the normal debounced draft save.
+      shelfSyncHash.current = JSON.stringify(savedShelf);
       if (draft.question) {
         setPlanQuestion(value => value || draft.question);
         if (!question) setQuestion(draft.question);
@@ -420,6 +428,7 @@ export function AskPage() {
       const fallback = readConversationSnapshot(session?.user?.id || initialUser);
       const sameDraft = !fallback?.draftId || !draftId || String(fallback.draftId) === String(draftId);
       if (!fallback || !sameDraft) {
+        setEvidenceShelfReady(true);
         setRestoredAt('');
         setRestoredFromLocal(false);
         return;
@@ -444,6 +453,10 @@ export function AskPage() {
         setRestoredAt(new Date().toISOString());
       }
       setRestoredFromLocal(true);
+      let localShelf = [];
+      try { localShelf = JSON.parse(localStorage.getItem(evidenceShelfKey(session?.user?.id, draftId || 'new')) || '[]'); } catch {}
+      setEvidenceShelf(Array.isArray(localShelf) ? localShelf : []);
+      setEvidenceShelfReady(true);
     });
   }, [draftId, session?.user?.id]);
   useEffect(() => {

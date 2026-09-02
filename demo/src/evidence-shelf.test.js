@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   evidenceShelfKey,
+  evidenceShelfForLesson,
   mergeEvidenceShelf,
   normalizeShelfItem,
   removeEvidenceShelfItem
@@ -11,14 +12,33 @@ function shelfItem(documentId, pdfPage, text = '') {
   return { documentId, pdfPage, text };
 }
 
-test('依据夹按账号隔离，并拒绝无效页码', () => {
-  assert.equal(evidenceShelfKey('user-a'), 'huojiaocan.evidence-shelf.v1.user-a');
+test('依据夹按账号和草稿隔离，并拒绝无效页码', () => {
+  assert.equal(evidenceShelfKey('user-a', 'draft-1'), 'huojiaocan.evidence-shelf.v1.user-a.draft-1');
+  assert.notEqual(evidenceShelfKey('user-a', 'draft-1'), evidenceShelfKey('user-a', 'draft-2'));
 
   for (const pdfPage of [0, -1, 1.5, 'not-a-page']) {
     assert.equal(normalizeShelfItem(shelfItem('teacher-guide', pdfPage)), null);
   }
 
   assert.equal(normalizeShelfItem(shelfItem('teacher-guide', 3)).pdfPage, 3);
+});
+
+test('旧依据夹只保留本课教材页和当前草稿已核验页', () => {
+  const filtered = evidenceShelfForLesson([
+    { documentId: 'teacher-guide', pdfPage: 100, sectionPath: ['第一单元', '1 沁园春·雪'] },
+    { documentId: 'teacher-guide', pdfPage: 224, sectionPath: ['第三单元', '11 岳阳楼记'] },
+    { documentId: 'textbook', pdfPage: 57, sectionPath: [] },
+    { documentId: 'curriculum-standard', pdfPage: 21, sectionPath: ['第四学段'] }
+  ], {
+    lessonTitle: '《岳阳楼记》',
+    citations: [{ documentId: 'textbook', pdfPage: 57 }]
+  });
+
+  assert.deepEqual(filtered.map(item => `${item.documentId}:${item.pdfPage}`), [
+    'teacher-guide:224',
+    'textbook:57',
+    'curriculum-standard:21'
+  ]);
 });
 
 test('依据夹按 documentId 和 pdfPage 去重', () => {
