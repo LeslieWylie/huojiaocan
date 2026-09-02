@@ -76,3 +76,16 @@ test('library search controls and page actions stay readable and operational', a
   expect(await px(page.getByRole('button', { name: '上一页', exact: true }))).toBeGreaterThanOrEqual(13);
   expect(await px(page.getByRole('link', { name: '核验原始教材' }))).toBeGreaterThanOrEqual(13);
 });
+
+test('library first visit explains the path and opens the first real lesson instead of the cover', async ({ page }) => {
+  await page.goto('/library/');
+
+  await expect(page.getByRole('heading', { name: '先选具体篇目，再阅读原页' })).toBeVisible();
+  await expect(page.locator('.library-pdf-article iframe')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '打开第一篇《沁园春·雪》' }).click({ noWaitAfter: true });
+  await expect(page).toHaveURL(/doc=textbook/);
+  await expect(page).toHaveURL(/page=9/);
+  await expect(page.getByRole('link', { name: '从当前内容开始备课' })).toBeVisible();
+  await expect(page.locator('.library-pdf-article iframe')).toHaveCount(1);
+});
