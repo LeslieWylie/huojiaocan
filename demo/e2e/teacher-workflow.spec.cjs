@@ -29,11 +29,13 @@ test('login recovery preserves the question through continuous Q&A, finalization
 
   await page.reload();
   await expect(page.locator('.conversation-latest').getByText('怎样围绕《岳阳楼记》的忧乐观组织课堂？', { exact: true })).toBeVisible();
+  await expect(page.locator('form.ask-large textarea')).toHaveValue('');
 
   await page.locator('form.ask-large textarea').fill('请调整为两课时，并保留当前篇目。');
   await page.getByRole('button', { name: '开始提问', exact: true }).click();
   await expect(page.getByText('请调整为两课时，并保留当前篇目。', { exact: true })).toBeVisible();
   await expect(page.getByText('已沿用本场对话上下文').last()).toBeVisible();
+  await expect(page.locator('form.ask-large textarea')).toHaveValue('');
 
   const evidence = page.locator('.conversation-latest details.raw-evidence');
   await evidence.getByText('查看原文片段与页码').click();

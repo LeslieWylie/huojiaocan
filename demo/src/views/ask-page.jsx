@@ -198,6 +198,13 @@ export function AskPage() {
   const recoveredMessages = Array.isArray(activeAuthRecovery?.messages)
     ? activeAuthRecovery.messages.filter(item => item && item.response).slice(-6)
     : canResumeLocal && Array.isArray(localConversation?.messages) ? localConversation.messages.slice(-12) : [];
+  // Restoring an answered thread should reopen a blank follow-up composer.
+  // The first question remains the durable lesson identity in `planQuestion`;
+  // putting it back in the textarea makes a refresh look like the answer was
+  // lost and makes an accidental duplicate submission far too easy.
+  const initialComposerQuestion = recoveredMessages.length && !params.get('q') && !activeAuthRecovery?.pendingAction
+    ? ''
+    : initialQuestion;
   const requestedScope = params.get('scope');
   // A new preparation starts with all three teaching sources. Teachers can
   // narrow the scope deliberately, but the default should not silently omit
@@ -215,14 +222,14 @@ export function AskPage() {
   }, [params]);
   const initialUnitRef = unitRefFromUrl(params);
   const requestedClassName = String(params.get('className') || '').trim().slice(0, 40);
-  const [question, setQuestion] = useState(initialQuestion);
+  const [question, setQuestion] = useState(initialComposerQuestion);
   const [messages, setMessages] = useState(recoveredMessages);
   const session = useAuthSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [lastErrorCode, setLastErrorCode] = useState('');
-  const [retryQuestion, setRetryQuestion] = useState(initialQuestion);
-  const [retryTarget, setRetryTarget] = useState(initialQuestion);
+  const [retryQuestion, setRetryQuestion] = useState(initialComposerQuestion);
+  const [retryTarget, setRetryTarget] = useState(initialComposerQuestion);
   const [scope, setScope] = useState(activeAuthRecovery?.scope || initialScope);
   const [keys, setKeys] = useState([]);
   const [keyId, setKeyId] = useState('');
@@ -401,7 +408,6 @@ export function AskPage() {
       shelfSyncHash.current = JSON.stringify(savedShelf);
       if (draft.question) {
         setPlanQuestion(value => value || draft.question);
-        if (!question) setQuestion(draft.question);
       }
       if (draft.lesson_context) {
         setLessonContext(value => ({ ...value, ...draft.lesson_context }));
@@ -442,12 +448,12 @@ export function AskPage() {
       if (fallback.scope) setScope(fallback.scope);
       if (fallback.lessonContext) setLessonContext(value => ({ ...value, ...fallback.lessonContext }));
       if (fallback.lessonRef) setLessonRef(fallback.lessonRef);
-      if (fallback.question) setQuestion(value => value || fallback.question);
       if (fallback.planQuestion) setPlanQuestion(value => value || fallback.planQuestion);
       if (!requestedDraftId) setDraftId(fallback.draftId || '');
       const fallbackTurns = Array.isArray(fallback.messages)
         ? fallback.messages.filter(item => item && item.response).slice(-12)
         : [];
+      if (fallback.question && !fallbackTurns.length) setQuestion(value => value || fallback.question);
       if (fallbackTurns.length) {
         setMessages(fallbackTurns);
       }
