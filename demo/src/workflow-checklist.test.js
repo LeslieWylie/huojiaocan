@@ -26,3 +26,15 @@ test('旧草稿没有数组字段时仍能显示可执行的起点', () => {
   assert.equal(items[4].done, false);
   assert.equal(items[5].done, false);
 });
+
+test('回答中的三卡建议不能冒充已经生成的课堂卡片', () => {
+  const items = deriveWorkflowChecklist({
+    messages: [{ question: '怎样备课《岳阳楼记》？', response: {
+      answer: { summary: '先比较两类人的忧乐观。' },
+      cardSuggestionItems: { board: ['忧乐对比'], question: ['何以忧乐？'] }
+    } }],
+    draft: { title: '《岳阳楼记》', cards: [] }
+  });
+  assert.equal(items.at(-1).done, false);
+  assert.equal(items.at(-1).detail, '方案确认后再进入课堂设计');
+});

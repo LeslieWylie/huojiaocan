@@ -32,13 +32,12 @@ function hasPlan(messages, draft) {
   return Boolean(draft?.answer?.summary || list(draft?.answer?.lessonPlan).length);
 }
 
-function hasCards(messages, draft, cards) {
+function hasCards(draft, cards) {
   const candidates = list(cards).length ? cards : list(draft?.cards);
-  if (candidates.some(card => list(card?.items).length || list(card?.content).length)) return true;
-  return list(messages).some(item => {
-    const response = item?.response || {};
-    return Object.values(response.cardSuggestionItems || response.cardSuggestions || {}).some(value => list(value).length);
-  });
+  // Suggestions returned beside an answer are not classroom cards. Marking
+  // this step complete before the teacher confirms and generates the cards
+  // sends the ask page and the cards page into contradictory states.
+  return candidates.some(card => list(card?.items).length || list(card?.content).length);
 }
 
 /**
@@ -65,7 +64,7 @@ export function deriveWorkflowChecklist({ messages = [], draft = null, cards = [
     { id: 'guide', label: '教师用书已读取', detail: hasGuide(citations) ? '已找到教学处理与课时依据' : '下一步读取教学重点与活动设计', done: hasGuide(citations) },
     { id: 'textbook', label: '学生教材已核对', detail: hasTextbook(citations) ? '已回到课文原文或任务页' : '下一步核对课文、段落和关键语句', done: hasTextbook(citations) },
     { id: 'plan', label: '课堂方案已生成', detail: hasPlan(messages, draft) ? '已形成可继续追问的课堂流程' : '先提出“怎么备课”或具体教学问题', done: hasPlan(messages, draft) },
-    { id: 'cards', label: '三卡已生成', detail: hasCards(messages, draft, cards) ? '板书、提问和评价可继续编辑' : '方案确认后再进入课堂设计', done: hasCards(messages, draft, cards) }
+    { id: 'cards', label: '三卡已生成', detail: hasCards(draft, cards) ? '板书、提问和评价可继续编辑' : '方案确认后再进入课堂设计', done: hasCards(draft, cards) }
   ].map(item => ({ ...item, hasEvidence: hasAnyCitation }));
 }
 

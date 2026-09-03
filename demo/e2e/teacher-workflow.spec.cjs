@@ -47,6 +47,10 @@ test('login recovery preserves the question through continuous Q&A, finalization
 
   await page.getByRole('link', { name: '查看并定稿方案' }).last().click();
   await expect(page).toHaveURL(/\/cards\/\?draftId=/);
+  const continueToCards = page.getByRole('button', { name: '请先生成三卡' });
+  await expect(continueToCards).toBeEnabled();
+  await continueToCards.click();
+  await expect(page.locator('#teacher-plan-editor')).toBeInViewport();
   await page.getByRole('button', { name: /确认本版并生成三卡|生成板书与三卡/ }).click();
   await expect(page.getByRole('heading', { name: '三张卡，分别对应课堂中的三个动作' })).toBeVisible();
 
