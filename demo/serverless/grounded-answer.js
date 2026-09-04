@@ -3,6 +3,12 @@ import { createStructuredModel, runStructuredReviewLoop } from './ai-orchestrato
 import { gatewayConfig } from './shared.js';
 import { resolveLessonIdentity } from '../shared/lesson-identity.js';
 import { runPiRetrievalAgent } from './pi-retrieval-agent.js';
+import {
+  buildAgentPromptContext,
+  createSafeAgentRun,
+  createTeachingTurnContract,
+  inspectEvidenceCoverage
+} from './teaching-agent-contract.js';
 
 const LEGACY_TITLES = ['问题理解', '课程标准依据', '学生教材依据', '教师用书依据', '基于依据的教学解释', '可加入一课三卡'];
 const CARD_KEYS = ['board', 'question', 'assessment'];
@@ -314,7 +320,7 @@ function legacySections({ question, answer, citations, standard, textbook, guide
   ];
 }
 
-export async function runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext = '', lessonIdentity, env, deepseek, retrieveMore, deadlineAt }) {
+export async function runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext = '', lessonIdentity, followUpInstruction = '', operation, expectedCardTypes = [], env, deepseek, retrieveMore, deadlineAt }) {
   return runPiRetrievalAgent({
     question,
     scope,
@@ -322,6 +328,9 @@ export async function runReActRetrieval({ question, scope, evidence, history, te
     history: boundedConversationHistory(history),
     teacherReflectionContext,
     lessonIdentity,
+    followUpInstruction,
+    operation,
+    expectedCardTypes,
     env,
     deepseek,
     retrieveMore,
@@ -624,8 +633,10 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   // Keep the server retrieval order and E-number identity stable.  The prompt
   // still tells the model to treat the teacher guide as the priority for
   // teaching decisions; reordering here would silently remap existing cards.
-  const react = reactResult || await runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext, lessonIdentity, env, deepseek, retrieveMore, deadlineAt });
+  const turnContract = createTeachingTurnContract({ question, scope, history, lessonIdentity, followUpInstruction, operation, expectedCardTypes });
+  const react = reactResult || await runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext, lessonIdentity, followUpInstruction, operation, expectedCardTypes, env, deepseek, retrieveMore, deadlineAt });
   const orderedEvidence = prioritizeTeachingEvidence(react.evidence).slice(0, 8);
+  const evidenceCoverage = inspectEvidenceCoverage(turnContract, orderedEvidence);
   const references = orderedEvidence.map((item, index) => ({
     ref: `E${index + 1}`,
     document: item.documentTitle,
@@ -713,6 +724,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
       '组织目标、流程、问题链、作业与评价',
       '将关键内容绑定到教材依据并进入三卡'
     ];
+    request.agentContract = buildAgentPromptContext(turnContract, evidenceCoverage);
     request.outputRequirements = [
       '每个课堂环节至少包含教师动作、学生回到的文本位置、预期文本证据和推进关系。',
       '每个问题至少写清观察点、追问目的和预期回答，避免空泛提问。',
@@ -826,6 +838,11 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   const rawCardSuggestions = parsed.threeCardSuggestions || parsed.cardSuggestions;
   const cardData = cardSuggestions(rawCardSuggestions, answer);
   const cardItemData = Object.fromEntries(Object.entries(cardSuggestionItems(rawCardSuggestions, answer, citations)).map(([key, items]) => [key, sanitizeCardRefs(items, citations)]));
+  const finalIssues = [
+    ...teachingPlanCompletenessIssues({ answer }, planningQuestion),
+    ...teachingPlanIssues({ answer }, lessonContext),
+    ...cardGenerationIssues(parsed, expectedCardTypes)
+  ].slice(0, 10);
   const route = {
     scopes: scope,
     documents: [...new Map(citations.map(item => [item.documentId, { id: item.documentId, title: item.documentTitle, type: item.documentType }])).values()],
@@ -841,11 +858,14 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     reactTrace: react.trace,
     generationTrace,
     generationRounds: generationTrace.filter(item => item.status === 'completed').length,
-    teachingPlanIssues: [
-      ...teachingPlanCompletenessIssues({ answer }, planningQuestion),
-      ...teachingPlanIssues({ answer }, lessonContext),
-      ...cardGenerationIssues(parsed, expectedCardTypes)
-    ].slice(0, 10),
+    teachingPlanIssues: finalIssues,
+    agentRun: createSafeAgentRun({
+      contract: turnContract,
+      evidence: orderedEvidence,
+      retrievalTrace: react.trace,
+      generationTrace,
+      issues: finalIssues
+    }),
     evidenceSufficient: citations.length > 0,
     understanding: textField(parsed.understanding, `围绕“${question}”定位教材结构与教学用书建议。`),
     answer,

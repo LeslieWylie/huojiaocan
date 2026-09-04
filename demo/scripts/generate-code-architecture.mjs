@@ -68,6 +68,8 @@ const diagram = [
   checkedEdge('api/ai.js', 'serverless/deepseek.js', '个人连接'),
   checkedEdge('serverless/grounded-answer.js', 'serverless/llm-gateway.js', '系统智能'),
   checkedEdge('serverless/grounded-answer.js', 'serverless/ai-orchestrator.js', '多轮审校'),
+  checkedEdge('serverless/grounded-answer.js', 'serverless/teaching-agent-contract.js', '回合契约与教师确认边界'),
+  checkedEdge('serverless/pi-retrieval-agent.js', 'serverless/teaching-agent-contract.js', '确定性依据门'),
   '  serverless_index_provider_js --> PageIndex[("自部署教材索引")]',
   '  serverless_deepseek_js --> DeepSeek[("DeepSeek 官方接口")]',
   '  serverless_llm_gateway_js --> Gateway[("系统智能网关")]',

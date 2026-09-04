@@ -253,7 +253,8 @@ async function generateCardsForTypes({ draft, targetCards, deepseek, focus = '' 
     model: response.model || null,
     generationTrace: Array.isArray(response.generationTrace) ? response.generationTrace : [],
     generationRounds: Number(response.generationRounds) || 1,
-    qualityIssues: Array.isArray(response.teachingPlanIssues) ? response.teachingPlanIssues : []
+    qualityIssues: Array.isArray(response.teachingPlanIssues) ? response.teachingPlanIssues : [],
+    agentRun: response.agentRun || null
   };
 }
 
@@ -288,7 +289,8 @@ export async function generateDraftCards({ draft, deepseek } = {}) {
     model: generated.model,
     generationRounds: generated.generationRounds,
     generationTrace: generated.generationTrace,
-    qualityIssues: generated.qualityIssues
+    qualityIssues: generated.qualityIssues,
+    agentRun: generated.agentRun
   }));
   return { cards: generated.cards, citations: generated.citations, generations };
 }

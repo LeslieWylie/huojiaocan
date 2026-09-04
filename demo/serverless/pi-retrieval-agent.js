@@ -3,6 +3,11 @@ import { Type, createModels, createProvider } from '@earendil-works/pi-ai';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { normalizeGatewayBaseUrl } from './llm-gateway.js';
 import { gatewayConfig } from './shared.js';
+import {
+  createTeachingTurnContract,
+  groundingQueryFor,
+  inspectEvidenceCoverage
+} from './teaching-agent-contract.js';
 
 const MAX_SEARCHES = 2;
 const DEFAULT_TIMEOUT_MS = 18_000;
@@ -120,6 +125,9 @@ export async function runPiRetrievalAgent({
   history = [],
   teacherReflectionContext = '',
   lessonIdentity,
+  followUpInstruction = '',
+  operation,
+  expectedCardTypes = [],
   retrieveMore,
   env = process.env,
   deepseek,
@@ -135,7 +143,17 @@ export async function runPiRetrievalAgent({
     return { evidence: current, trace };
   }
 
+  const contract = createTeachingTurnContract({
+    question,
+    scope,
+    history,
+    lessonIdentity,
+    followUpInstruction,
+    operation,
+    expectedCardTypes
+  });
   let searchCount = 0;
+  const seenQueries = new Set();
   const searchTool = {
     name: 'search_teaching_material',
     label: '继续查找教材',
@@ -153,6 +171,15 @@ export async function runPiRetrievalAgent({
         };
       }
       const query = compact(params?.query, 120);
+      const queryKey = query.toLowerCase();
+      if (!query || seenQueries.has(queryKey)) {
+        return {
+          content: [{ type: 'text', text: '该教材搜索已经执行，请依据已有页面继续。' }],
+          details: { status: 'duplicate_search' },
+          terminate: true
+        };
+      }
+      seenQueries.add(queryKey);
       searchCount += 1;
       const next = await retrieveMore(query);
       const additions = distinctEvidence(current, next);
@@ -168,6 +195,39 @@ export async function runPiRetrievalAgent({
       };
     }
   };
+
+  // The model may decide whether another page would be useful, but it cannot
+  // waive the product's source requirements. Planning and card turns fetch the
+  // first missing source deterministically before free tool use.
+  let nextMissing = inspectEvidenceCoverage(contract, current).missing[0];
+  while (nextMissing && searchCount < contract.maxRetrievalIterations) {
+    const missingSource = nextMissing;
+    const query = groundingQueryFor(contract, question, missingSource);
+    try {
+      seenQueries.add(query.toLowerCase());
+      searchCount += 1;
+      const next = await retrieveMore(query);
+      const additions = distinctEvidence(current, next);
+      current = [...current, ...additions].slice(0, 10);
+      trace.push({
+        step: searchCount,
+        action: 'search',
+        query,
+        reason: `补齐${missingSource === 'teacher_guide' ? '教师用书' : missingSource === 'textbook' ? '学生教材' : '课程标准'}依据`,
+        initiatedBy: 'grounding_policy'
+      });
+    } catch {
+      trace.push({
+        step: searchCount,
+        action: 'search_failed',
+        query: '',
+        reason: '所需教材依据暂未补齐',
+        initiatedBy: 'grounding_policy'
+      });
+    }
+    const missing = inspectEvidenceCoverage(contract, current).missing;
+    nextMissing = missing.find(type => type !== missingSource) || null;
+  }
 
   const agent = new Agent({
     initialState: {
@@ -199,6 +259,7 @@ export async function runPiRetrievalAgent({
     await agent.prompt(JSON.stringify({
       currentQuestion: compact(question, 900),
       fixedLessonIdentity: lessonIdentity || {},
+      turnContract: contract,
       scope: Array.isArray(scope) ? scope : [scope].filter(Boolean),
       recentConversation: Array.isArray(history) ? history.slice(-6) : [],
       teacherReflectionContext: compact(teacherReflectionContext, 900),
@@ -214,5 +275,5 @@ export async function runPiRetrievalAgent({
   if (!trace.length || trace.at(-1)?.action === 'search') {
     trace.push({ step: searchCount + 1, action: 'answer', query: '', reason: '已有页面交由最终回答流程核对' });
   }
-  return { evidence: current, trace };
+  return { evidence: current, trace, contract, coverage: inspectEvidenceCoverage(contract, current) };
 }

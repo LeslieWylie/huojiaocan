@@ -266,8 +266,8 @@ test('ReAct retrieval can expand an empty first hit before producing an answer',
     env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-secret', LLM_GATEWAY_MODEL: 'test-model', LLM_ANSWER_MODE: 'gateway' }
   });
 
-  assert.equal(calls, 4);
-  assert.equal(retrievedQuery, '我爱这土地 教师用书 教学重点');
+  assert.equal(calls, 3);
+  assert.match(retrievedQuery, /我爱这土地.*学生教材/u);
   assert.equal(result.evidenceSufficient, true);
   assert.equal(result.reactTrace[0].action, 'search');
   assert.equal(result.citations[0].pdfPage, 58);

@@ -607,6 +607,8 @@ async function buildEvidenceAnswer({ provider, question, teachingFocus = '', sco
     history,
     teacherReflectionContext,
     lessonIdentity,
+    followUpInstruction,
+    operation,
     env: process.env,
     deepseek,
     retrieveMore,
@@ -699,6 +701,7 @@ async function buildEvidenceAnswer({ provider, question, teachingFocus = '', sco
     reactTrace: grounded?.reactTrace || react.trace || [],
     generationTrace: grounded?.generationTrace || [],
     generationRounds: grounded?.generationRounds || 0,
+    agentRun: grounded?.agentRun || null,
     answer: grounded?.answer || {
       type: 'extractive',
       reply: '先回到教材原页定位关键语句，再组织课堂解释。',

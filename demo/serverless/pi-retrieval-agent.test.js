@@ -62,10 +62,13 @@ test('Pi retrieval agent executes a bounded PageIndex tool loop', async () => {
     runtime
   });
 
-  assert.deepEqual(calls, ['岳阳楼记 教学重点']);
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /岳阳楼记.*教师用书/u);
+  assert.equal(calls[1], '岳阳楼记 教学重点');
   assert.equal(result.evidence.length, 2);
-  assert.deepEqual(result.trace.map(item => item.action), ['search', 'answer']);
-  assert.equal(faux.state.callCount, 2);
+  assert.deepEqual(result.trace.map(item => item.action), ['search', 'search', 'answer']);
+  assert.equal(result.trace[0].initiatedBy, 'grounding_policy');
+  assert.equal(faux.state.callCount, 1);
 });
 
 test('Pi retrieval agent stops without PageIndex when current evidence is enough', async () => {
@@ -144,7 +147,7 @@ test('production Pi adapter keeps the gateway request server-side and tool-scope
     }
   });
 
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 1);
   assert.equal(requests[0].url, 'https://gateway.test/v1/chat/completions');
   assert.equal(requests[0].authorization, 'Bearer server-only-test-key');
   assert.equal(requests[0].body.stream, true);
