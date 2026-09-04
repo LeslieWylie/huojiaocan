@@ -626,6 +626,44 @@ function persistedCitationKey(citation) {
   return `${documentId}:${page}:${quote}`;
 }
 
+/**
+ * Older saved conversations may contain verified citations on each turn or in
+ * the teacher's evidence shelf while the draft-level citation list is empty.
+ * The cards workflow consumes the draft-level list, so recover those persisted
+ * candidates before confirmation instead of forcing the teacher to repeat the
+ * whole conversation. Trust is still established by
+ * assertCitationsTrusted(); this helper only discovers already-owned data.
+ */
+export function persistedDraftCitationCandidates(draft = {}) {
+  const answer = draft?.answer && typeof draft.answer === 'object' ? draft.answer : {};
+  const turns = Array.isArray(answer.conversationTurns) ? answer.conversationTurns : [];
+  const candidates = [
+    ...(Array.isArray(draft?.citations) ? draft.citations : []),
+    ...(Array.isArray(answer.evidenceShelf) ? answer.evidenceShelf : []),
+    ...turns.flatMap(turn => Array.isArray(turn?.response?.citations) ? turn.response.citations : [])
+  ];
+  const seen = new Set();
+  return candidates.filter(citation => {
+    const documentId = String(citation?.documentId || citation?.document_id || '');
+    const page = Number(citation?.pdfPage ?? citation?.pageNumber ?? citation?.page);
+    const quote = citationComparableText(citation?.quote || citation?.text || '');
+    if (!documentId || !Number.isInteger(page) || page < 1 || quote.length < 4) return false;
+    const key = `${documentId}:${page}:${quote}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 32);
+}
+
+async function trustedCitationsForDraft(user, draft) {
+  return assertCitationsTrusted(
+    user,
+    persistedDraftCitationCandidates(draft),
+    draft?.lesson_context,
+    { allowPublicDrift: true }
+  );
+}
+
 async function assertUpdatedCitationsTrusted(user, citations, currentCitations, context) {
   const persisted = new Set((Array.isArray(currentCitations) ? currentCitations : []).map(persistedCitationKey));
   return Promise.all((Array.isArray(citations) ? citations : []).map(async citation => {
@@ -875,6 +913,13 @@ export default async function handler(req, res) {
     }
     if (parts.length === 1 && req.method === 'GET') {
       const repaired = repairDraftForClassroom(await getDraft(user, id));
+      if (!Array.isArray(repaired.draft.citations) || repaired.draft.citations.length === 0) {
+        const recovered = persistedDraftCitationCandidates(repaired.draft);
+        if (recovered.length) {
+          repaired.draft = { ...repaired.draft, citations: recovered };
+          repaired.changed = true;
+        }
+      }
       return json(res, 200, { draft: repaired.draft, repairNeeded: repaired.changed });
     }
     if (parts.length === 2 && parts[1] === 'slides' && req.method === 'GET') {
@@ -1294,7 +1339,7 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const body = await readJson(req);
       assertCurrentVersion(current, requestVersion(req, body));
-      const citations = await assertCitationsTrusted(user, current.citations, current.lesson_context, { allowPublicDrift: true });
+      const citations = await trustedCitationsForDraft(user, current);
       const trustedCurrent = { ...current, citations };
       const answer = confirmDraftPlan(trustedCurrent, { confirmedBy: user.id });
       answer.revisions = appendRevision(trustedCurrent, '确认教学方案').revisions;
@@ -1323,7 +1368,7 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const body = await readJson(req);
       assertCurrentVersion(current, requestVersion(req, body));
-      const citations = await assertCitationsTrusted(user, current.citations, current.lesson_context, { allowPublicDrift: true });
+      const citations = await trustedCitationsForDraft(user, current);
       const trustedCurrent = { ...current, citations };
       let deepseek = null;
       if (typeof body.keyId === 'string' && body.keyId.trim()) deepseek = await resolveActiveDeepSeekKey(user, body.keyId.trim());
@@ -1350,7 +1395,7 @@ export default async function handler(req, res) {
       if (req.method === 'POST' && parts[3] === 'lock') {
         cards[index] = { ...card, status: 'locked', updatedAt: new Date().toISOString() };
       } else if (req.method === 'POST' && parts[3] === 'regenerate') {
-        const citations = await assertCitationsTrusted(user, current.citations, current.lesson_context, { allowPublicDrift: true });
+        const citations = await trustedCitationsForDraft(user, current);
         const trustedCurrent = { ...current, citations };
         let deepseek = null;
         if (typeof body.keyId === 'string' && body.keyId.trim()) {

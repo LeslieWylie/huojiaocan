@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import handler, { assertLockedCardsUnchanged, relayDraftId, repairDraftForClassroom, sanitizeClientAnswer, sanitizeClientCards } from './drafts.js';
+import handler, { assertLockedCardsUnchanged, persistedDraftCitationCandidates, relayDraftId, repairDraftForClassroom, sanitizeClientAnswer, sanitizeClientCards } from './drafts.js';
 import { buildLearningEvidence, learningEvidenceSourceKey } from '../shared/learning-evidence.js';
 import { buildPreClassPulse } from '../shared/preclass-pulse.js';
 import { normalizeTeachingDeliberation, teachingDeliberationSourceKey } from '../shared/teaching-deliberation.js';
@@ -43,6 +43,25 @@ function draftFixture() {
     ]
   };
 }
+
+test('legacy conversation citations are recovered for cards without duplicating the evidence shelf', () => {
+  const teacherPage = { id: 'shelf-1', documentId: 'teacher-guide', documentType: 'teacher_guide', pdfPage: 224, text: '教学重点：在理解课文大意的基础上熟读成诵。' };
+  const textbookPage = { id: 'turn-2', documentId: 'textbook', documentType: 'textbook', pdfPage: 58, quote: '先天下之忧而忧，后天下之乐而乐。' };
+  const draft = {
+    citations: [],
+    answer: {
+      evidenceShelf: [teacherPage],
+      conversationTurns: [
+        { response: { citations: [{ ...teacherPage, id: 'turn-1' }] } },
+        { response: { citations: [textbookPage] } }
+      ]
+    }
+  };
+
+  const recovered = persistedDraftCitationCandidates(draft);
+  assert.equal(recovered.length, 2);
+  assert.deepEqual(recovered.map(item => `${item.documentId}:${item.pdfPage}`), ['teacher-guide:224', 'textbook:58']);
+});
 
 test('repairDraftForClassroom restores lesson identity without overwriting teacher work', () => {
   const original = draftFixture();
