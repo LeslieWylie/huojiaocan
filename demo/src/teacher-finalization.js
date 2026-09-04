@@ -120,7 +120,9 @@ export function deriveTeacherDraftState({ draft, cards, dirty = false } = {}) {
   const cardsGenerated = list.length > 0;
   const cardLocked = list.some(card => card?.status === 'locked');
   const hasApprovalContract = Boolean(draft?.answer?.planApproval);
-  const teacherConfirmed = isTeacherConfirmed(draft) || (!hasApprovalContract && cardsGenerated);
+  const copiedEditableVersion = Boolean(draft?.answer?.assetMeta?.copiedFrom);
+  const teacherConfirmed = isTeacherConfirmed(draft)
+    || (!hasApprovalContract && cardsGenerated && !copiedEditableVersion);
   return {
     planDraft: Boolean(draft) && !teacherConfirmed,
     unsavedChanges: Boolean(dirty),

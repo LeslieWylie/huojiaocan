@@ -79,6 +79,18 @@ test('teacher workflow states remain explicit and cumulative', () => {
   assert.equal(confirmed.teacherConfirmed, true);
 });
 
+test('a copied locked lesson is editable and must be confirmed again before regeneration', () => {
+  const state = deriveTeacherDraftState({
+    draft: {
+      answer: { assetMeta: { status: 'draft', copiedFrom: 'source-draft' } },
+      cards: [{ type: 'board', status: 'draft' }]
+    }
+  });
+  assert.equal(state.cardsGenerated, true);
+  assert.equal(state.teacherConfirmed, false);
+  assert.equal(state.planDraft, true);
+});
+
 test('front-end contract confirms the saved version before generating cards and uses teacher-facing CTA', () => {
   const source = appSource;
   const confirmCall = source.indexOf('/confirm`');
