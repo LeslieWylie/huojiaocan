@@ -2,6 +2,7 @@ import { GatewayError } from './llm-gateway.js';
 import { createStructuredModel, runStructuredReviewLoop } from './ai-orchestrator.js';
 import { gatewayConfig } from './shared.js';
 import { resolveLessonIdentity } from '../shared/lesson-identity.js';
+import { runPiRetrievalAgent } from './pi-retrieval-agent.js';
 
 const LEGACY_TITLES = ['问题理解', '课程标准依据', '学生教材依据', '教师用书依据', '基于依据的教学解释', '可加入一课三卡'];
 const CARD_KEYS = ['board', 'question', 'assessment'];
@@ -313,74 +314,19 @@ function legacySections({ question, answer, citations, standard, textbook, guide
   ];
 }
 
-function reactDecisionPrompt({ question, lessonIdentity, history, teacherReflectionContext, evidence, scope }) {
-  return JSON.stringify({
-    task: '判断是否需要继续搜索教材，再回答教师当前这一轮问题。你是教材问答代理，不是一次性写作器。',
-    currentQuestion: String(question || '').trim(),
-    fixedLessonIdentity: lessonIdentity || {},
-    scope,
-    conversation: boundedConversationHistory(history),
-    teacherReflectionContext: compact(teacherReflectionContext, 1200),
-    currentEvidence: (Array.isArray(evidence) ? evidence : []).slice(0, 6).map((item, index) => ({
-      ref: `E${index + 1}`,
-      document: item.documentTitle,
-      documentType: item.documentType,
-      page: item.pdfPage,
-      sectionPath: item.sectionPath,
-      excerpt: compact(item.text || item.quote, 480)
-    })),
-    outputSchema: {
-      action: 'answer 或 search；当前证据足够时必须 answer',
-      query: '如果 action=search，写一个更适合教材目录/页面搜索的短查询；否则为空字符串',
-      reason: '一句话说明还缺什么教材依据；如果 answer，说明已有依据足够支持什么'
-    }
-  });
-}
-
-async function reactDecision({ question, scope, evidence, history, teacherReflectionContext, lessonIdentity, env, deepseek, deadlineAt }) {
-  const model = createStructuredModel({ env, deepseek, deadlineAt });
-  const messages = [
-    {
-      role: 'system',
-      content: '你是教材检索代理的 ReAct 决策器。每次只做一个动作：answer 或 search。先检查当前证据是否真正包含教师当前问题所需的篇目、教师用书处理或学生教材原文；证据足够就 answer，禁止为了多轮而重复搜索。证据不足才 search，并且 query 必须短、具体、可直接用于教材检索。不要回答教师问题，不要输出页码、文档 ID、URL，不要输出 Markdown，只返回 JSON。'
-    },
-    { role: 'user', content: reactDecisionPrompt({ question, scope, evidence, history, teacherReflectionContext, lessonIdentity }) }
-  ];
-  try {
-    const result = model.configured ? await model.completeJson({ messages, temperature: 0, maxTokens: 500 }) : null;
-    const parsed = result?.value || null;
-    const action = parsed?.action === 'search' ? 'search' : 'answer';
-    const query = action === 'search' ? compact(parsed?.query, 120) : '';
-    return { action: query ? action : 'answer', query, reason: compact(parsed?.reason, 180) };
-  } catch {
-    // ReAct is an evidence expansion aid. If its small planning call fails,
-    // the already retrieved pages remain valid and the final grounded answer
-    // still runs; a transient planning failure must not erase the answer.
-    return { action: 'answer', query: '', reason: '已有页面交由最终回答模型核对。' };
-  }
-}
-
 export async function runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext = '', lessonIdentity, env, deepseek, retrieveMore, deadlineAt }) {
-  let current = Array.isArray(evidence) ? [...evidence] : [];
-  const trace = [];
-  if (typeof retrieveMore !== 'function') return { evidence: current, trace };
-  for (let step = 0; step < 2; step += 1) {
-    const decision = await reactDecision({ question, scope, evidence: current, history, teacherReflectionContext, lessonIdentity, env, deepseek, deadlineAt });
-    trace.push({ step: step + 1, action: decision.action, query: decision.query, reason: decision.reason });
-    if (decision.action !== 'search' || !decision.query) break;
-    let next = [];
-    try { next = await retrieveMore(decision.query); } catch { break; }
-    const seen = new Set(current.map(item => `${item.documentId}:${item.pdfPage}`));
-    const additions = (Array.isArray(next) ? next : []).filter(item => {
-      const key = `${item.documentId}:${item.pdfPage}`;
-      if (!item?.pdfPage || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    if (!additions.length) break;
-    current = [...current, ...additions].slice(0, 10);
-  }
-  return { evidence: current, trace };
+  return runPiRetrievalAgent({
+    question,
+    scope,
+    evidence,
+    history: boundedConversationHistory(history),
+    teacherReflectionContext,
+    lessonIdentity,
+    env,
+    deepseek,
+    retrieveMore,
+    deadlineAt
+  });
 }
 
 function teachingPhaseRank(value) {

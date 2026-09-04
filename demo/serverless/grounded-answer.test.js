@@ -234,11 +234,26 @@ test('ReAct retrieval can expand an empty first hit before producing an answer',
   let calls = 0;
   let retrievedQuery = '';
   t.after(() => { global.fetch = originalFetch; });
-  global.fetch = async () => {
+  global.fetch = async (_url, options) => {
     calls += 1;
-    const content = calls === 1
-      ? { action: 'search', query: '我爱这土地 教师用书 教学重点', reason: '当前页面没有教师用书处理。' }
-      : { answer: { reply: '教师用书把朗读、意象比较和情感归纳安排为递进步骤。', summary: '先按教师用书的递进处理组织课堂。', evidenceRefs: ['E1'] } };
+    const request = JSON.parse(options.body);
+    if (request.stream) {
+      const firstAgentTurn = !request.messages.some(message => message.role === 'tool');
+      const deltas = firstAgentTurn
+        ? [
+            { id: 'chatcmpl-test', model: 'test-model', choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: 'call-search', type: 'function', function: { name: 'search_teaching_material', arguments: '{"query":"我爱这土地 教师用书 教学重点"}' } }] }, finish_reason: null }] },
+            { id: 'chatcmpl-test', model: 'test-model', choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }
+          ]
+        : [
+            { id: 'chatcmpl-test', model: 'test-model', choices: [{ index: 0, delta: { role: 'assistant', content: 'READY' }, finish_reason: null }] },
+            { id: 'chatcmpl-test', model: 'test-model', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }
+          ];
+      return new Response(`${deltas.map(item => `data: ${JSON.stringify(item)}\n\n`).join('')}data: [DONE]\n\n`, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' }
+      });
+    }
+    const content = { answer: { reply: '教师用书把朗读、意象比较和情感归纳安排为递进步骤。', summary: '先按教师用书的递进处理组织课堂。', evidenceRefs: ['E1'] } };
     return new Response(JSON.stringify({ model: 'test-model', choices: [{ message: { content: JSON.stringify(content) } }] }), { status: 200 });
   };
   const guidePage = { ...evidence[1], pdfPage: 58, viewer: { pdfUrl: '/materials/guide.pdf#page=58', page: 58 } };
