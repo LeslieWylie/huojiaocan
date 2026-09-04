@@ -6,6 +6,7 @@ const MAX_ATTEMPTS = 2;
 const DEFAULT_CALL_TIMEOUT_MS = 30_000;
 const MIN_RETRY_WINDOW_MS = 5_000;
 const DEFAULT_WORKFLOW_TIMEOUT_MS = 55_000;
+const DEFAULT_RETRY_DELAY_MS = 180;
 
 function gatewayMaxTokens(value) {
   const parsed = Number(value);
@@ -42,12 +43,22 @@ export function parseStructuredJson(content) {
   return null;
 }
 
-async function withBoundedRetry(call, remainingMs) {
+function retryDelayMs(env = process.env) {
+  const requested = Number(env.AI_RETRY_DELAY_MS);
+  if (!Number.isFinite(requested) || requested < 0) return DEFAULT_RETRY_DELAY_MS;
+  return Math.min(1_500, Math.floor(requested));
+}
+
+async function withBoundedRetry(call, remainingMs, baseDelayMs = DEFAULT_RETRY_DELAY_MS) {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
       return await call();
     } catch (error) {
       if (!error?.retryable || attempt === MAX_ATTEMPTS || remainingMs() < MIN_RETRY_WINDOW_MS) throw error;
+      // Provider overloads should not be hit again in the same event-loop tick.
+      // Keep the pause small and inside the shared workflow deadline.
+      const delay = Math.min(baseDelayMs * attempt, Math.max(0, remainingMs() - MIN_RETRY_WINDOW_MS));
+      if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
   throw new GatewayError('gateway_request_failed');
@@ -104,7 +115,7 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
               },
               { env, model: config.gatewayModel || config.textModel, timeoutMs: callTimeoutMs }
             );
-      }, remainingMs);
+      }, remainingMs, retryDelayMs(env));
 
       const value = parseStructuredJson(completion.content);
       if (!value) {
@@ -134,23 +145,32 @@ export async function runStructuredReviewLoop({
   const first = await model.completeJson({ messages: initialMessages, maxTokens });
   let completion = first.completion;
   let value = first.value;
-  const trace = [{ round: 1, stage: stageNames[0] || 'draft', status: 'completed' }];
+  let issues = [...new Set(detectIssues(value) || [])].slice(0, 10);
+  const trace = [{ round: 1, stage: stageNames[0] || 'draft', status: 'completed', issues: issues.length }];
 
   for (let round = 2; round <= Math.min(Math.max(1, maxRounds), 3); round += 1) {
     if (typeof model.remainingMs === 'function' && model.remainingMs() < MIN_RETRY_WINDOW_MS) {
       trace.push({ round, stage: stageNames[round - 1] || `review_${round}`, status: 'skipped_deadline' });
       break;
     }
-    const issues = round >= 3 ? [...new Set(detectIssues(value) || [])].slice(0, 10) : [];
     if (round >= 3 && !issues.length) break;
     const messages = reviewMessages?.({ value, round, issues });
     if (!Array.isArray(messages) || !messages.length) break;
     const stage = stageNames[round - 1] || `review_${round}`;
     try {
       const next = await model.completeJson({ messages, maxTokens });
+      const nextIssues = [...new Set(detectIssues(next.value) || [])].slice(0, 10);
+      // A prose reviewer is allowed to improve wording, but it cannot replace a
+      // usable draft with a structurally worse plan. Keep the best complete
+      // candidate seen so far and expose only bounded quality metadata.
+      if (nextIssues.length > issues.length) {
+        trace.push({ round, stage, status: 'rejected_regression', issuesBefore: issues.length, issuesAfter: nextIssues.length });
+        continue;
+      }
       completion = next.completion;
       value = next.value;
-      trace.push({ round, stage, status: 'completed', ...(issues.length ? { issues: issues.length } : {}) });
+      trace.push({ round, stage, status: 'completed', issuesBefore: issues.length, issuesAfter: nextIssues.length });
+      issues = nextIssues;
     } catch {
       // A later review round may improve a valid result but must never erase it.
       trace.push({ round, stage, status: round === 2 ? 'fallback_to_draft' : 'fallback_to_reviewed', ...(issues.length ? { issues: issues.length } : {}) });

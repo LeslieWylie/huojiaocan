@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ensureLessonPeriodCoverage, generateGroundedAnswer } from './grounded-answer.js';
+import { boundedConversationHistory, ensureLessonPeriodCoverage, generateGroundedAnswer } from './grounded-answer.js';
 
 const evidence = [
   {
@@ -16,6 +16,21 @@ const evidence = [
     viewer: { pdfUrl: '/materials/guide.pdf#page=56', page: 56 }
   }
 ];
+
+test('bounded conversation keeps recent complete turns and removes oversized old output', () => {
+  const history = [
+    { role: 'assistant', content: 'orphan' },
+    { role: 'user', content: '第一轮问题' },
+    { role: 'assistant', content: '旧方案'.repeat(900) },
+    { role: 'user', content: '请保持篇目，只调整问题梯度' },
+    { role: 'assistant', content: '已按当前篇目调整。' }
+  ];
+  const result = boundedConversationHistory(history, { maxMessages: 4, maxChars: 2_400 });
+  assert.equal(result[0].role, 'user');
+  assert.equal(result.at(-1).content, '已按当前篇目调整。');
+  assert.equal(result.some(item => item.content === 'orphan'), false);
+  assert.ok(result.every(item => item.content.length <= (item.role === 'user' ? 900 : 1200)));
+});
 
 test('multi-period answers cover every requested period even when the model repeats period one', () => {
   const source = {

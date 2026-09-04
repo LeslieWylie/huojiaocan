@@ -26,7 +26,8 @@ test('system model retries one transient provider failure within one workflow bu
       LLM_GATEWAY_API_KEY: 'test-key',
       LLM_GATEWAY_MODEL: 'test-model',
       LLM_GATEWAY_TIMEOUT_MS: '1000',
-      AI_WORKFLOW_TIMEOUT_MS: '20000'
+      AI_WORKFLOW_TIMEOUT_MS: '20000',
+      AI_RETRY_DELAY_MS: '0'
     }
   });
   const result = await model.completeJson({ messages: [{ role: 'user', content: 'test' }] });
@@ -94,4 +95,64 @@ test('review loop stops cleanly when the shared request deadline is nearly exhau
     reviewMessages: () => [{ role: 'user', content: 'review' }]
   });
   assert.deepEqual(result.trace.map(item => item.status), ['completed', 'skipped_deadline']);
+});
+
+test('review loop keeps the best candidate when a reviewer introduces new structural defects', async () => {
+  const values = [
+    { answer: { objectives: ['一', '二'], lessonPlan: ['完整'] } },
+    { answer: { objectives: [], lessonPlan: [] } },
+    { answer: { objectives: ['一', '二'], lessonPlan: ['完整'] } }
+  ];
+  let calls = 0;
+  const issueLists = [];
+  const model = {
+    configured: true,
+    remainingMs: () => 20_000,
+    async completeJson() {
+      const value = values[calls];
+      calls += 1;
+      return { completion: { model: 'test' }, value };
+    }
+  };
+  const detectIssues = value => value.answer.objectives.length >= 2 && value.answer.lessonPlan.length
+    ? []
+    : ['方案结构不完整'];
+  const result = await runStructuredReviewLoop({
+    model,
+    initialMessages: [{ role: 'user', content: 'draft' }],
+    reviewMessages: ({ issues }) => {
+      issueLists.push(issues);
+      return [{ role: 'user', content: 'review' }];
+    },
+    detectIssues
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(issueLists, [[]]);
+  assert.equal(result.trace[1].status, 'rejected_regression');
+  assert.deepEqual(result.value, values[0]);
+});
+
+test('review loop supplies current deterministic issues to the evidence review round', async () => {
+  let calls = 0;
+  let received = [];
+  const model = {
+    configured: true,
+    remainingMs: () => 20_000,
+    async completeJson() {
+      calls += 1;
+      return { completion: { model: 'test' }, value: { complete: calls > 1 } };
+    }
+  };
+  const result = await runStructuredReviewLoop({
+    model,
+    initialMessages: [{ role: 'user', content: 'draft' }],
+    reviewMessages: ({ issues }) => {
+      received = issues;
+      return [{ role: 'user', content: 'review' }];
+    },
+    detectIssues: value => value.complete ? [] : ['缺少课堂收束']
+  });
+  assert.deepEqual(received, ['缺少课堂收束']);
+  assert.equal(result.trace[0].issues, 1);
+  assert.equal(result.trace[1].issuesAfter, 0);
 });
