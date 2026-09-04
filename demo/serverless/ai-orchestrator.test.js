@@ -34,6 +34,30 @@ test('system model retries one transient provider failure within one workflow bu
   assert.deepEqual(result.value, { answer: 'ok' });
 });
 
+test('system model respects the configured gateway output-token ceiling', async t => {
+  const originalFetch = global.fetch;
+  t.after(() => { global.fetch = originalFetch; });
+  let body;
+  global.fetch = async (_url, options) => {
+    body = JSON.parse(options.body);
+    return new Response(JSON.stringify({
+      model: 'test-model',
+      choices: [{ message: { content: '{"answer":"ok"}' } }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  const model = createStructuredModel({
+    env: {
+      LLM_GATEWAY_BASE_URL: 'https://gateway.test',
+      LLM_GATEWAY_API_KEY: 'test-key',
+      LLM_GATEWAY_MODEL: 'test-model',
+      LLM_GATEWAY_MAX_TOKENS: '1200'
+    }
+  });
+  await model.completeJson({ messages: [{ role: 'user', content: 'test' }], maxTokens: 4200 });
+  assert.equal(body.max_tokens, 1200);
+});
+
 test('review loop keeps the valid draft when an optional review fails', async () => {
   let calls = 0;
   const model = {

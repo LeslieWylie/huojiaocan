@@ -7,6 +7,12 @@ const DEFAULT_CALL_TIMEOUT_MS = 30_000;
 const MIN_RETRY_WINDOW_MS = 5_000;
 const DEFAULT_WORKFLOW_TIMEOUT_MS = 55_000;
 
+function gatewayMaxTokens(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 256) return null;
+  return Math.min(16_000, Math.floor(parsed));
+}
+
 function workflowTimeoutMs(env = process.env) {
   const requested = Number(env.AI_WORKFLOW_TIMEOUT_MS);
   if (!Number.isFinite(requested) || requested <= 0) return DEFAULT_WORKFLOW_TIMEOUT_MS;
@@ -78,17 +84,20 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
           remainingMs()
         );
         if (callTimeoutMs < 1_000) throw new GatewayError('gateway_timeout', { retryable: true });
+        const requestedMaxTokens = !usePersonalDeepSeek && gatewayMaxTokens(config.maxTokens)
+          ? Math.min(maxTokens, gatewayMaxTokens(config.maxTokens))
+          : maxTokens;
         return usePersonalDeepSeek
           ? createDeepSeekClient({
               apiKey: deepseek.apiKey,
               model: deepseek.model,
               timeout: callTimeoutMs
-            }).chat({ messages, responseFormat: true, maxTokens })
+            }).chat({ messages, responseFormat: true, maxTokens: requestedMaxTokens })
           : callGatewayChatCompletion(
               {
                 messages,
                 temperature,
-                maxTokens,
+                maxTokens: requestedMaxTokens,
                 stream: false,
                 thinking: { type: 'disabled' },
                 response_format: { type: 'json_object' }

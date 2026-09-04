@@ -15,6 +15,7 @@ export function gatewayConfig(env = process.env) {
     imageModel: value('LLM_IMAGE_MODEL'),
     imageEndpoint: value('LLM_IMAGE_ENDPOINT'),
     timeoutMs: value('LLM_GATEWAY_TIMEOUT_MS'),
+    maxTokens: value('LLM_GATEWAY_MAX_TOKENS'),
     answerMode: value('LLM_ANSWER_MODE') || 'auto',
     allowIndexProviderFallback: value('ALLOW_INDEX_PROVIDER_FALLBACK').toLowerCase() === 'true'
   };
