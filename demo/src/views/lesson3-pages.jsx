@@ -234,6 +234,11 @@ export function TeachingSlidesPage() {
     if (!userId) { if (session === null) location.href = `/login/?next=${encodeURIComponent(location.pathname + location.search)}`; return; }
     if (!draftId) { setError('还没有选定课堂方案。请先从课堂设计进入。'); setBusy(false); return; }
     rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/slides`).then(data => {
+      if (data.unavailableReason) {
+        setDeck(null); setDraftVersion(Number(data.draftVersion || 0)); setStale(false);
+        setError(data.unavailableReason === 'teaching_slides_require_confirmed_plan' ? '请先确认当前教学方案，再生成课堂课件。' : '请先生成一课三卡，再把课堂主线整理成课件。');
+        return;
+      }
       setDeck(data.deck || null); setDraftVersion(Number(data.draftVersion || 0)); setStale(Boolean(data.stale)); setDirty(false); setActive(0);
     }).catch(err => {
       const code = requestCode(err);
@@ -301,6 +306,11 @@ export function LayeredHomeworkPage() {
     if (!userId) { if (session === null) location.href = `/login/?next=${encodeURIComponent(location.pathname + location.search)}`; return; }
     if (!draftId) { setError('还没有选定课堂方案。请先从一课三卡进入。'); setBusy(false); return; }
     rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/homework-pack`).then(data => {
+      if (data.unavailableReason) {
+        setPack(null); setDraftVersion(Number(data.draftVersion || 0)); setStale(false);
+        setError(data.unavailableReason === 'homework_requires_confirmed_plan' ? '请先确认教学方案，再生成课后作业。' : data.unavailableReason === 'homework_requires_cards' ? '请先生成一课三卡，再把课堂目标转成分层作业。' : '当前三卡还没有绑定学生教材页码。请先补充教材依据，避免生成脱离课文的题目。');
+        return;
+      }
       setPack(data.pack || null); setDraftVersion(Number(data.draftVersion || 0)); setStale(Boolean(data.stale)); setActive(0); setDirty(false);
     }).catch(err => {
       const code = requestCode(err);
@@ -351,4 +361,3 @@ export function LayeredHomeworkPage() {
     </>}
   </div>;
 }
-

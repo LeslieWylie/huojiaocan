@@ -48,7 +48,7 @@ module.exports = defineConfig({
     },
     {
       name: 'mobile-chromium',
-      testMatch: /anonymous-reader\.spec\.cjs/,
+      testMatch: /(?:anonymous-reader|all-pages-runtime)\.spec\.cjs/,
       use: { ...devices['Pixel 7'], channel: browserChannel }
     }
   ]

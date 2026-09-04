@@ -495,6 +495,14 @@ test('slides endpoint builds from the owned confirmed draft without writing on r
   assert.equal(result.calls.some(call => call.options.method === 'PATCH'), false);
 });
 
+test('slides GET returns a recoverable unavailable state before cards exist', async () => {
+  const current = apiDraft();
+  const result = await invokeApi({ method: 'GET', url: '/api/drafts/draft-1/slides', draft: current });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.payload.deck, null);
+  assert.equal(result.payload.unavailableReason, 'teaching_slides_require_confirmed_plan');
+});
+
 test('slides endpoint CAS-saves teacher edits while keeping citation identity server-owned', async () => {
   const current = slideDraft();
   const preview = await invokeApi({ method: 'GET', url: '/api/drafts/draft-1/slides', draft: current });
@@ -519,6 +527,14 @@ test('homework endpoint builds A B C tasks from the owned confirmed draft', asyn
   assert.deepEqual(result.payload.pack.tasks.map(item => item.level), ['A', 'B', 'C']);
   assert.equal(result.payload.draftVersion, 8);
   assert.equal(result.calls.some(call => call.options.method === 'PATCH'), false);
+});
+
+test('homework GET returns a recoverable unavailable state before cards exist', async () => {
+  const current = apiDraft();
+  const result = await invokeApi({ method: 'GET', url: '/api/drafts/draft-1/homework-pack', draft: current });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.payload.pack, null);
+  assert.equal(result.payload.unavailableReason, 'homework_requires_confirmed_plan');
 });
 
 test('homework endpoint saves teacher wording but keeps scores and evidence server-owned', async () => {

@@ -14,7 +14,10 @@ const test = base.extend({
       }));
     }
     page.on('console', message => {
-      if (message.type() === 'error') errors.push(`console.error: ${message.text()}`);
+      if (message.type() === 'error') {
+        const source = message.location()?.url;
+        errors.push(`console.error${source ? ` (${source})` : ''}: ${message.text()}`);
+      }
     });
     page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
     await use(errors);

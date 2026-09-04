@@ -926,8 +926,15 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const stored = current.answer?.teachingSlides ? normalizeTeachingSlideDeck(current.answer.teachingSlides) : null;
       const stale = stored ? teachingSlideDeckIsStale(current) : false;
-      const deck = stored && !stale ? stored : buildTeachingSlideDeck(current);
-      return json(res, 200, { deck, stale, draftVersion: Number(current.version || 1) });
+      try {
+        const deck = stored && !stale ? stored : buildTeachingSlideDeck(current);
+        return json(res, 200, { deck, stale, draftVersion: Number(current.version || 1) });
+      } catch (error) {
+        if (['teaching_slides_require_confirmed_plan', 'teaching_slides_require_cards'].includes(error?.code)) {
+          return json(res, 200, { deck: null, stale: false, unavailableReason: error.code, draftVersion: Number(current.version || 1) });
+        }
+        throw error;
+      }
     }
     if (parts.length === 2 && parts[1] === 'slides' && req.method === 'PATCH') {
       const current = await getDraft(user, id);
@@ -945,8 +952,15 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const stored = current.answer?.layeredHomework ? normalizeLayeredHomework(current.answer.layeredHomework) : null;
       const stale = stored ? layeredHomeworkIsStale(current) : false;
-      const pack = stored && !stale ? stored : buildLayeredHomework(current);
-      return json(res, 200, { pack, stale, draftVersion: Number(current.version || 1) });
+      try {
+        const pack = stored && !stale ? stored : buildLayeredHomework(current);
+        return json(res, 200, { pack, stale, draftVersion: Number(current.version || 1) });
+      } catch (error) {
+        if (['homework_requires_confirmed_plan', 'homework_requires_cards', 'homework_requires_textbook_evidence'].includes(error?.code)) {
+          return json(res, 200, { pack: null, stale: false, unavailableReason: error.code, draftVersion: Number(current.version || 1) });
+        }
+        throw error;
+      }
     }
     if (parts.length === 2 && parts[1] === 'homework-pack' && req.method === 'PATCH') {
       const current = await getDraft(user, id);
