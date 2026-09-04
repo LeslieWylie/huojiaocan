@@ -1222,6 +1222,41 @@ test('a real document and page cannot disguise client-forged citation text', asy
   assert.equal(result.calls.some(call => call.options.method === 'PATCH'), false);
 });
 
+test('client citation writes remain exact even when most of the quote resembles the page', async () => {
+  const current = apiDraft();
+  const nearMatch = [{
+    id: 'client-near-match', documentId: 'textbook', documentType: 'textbook', pdfPage: 56,
+    quote: '本文题为《岳阳楼记》，但并未具体描写岳阳楼本身，这是为什么？查阅相关资料，并参照注释读课文，看看文中写了哪些内容。'
+  }];
+  const result = await invokeApi({ method: 'PATCH', url: '/api/drafts/draft-1', draft: current, body: { version: 8, citations: nearMatch } });
+  assert.equal(result.statusCode, 422);
+  assert.equal(result.payload.error, 'citation_text_mismatch');
+  assert.equal(result.calls.some(call => call.options.method === 'PATCH'), false);
+});
+
+test('confirm repairs a persisted public OCR drift with a canonical local-page quote', async () => {
+  const current = apiDraft();
+  current.citations = [{
+    id: 'E1', documentId: 'textbook', documentType: 'textbook', pdfPage: 56,
+    quote: '本文题为《岳阳楼记》，但并未具体描写岳阳楼本身，这是为什么？查阅相关资料，并参照注释读课文，看看文中写了哪些内容。'
+  }];
+  const result = await invokeApi({ method: 'POST', url: '/api/drafts/draft-1/confirm', draft: current, body: { version: 8 } });
+  assert.equal(result.statusCode, 200);
+  const saved = JSON.parse(result.calls.find(call => call.options.method === 'PATCH').options.body);
+  assert.match(saved.citations[0].quote, /这是为什么呢/u);
+  assert.equal(saved.citations[0].quote, saved.citations[0].text);
+  assert.equal(saved.answer.planApproval.confirmedSnapshot.citations[0].quote, saved.citations[0].quote);
+});
+
+test('confirm rejects an unrelated persisted public quote without writing', async () => {
+  const current = apiDraft();
+  current.citations = [{ id: 'E1', documentId: 'textbook', documentType: 'textbook', pdfPage: 56, quote: '这是一段与岳阳楼记原页完全无关的伪造内容' }];
+  const result = await invokeApi({ method: 'POST', url: '/api/drafts/draft-1/confirm', draft: current, body: { version: 8 } });
+  assert.equal(result.statusCode, 422);
+  assert.equal(result.payload.error, 'citation_text_mismatch');
+  assert.equal(result.calls.some(call => call.options.method === 'PATCH'), false);
+});
+
 test('confirm validates and CAS-saves a sanitized current snapshot', async () => {
   const result = await invokeApi({ method: 'POST', url: '/api/drafts/draft-1/confirm', body: { version: 8 } });
   assert.equal(result.statusCode, 200);

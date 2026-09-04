@@ -645,7 +645,12 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   // Keep enough output budget for the actual teaching workflow. The UI now
   // renders this as a readable two-part document instead of truncating it into
   // a dense single-screen summary.
-  const reviewInstruction = [...history].reverse().find(item => item?.role === 'user' && typeof item.content === 'string')?.content || '';
+  // Live ask requests keep the pending turn out of history and provide it via
+  // followUpInstruction. Card regeneration intentionally carries its bounded
+  // teacher brief as the latest historical user message, so retain that as a
+  // fallback before the stable lesson question.
+  const priorTeacherInstruction = [...history].reverse().find(item => item?.role === 'user' && typeof item.content === 'string')?.content || '';
+  const reviewInstruction = String(followUpInstruction || priorTeacherInstruction || question || '').trim().slice(0, 500);
   const workflow = await runStructuredReviewLoop({
     model,
     initialMessages: messages,

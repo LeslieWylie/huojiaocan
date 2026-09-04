@@ -431,10 +431,51 @@ function trustedPageText(value = {}) {
   return String(page.retrievalText || page.text || page.quote || '');
 }
 
-async function assertCitationTextMatchesSource(citations) {
+function evidenceTokens(value) {
+  const text = citationComparableText(value);
+  if (!text) return [];
+  const tokens = new Set();
+  const words = text.match(/[a-z0-9]+/giu);
+  for (const word of words || []) {
+    if (word.length >= 3) tokens.add(word);
+  }
+  const chars = text.replace(/[a-z0-9]/gu, '');
+  const chunkLength = chars.length >= 6 ? 4 : 2;
+  for (let index = 0; index + chunkLength <= chars.length; index += 1) {
+    tokens.add(chars.slice(index, index + chunkLength));
+  }
+  return [...tokens];
+}
+
+function citationEvidenceOverlap(query, source) {
+  const quoteTokens = evidenceTokens(query);
+  if (!quoteTokens.length) return 0;
+  const sourceTokens = new Set(evidenceTokens(source));
+  const matches = quoteTokens.filter(token => sourceTokens.has(token)).length;
+  return matches / quoteTokens.length;
+}
+
+function buildCanonicalCitationText(sourcePageText, queryHint) {
+  const source = String(sourcePageText || '').trim();
+  if (!source) return '';
+  const query = String(queryHint || '').replace(/…/gu, '').trim();
+  if (!query) return source;
+  const index = source.indexOf(query);
+  const normalizedSource = source.toLowerCase();
+  const normalizedQuery = query.toLowerCase();
+  const fallbackIndex = normalizedSource.includes(normalizedQuery) ? normalizedSource.indexOf(normalizedQuery) : 0;
+  const start = Math.max(0, (index >= 0 ? index : fallbackIndex) - 55);
+  const end = Math.min(source.length, (index >= 0 ? index : fallbackIndex) + Math.max(query.length, 130));
+  const slice = source.slice(start, end).trim();
+  if (slice) return slice;
+  return source.slice(0, 230).trim();
+}
+
+async function assertCitationTextMatchesSource(citations, { repairPublicOcrDrift = false } = {}) {
   const items = Array.isArray(citations) ? citations : [];
   if (!items.length) return;
   const publicIds = new Set((getManifest().documents || []).map(item => String(item.id)));
+  const repaired = [];
   const local = new LocalFullTextIndexProvider();
   const remote = getIndexProvider().provider;
   await Promise.all(items.map(async citation => {
@@ -452,15 +493,30 @@ async function assertCitationTextMatchesSource(citations) {
     }
     const source = citationComparableText(trustedPageText(result));
     if (!source || !source.includes(quote)) {
+      if (repairPublicOcrDrift && publicIds.has(documentId) && citationEvidenceOverlap(quote, source) > 0.25) {
+        const rebuilt = buildCanonicalCitationText(trustedPageText(result), citation?.quote || citation?.text);
+        const rebuildComparable = citationComparableText(rebuilt);
+        if (source && rebuildComparable && source.includes(rebuildComparable)) {
+          repaired.push({
+            ...citation,
+            quote: rebuilt,
+            text: rebuilt
+          });
+          return;
+        }
+      }
       throw Object.assign(new Error('citation_text_mismatch'), { code: 'citation_text_mismatch', status: 422 });
     }
+    repaired.push(citation);
   }));
+  if (repairPublicOcrDrift) return repaired;
+  return;
 }
 
-async function assertCitationsTrusted(user, citations, context) {
+async function assertCitationsTrusted(user, citations, context, options = {}) {
   await assertCitationDocumentsAccessible(user, citations);
   assertCitationsBelongToLesson(citations, context);
-  await assertCitationTextMatchesSource(citations);
+  return assertCitationTextMatchesSource(citations, options);
 }
 
 function lessonName(value) {
@@ -1112,11 +1168,13 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const body = await readJson(req);
       assertCurrentVersion(current, requestVersion(req, body));
-      await assertCitationsTrusted(user, current.citations, current.lesson_context);
-      const answer = confirmDraftPlan(current, { confirmedBy: user.id });
+      const repairedCitations = await assertCitationsTrusted(user, current.citations, current.lesson_context, { repairPublicOcrDrift: true }) || current.citations;
+      const prepared = { ...current, citations: repairedCitations };
+      const answer = confirmDraftPlan(prepared, { confirmedBy: user.id });
       answer.revisions = appendRevision(current, '确认教学方案').revisions;
       const saved = await patchOwnedDraft(user, id, current.version || 1, {
         answer,
+        citations: repairedCitations,
         updated_at: new Date().toISOString(),
         version: Number(current.version || 1) + 1
       });

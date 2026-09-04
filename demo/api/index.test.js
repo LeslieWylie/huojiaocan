@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import handler, { aggregateLearningContext, classAdaptationPlanContext, confirmedDeliberationContext, confirmedHomeworkReviewContext, mergeAskHistory, ownedClassLearningContext, ownedDraftAskContext, ownedDraftTeachingContext, previousLessonCarryoverContext } from './index.js';
+import handler, { aggregateLearningContext, classAdaptationPlanContext, completedAskHistory, confirmedDeliberationContext, confirmedHomeworkReviewContext, mergeAskHistory, ownedClassLearningContext, ownedDraftAskContext, ownedDraftTeachingContext, previousLessonCarryoverContext } from './index.js';
 
 const envKeys = ['DOCUMENT_INDEX_PROVIDER', 'PAGEINDEX_BASE_URL', 'PAGEINDEX_API_KEY', 'PAGEINDEX_API_PREFIX', 'PAGEINDEX_TIMEOUT_MS', 'ALLOW_INDEX_PROVIDER_FALLBACK', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'INDEX_MAINTAINER_EMAILS'];
 const originalEnv = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
@@ -22,6 +22,34 @@ test('saved and locally recovered turns are merged without losing a follow-up', 
     { role: 'user', content: '怎样备课《岳阳楼记》？' },
     { role: 'assistant', content: '先核对篇目和三类材料。' },
     { role: 'user', content: '那如何调整为两课时？' }
+  ]);
+});
+
+test('conversation merge preserves intentional repeated turns while overlapping saved history only once', () => {
+  const repeated = [
+    { role: 'user', content: '这一处怎样朗读？' },
+    { role: 'assistant', content: '先圈出重音。' },
+    { role: 'user', content: '这一处怎样朗读？' },
+    { role: 'assistant', content: '再比较语气。' }
+  ];
+  assert.deepEqual(mergeAskHistory(repeated.slice(0, 2), repeated), repeated);
+});
+
+test('the model receives only completed history and not the duplicated pending instruction', () => {
+  const merged = mergeAskHistory(
+    [
+      { role: 'user', content: '怎样备课《岳阳楼记》？' },
+      { role: 'assistant', content: '先核对教师用书。' }
+    ],
+    [
+      { role: 'user', content: '怎样备课《岳阳楼记》？' },
+      { role: 'assistant', content: '先核对教师用书。' },
+      { role: 'user', content: '请调整为两课时。' }
+    ]
+  );
+  assert.deepEqual(completedAskHistory(merged, '怎样备课《岳阳楼记》？', '请调整为两课时。'), [
+    { role: 'user', content: '怎样备课《岳阳楼记》？' },
+    { role: 'assistant', content: '先核对教师用书。' }
   ]);
 });
 
@@ -208,6 +236,21 @@ test('index API contract', { concurrency: false }, async t => {
   delete process.env.PAGEINDEX_API_KEY;
   delete process.env.ALLOW_INDEX_PROVIDER_FALLBACK;
 
+  await t.test('public catalogue remains readable when a stale browser token cannot be checked', async () => {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;
+    try {
+      const res = await request('/documents', { headers: { authorization: 'Bearer expired-browser-session' } });
+      assert.equal(res.statusCode, 200);
+      assert.deepEqual(res.payload.documents.map(document => document.id), ['textbook', 'teacher-guide', 'curriculum-standard']);
+    } finally {
+      process.env.SUPABASE_URL = supabaseUrl;
+      process.env.SUPABASE_ANON_KEY = supabaseAnonKey;
+    }
+  });
+
   await t.test('POST /retrieve returns verifiable local evidence', async () => {
     const res = await request('/retrieve', { method: 'POST', body: { query: '我爱这土地', limit: 2 } });
     assert.equal(res.statusCode, 200);
@@ -357,8 +400,8 @@ test('index API contract', { concurrency: false }, async t => {
     assert.deepEqual(otherCatalog.payload.documents.map(document => document.id), ['textbook', 'teacher-guide', 'curriculum-standard']);
 
     const invalidCatalog = await request('/documents', { headers: { authorization: 'Bearer invalid-token' } });
-    assert.equal(invalidCatalog.statusCode, 401);
-    assert.deepEqual(invalidCatalog.payload, { ok: false, error: 'auth_invalid' });
+    assert.equal(invalidCatalog.statusCode, 200);
+    assert.deepEqual(invalidCatalog.payload.documents.map(document => document.id), ['textbook', 'teacher-guide', 'curriculum-standard']);
 
     const anonymousPrivatePage = await request('/documents/private-doc/pages/1', { headers: {} });
     assert.equal(anonymousPrivatePage.statusCode, 404);
@@ -425,7 +468,7 @@ test('index API contract', { concurrency: false }, async t => {
         return new Response(JSON.stringify({
           total: 3,
           hits: [
-            { documentId: 'textbook', pdfPage: 9, text: '公开教材 隔离测试', score: 0.9 },
+            { documentId: 'textbook', pdfPage: 9, text: '公开教材 千里冰封', score: 0.9 },
             { documentId: 'private-doc', pdfPage: 1, text: '私有备课 私人材料', score: 0.95 },
             { documentId: 'other-private', pdfPage: 1, text: '其他账号私有备课', score: 0.99 }
           ]
@@ -434,17 +477,21 @@ test('index API contract', { concurrency: false }, async t => {
       throw new Error(`unexpected fetch: ${target}`);
     };
 
-    const anonymousSearch = await request('/search', { method: 'POST', headers: {}, body: { query: '隔离测试', userId: 'owner-1' } });
+    // Use a phrase that is present on the immutable physical page. Public
+    // provider-only snippets are no longer accepted as retrieval evidence.
+    const anonymousSearch = await request('/search', { method: 'POST', headers: {}, body: { query: '千里冰封', userId: 'owner-1' } });
     assert.equal(anonymousSearch.statusCode, 200);
-    assert.deepEqual(anonymousSearch.payload.results.map(item => item.documentId), ['textbook']);
+    assert.ok(anonymousSearch.payload.results.some(item => item.documentId === 'textbook'));
+    assert.ok(anonymousSearch.payload.results.every(item => ['textbook', 'teacher-guide'].includes(item.documentId)));
     assert.deepEqual(providerPayloads.at(-1).documentIds, ['textbook', 'teacher-guide']);
 
     const ownerBoth = await request('/retrieve', {
       method: 'POST',
       headers: { authorization: 'Bearer owner-token' },
-      body: { query: '隔离测试', scope: 'both', userId: 'other-1' }
+      body: { query: '千里冰封', scope: 'both', userId: 'other-1' }
     });
-    assert.deepEqual(ownerBoth.payload.results.map(item => item.documentId), ['textbook']);
+    assert.ok(ownerBoth.payload.results.some(item => item.documentId === 'textbook'));
+    assert.ok(ownerBoth.payload.results.every(item => ['textbook', 'teacher-guide'].includes(item.documentId)));
     assert.deepEqual(providerPayloads.at(-1).documentIds, ['textbook', 'teacher-guide']);
 
     const anonymousPrivate = await request('/retrieve', { method: 'POST', headers: {}, body: { query: '私有备课', scope: ['private-doc'] } });

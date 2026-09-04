@@ -447,9 +447,7 @@ test('连续问答的篇目、条件、回答和上下文可在刷新后恢复',
   const storage = installMemoryStorage();
   try {
     const messages = [answerTurn(1), answerTurn(2)];
-    const conversationHistory = buildConversationHistory(messages, [
-      { role: 'user', content: '那第二节怎样衔接？' }
-    ]);
+    const conversationHistory = buildConversationHistory(messages);
     const snapshot = {
       draftId: 'draft-refresh',
       question: '那第二节怎样衔接？',
@@ -472,8 +470,8 @@ test('连续问答的篇目、条件、回答和上下文可在刷新后恢复',
     assert.deepEqual(restored.messages, messages);
     assert.deepEqual(restored.conversationHistory, conversationHistory);
     assert.equal(restored.next, snapshot.next);
-    assert.match(restored.conversationHistory.at(-2).content, /第2轮有依据的回答/u);
-    assert.equal(restored.conversationHistory.at(-1).content, '那第二节怎样衔接？');
+    assert.equal(restored.conversationHistory.at(-2).content, '第2轮问题');
+    assert.match(restored.conversationHistory.at(-1).content, /第2轮有依据的回答/u);
   } finally {
     storage.restore();
   }

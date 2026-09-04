@@ -528,7 +528,6 @@ export function AskPage() {
     const nextLessonRef = requestOptions.lessonRef || lessonRef;
     const resolvedIdentityTitle = nextLessonRef?.title || identityTitle || planIdentity(nextIdentityQuestion, '当前篇目');
     const operation = requestOptions.operation && typeof requestOptions.operation === 'object' ? requestOptions.operation : undefined;
-    const followUpHistory = requestOptions.prompt ? [{ role: 'user', content: requestOptions.prompt }] : [];
     setBusy(true); setError(''); setLastErrorCode(''); setRetryQuestion(currentQuestion); setRetryTarget(typeof directQuestion === 'object' ? directQuestion : currentQuestion);
     let pendingTurn = null;
     let pendingHistory = [];
@@ -547,7 +546,11 @@ export function AskPage() {
         title: resolvedIdentityTitle,
         coreQuestion: existingDraft?.answer?.lesson?.coreQuestion || stableCoreQuestion || canonicalQuestion
       };
-      const groundedHistory = conversationHistory.length ? [...conversationHistory, ...followUpHistory] : buildConversationHistory(messages, followUpHistory);
+      // History contains completed turns only. The current question and quick
+      // adjustment travel in their own fields below; appending either here
+      // would make the model read the same instruction twice and can promote
+      // plan operations such as “换成两课时” into lesson or board content.
+      const groundedHistory = conversationHistory.length ? conversationHistory : buildConversationHistory(messages);
       const askBody = {
         draftId: existingDraft?.id || draftId || '',
         question: currentQuestion,
@@ -802,4 +805,3 @@ export function AskPage() {
     </div>
   );
 }
-

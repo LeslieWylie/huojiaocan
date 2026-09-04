@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowLeft, ArrowRight, BookOpen, CircleAlert, ClipboardCheck, Download, ExternalLink, Maximize2, Search, ZoomIn, ZoomOut } from 'lucide-react';
 import { Badge } from '../ui-kit.jsx';
-import { canonicalDocumentId, citationLink, citationText, docName, focusedCurriculumExcerpt, questionState, queryParams, request, requestCode, searchResultDocumentId, searchResultPage } from '../app-core.js';
+import { canonicalDocumentId, citationLink, citationText, docName, focusedCurriculumExcerpt, normalizeCatalogItem, questionState, queryParams, request, requestCode, searchResultDocumentId, searchResultPage } from '../app-core.js';
 import { buildPdfPageUrl, buildReaderHref, pairedDocumentId, pairedFocusQuery, pairedLessonQuery, resolveReaderReturn } from '../reader-target.js';
 import { buildDualSourceTeachingCard } from '../../shared/dual-source-teaching-card.js';
 import { pairLessonEvidence } from '../lesson-evidence.js';
@@ -248,6 +248,5 @@ export function DocumentPage() {
     </section>}
   </div>;
 }
-
 
 

@@ -270,6 +270,27 @@ test('remote public hits rebuild their preview around the query from the verifie
   assert.doesNotMatch(response.results[0].text, /无关预览/u);
 });
 
+test('remote public hits never preserve an unverifiable provider-only excerpt', async t => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({
+    results: [{
+      documentId: 'teacher-guide',
+      pdfPage: 224,
+      text: '远程独有聚合片段，不属于这一物理页。',
+      score: 0.9
+    }]
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+  t.after(() => { global.fetch = originalFetch; });
+
+  const provider = new PageIndexProvider({ baseUrl: 'https://pageindex.test' });
+  const response = await provider.search({ query: '远程独有聚合片段', scope: ['teacher-guide'], limit: 2 });
+  assert.equal(response.results[0].pdfPage, 224);
+  assert.doesNotMatch(response.results[0].text, /远程独有聚合片段/u);
+  const local = await new LocalFullTextIndexProvider().getPage('teacher-guide', 224);
+  const localText = String(local.page.retrievalText || local.page.text).replace(/\s+/gu, '');
+  assert.ok(localText.includes(response.results[0].text.replace(/\s+/gu, '').slice(0, 24)));
+});
+
 test('remote PageIndex converts scalar UI scope into documentIds array', async t => {
   const originalFetch = global.fetch;
   let payload;

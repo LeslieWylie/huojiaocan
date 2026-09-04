@@ -72,7 +72,7 @@ test('resolveTeachingFocus leaves a specific textual question intact', () => {
   assert.match(result.retrievalQuery, /^《就英法联军远征中国致巴特勒上尉的信》/u);
 });
 
-test('conversation history keeps prior grounded turns for continuous questioning', () => {
+test('conversation history can append recovery text without changing completed turns', () => {
   const history = buildConversationHistory([
     {
       question: '怎样备课《我爱这土地》？',
@@ -85,6 +85,17 @@ test('conversation history keeps prior grounded turns for continuous questioning
   assert.equal(history[0].role, 'user');
   assert.match(history[1].content, /先读教师用书/u);
   assert.equal(history.at(-1).content, '那朗读时先抓哪几个词？');
+});
+
+test('the live request history contains completed turns only', () => {
+  const history = buildConversationHistory([
+    {
+      question: '怎样备课《我爱这土地》？',
+      response: { answer: { reply: '先从土地意象进入。' } }
+    }
+  ]);
+  assert.deepEqual(history.map(item => item.role), ['user', 'assistant']);
+  assert.doesNotMatch(history.at(-1).content, /换成两课时/u);
 });
 
 test('conversation history keeps exactly the five most recent complete grounded turns', () => {

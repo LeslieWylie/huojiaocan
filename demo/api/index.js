@@ -72,15 +72,28 @@ function normalizedConversationHistory(value = []) {
  * teacher-confirmed status. Merge the two without silently discarding either.
  */
 export function mergeAskHistory(stored = [], recent = []) {
-  const merged = [];
-  const seen = new Set();
-  for (const item of [...normalizedConversationHistory(stored), ...normalizedConversationHistory(recent)]) {
-    const key = `${item.role}:${item.content}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(item);
+  const baseline = normalizedConversationHistory(stored);
+  const local = normalizedConversationHistory(recent);
+  let overlap = Math.min(baseline.length, local.length);
+  while (overlap > 0) {
+    const suffix = baseline.slice(-overlap);
+    const prefix = local.slice(0, overlap);
+    if (suffix.every((item, index) => item.role === prefix[index].role && item.content === prefix[index].content)) break;
+    overlap -= 1;
   }
-  return merged.slice(-10);
+  return [...baseline, ...local.slice(overlap)].slice(-10);
+}
+
+/**
+ * The current turn is carried by `question` and `followUpInstruction`, not by
+ * history. Old browser snapshots may still end with that pending user text;
+ * trim only an unpaired trailing user item and keep completed repeated turns.
+ */
+export function completedAskHistory(history = [], currentQuestion = '', followUpInstruction = '') {
+  const completed = normalizedConversationHistory(history);
+  const pending = new Set([currentQuestion, followUpInstruction].map(value => String(value || '').trim()).filter(Boolean));
+  while (completed.at(-1)?.role === 'user' && (!pending.size || pending.has(completed.at(-1).content))) completed.pop();
+  return completed.slice(-10);
 }
 
 function askDeadlineAt(env = process.env) {
@@ -305,7 +318,18 @@ function publicDocument(document = {}) {
 
 async function filterAccessibleDocuments(req, documents = []) {
   const list = Array.isArray(documents) ? documents : [];
-  const owned = hasBearerToken(req) ? await ownedDocumentIds(req) : new Set();
+  let owned = new Set();
+  if (hasBearerToken(req)) {
+    try {
+      owned = await ownedDocumentIds(req);
+    } catch (error) {
+      // Public books remain anonymously readable when a previously signed-in
+      // browser carries an expired token. Treat that request as anonymous for
+      // catalogue listing only; private document reads still fail closed in
+      // requireDocumentRead.
+      if (!(error instanceof AuthError)) throw error;
+    }
+  }
   return list.filter(document => publicDocument(document) || owned.has(String(document.id || document.documentId || '')));
 }
 
@@ -467,7 +491,11 @@ export default async function handler(req, res) {
           // Keep the account draft as the durable baseline, but merge any
           // newer locally recovered turns so a temporary save failure does
           // not make the next follow-up forget the conversation.
-          history: mergeAskHistory(ownedContext?.history, body.history),
+          history: completedAskHistory(
+            mergeAskHistory(ownedContext?.history, body.history),
+            body.question,
+            body.followUpInstruction
+          ),
           teacherReflectionContext,
           lessonContext,
           lessonIdentity: ownedContext?.lessonIdentity || (body.lessonIdentity && typeof body.lessonIdentity === 'object' ? body.lessonIdentity : undefined),
