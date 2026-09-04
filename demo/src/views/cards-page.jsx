@@ -773,8 +773,9 @@ ${sourceNote}`;
     classroomReady ? '板书与三卡已经就绪，可以进入课堂模式。' : '请先补全板书卡，再进入课堂模式。'
   ][workflowGuideStep];
   const citationNeedsReview = errorCode === 'citation_text_mismatch';
-  const noticeTitle = ['auth_required','auth_invalid'].includes(errorCode) ? '登录后继续编辑课堂设计' : errorCode === 'draft_missing' ? '还没有选定备课方案' : errorCode === 'draft_not_found' ? '这份备课方案暂时无法读取' : citationNeedsReview ? '教材依据已更新，请重新核对' : /^(gateway|deepseek|card_generation|evidence_)/u.test(errorCode) ? '三卡暂时没有生成' : '课堂设计暂时没有打开';
-  const noticeBody = ['auth_required','auth_invalid'].includes(errorCode) ? '为保护不同账号的课堂资料，只有确认当前账号后才会读取该账号自己的本机恢复副本。' : errorCode === 'draft_missing' ? '先在备课问答中提出问题，保存方案后再进入这里。' : errorCode === 'draft_not_found' ? '可能是链接已过期，或这份方案不属于当前账号。请回到备课问答重新建立方案。' : citationNeedsReview ? '教材页码或摘录发生变化。你的方案和教师修改仍在，请重新核对教材依据后再确认。' : error || '请稍后重试，或回到备课问答重新建立方案。';
+  const generationFailed = /^(gateway|deepseek|card_generation|evidence_)/u.test(errorCode);
+  const noticeTitle = ['auth_required','auth_invalid'].includes(errorCode) ? '登录后继续编辑课堂设计' : errorCode === 'draft_missing' ? '还没有选定备课方案' : errorCode === 'draft_not_found' ? '这份备课方案暂时无法读取' : citationNeedsReview ? '教材依据已更新，请重新核对' : generationFailed ? workflowState.cardsGenerated ? '本卡暂时无法重新生成' : '三卡暂时没有生成' : '课堂设计暂时没有打开';
+  const noticeBody = ['auth_required','auth_invalid'].includes(errorCode) ? '为保护不同账号的课堂资料，只有确认当前账号后才会读取该账号自己的本机恢复副本。' : errorCode === 'draft_missing' ? '先在备课问答中提出问题，保存方案后再进入这里。' : errorCode === 'draft_not_found' ? '可能是链接已过期，或这份方案不属于当前账号。请回到备课问答重新建立方案。' : citationNeedsReview ? '教材页码或摘录发生变化。你的方案和教师修改仍在，请重新核对教材依据后再确认。' : generationFailed && workflowState.cardsGenerated ? `当前三卡和教师修改都已保留。${error || '请稍后再试。'}` : error || '请稍后重试，或回到备课问答重新建立方案。';
   const workflowCopy = CARD_META[currentCard?.type]?.action || '把教材依据转成课堂行动';
   const classroomCta = classroomRun.status === 'in_progress' ? '继续本节课堂' : classroomRun.status === 'pending_review' ? '完成课后复盘' : classroomRun.status === 'confirmed' ? '查看课堂记录' : '开始上课并记录';
   const classroomButtonCopy = classroomReady ? classroomCta : !workflowState.teacherConfirmed || !workflowState.cardsGenerated ? '继续：核对并生成三卡' : !allCardsLocked ? '继续：检查并锁定三卡' : '继续：补全板书卡';
