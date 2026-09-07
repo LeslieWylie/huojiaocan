@@ -27,8 +27,12 @@ const PHASE_RULES = [
 ];
 
 function phaseOf(value) {
-  const text = `${value?.title || ''} ${value?.detail || ''}`;
-  return PHASE_RULES.find(rule => rule.pattern.test(text)) || { phase: 'other', rank: 35 };
+  // An activity can recall prior learning or ask pupils to read without being
+  // the lesson's opening/first reading. Its purpose takes precedence over
+  // incidental verbs in the instructions (e.g. “导入上节课表格”).
+  return PHASE_RULES.find(rule => rule.pattern.test(value?.title || ''))
+    || PHASE_RULES.find(rule => rule.pattern.test(value?.detail || ''))
+    || { phase: 'other', rank: 35 };
 }
 
 function defaultMinutes(value) {

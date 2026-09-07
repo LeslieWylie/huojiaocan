@@ -5,6 +5,7 @@ import { Badge, SectionHead } from './ui-kit.jsx';
 import { askErrorMessage, boardLabelFromText, boardQuestion, citationLink, citationPage, classroomRecoveryKey, clearClassroomRecovery, docName, readClassroomRecovery, rootRequest, sourceTypeLabel, statusLabel, uniqueCitations, wrapSvgText, writeClassroomRecovery } from './app-core.js';
 import { CLASSROOM_STAGE_LABELS, normalizeClassroomRun } from '../shared/classroom-run.js';
 import { buildPeriodPlan, reorderPeriodActivity, repairPeriodSequence, serializePeriodPlan, updatePeriodActivity } from '../shared/period-planner.js';
+import { boardLeafLayout } from '../shared/board-writing-plan.js';
 
 export function SvgLabel({ x, y, text, className = 'board-svg-label', max = 13, anchor = 'middle' }) {
   return <text x={x} y={y} textAnchor={anchor} className={className}>{wrapSvgText(text, max).map((line, index) => <tspan x={x} dy={index ? 21 : 0} key={`${line}-${index}`}>{line}</tspan>)}</text>;
@@ -18,11 +19,7 @@ export function MindMapBoard({ title, items = [], stage = 1, filterId = 'chalkGl
   ];
   const grouped = branches.map((branch, index) => ({ ...branch, items: cleanItems.filter((_, itemIndex) => itemIndex % branches.length === index) }));
   const visibleBranches = grouped.filter(branch => branch.items.length > 0);
-  const leafPosition = (branch, index) => {
-    const offsets = [-82, 82, 0];
-    const x = branch.x + offsets[index % offsets.length];
-    return { x, y: 465 + Math.floor(index / offsets.length) * 78, anchor: 'middle' };
-  };
+  const leafPosition = boardLeafLayout;
   const safeTitle = boardLabelFromText(title, '课堂板书');
   const safeQuestion = boardQuestion(coreQuestion, safeTitle);
   const conclusion = cleanItems.length ? boardLabelFromText(cleanItems[cleanItems.length - 1].text, '课堂归纳') : '课堂归纳：________';
@@ -38,7 +35,7 @@ export function MindMapBoard({ title, items = [], stage = 1, filterId = 'chalkGl
     {stage >= 1 && <g className="board-map-core" filter={`url(#${filterId})`}><rect x="470" y="105" width="460" height="120" rx="18"/><SvgLabel x={700} y={152} text={safeTitle} className="board-map-core-title" max={18}/><SvgLabel x={700} y={194} text={safeQuestion} className="board-map-core-prompt" max={28}/></g>}
     {stage >= 2 && visibleBranches.map(branch => <g className={`board-map-branch ${branch.color}`} key={branch.title}><rect x={branch.x - 100} y={branch.y - 28} width="200" height="56" rx="16"/><SvgLabel x={branch.x} y={branch.y + 7} text={branch.title} className="board-map-branch-label" max={8}/></g>)}
     {stage >= 2 && !visibleBranches.length && <text x="700" y="360" textAnchor="middle" className="board-map-empty-hint">板书卡暂无要点，请先在课堂设计中整理关键词。</text>}
-    {stage >= 3 && visibleBranches.map(branch => branch.items.map((item, index) => { const pos = leafPosition(branch, index); return <g className={`board-map-leaf ${branch.color}`} key={`leaf-${item.id}`}><rect x={pos.x - 92} y={pos.y - 25} width="184" height="58" rx="12"/><SvgLabel x={pos.x} y={pos.y + 4} text={item.label} className="board-map-leaf-label" max={12}/>{showWriteOrder && <g className="board-write-order"><circle cx={pos.x - 78} cy={pos.y - 15} r="15"/><text x={pos.x - 78} y={pos.y - 10} textAnchor="middle">{item.writeOrder}</text></g>}</g>; }))}
+    {stage >= 3 && visibleBranches.map(branch => branch.items.map((item, index) => { const pos = leafPosition(branch, index); return <g className={`board-map-leaf ${branch.color}`} key={`leaf-${item.id}`}><rect x={pos.x - pos.width / 2} y={pos.y - 25} width={pos.width} height={pos.height} rx="12"/><SvgLabel x={pos.x} y={pos.y + 4} text={item.label} className="board-map-leaf-label" max={18}/>{showWriteOrder && <g className="board-write-order"><circle cx={pos.x - pos.width / 2 + 14} cy={pos.y - 15} r="15"/><text x={pos.x - pos.width / 2 + 14} y={pos.y - 10} textAnchor="middle">{item.writeOrder}</text></g>}</g>; }))}
     {stage >= 4 && <g className="board-map-conclusion"><rect x="480" y="635" width="440" height="64" rx="14"/><SvgLabel x={700} y="674" text={`课堂归纳：${conclusion}`} className="board-map-conclusion-label" max={24}/></g>}
     {stage >= 5 && <g className="board-map-blanks"><rect x="80" y="700" width="330" height="82" rx="12"/><SvgLabel x={245} y="733" text="学生关键词" className="board-map-blank-label" max={12}/><SvgLabel x={245} y="765" text={liveKeywords.length ? liveKeywords.join(' · ') : '________________'} className="board-map-blank-line" max={18}/><rect x="990" y="700" width="330" height="82" rx="12"/><SvgLabel x={1155} y="733" text="仍需追问" className="board-map-blank-label" max={12}/><SvgLabel x={1155} y="765" text={followupStages.length ? followupStages.join(' · ') : '________________'} className="board-map-blank-line" max={18}/></g>}
   </svg>;

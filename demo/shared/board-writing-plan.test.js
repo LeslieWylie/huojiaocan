@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildBoardWritingPlan, chalkCharacterCount } from './board-writing-plan.js';
+import { boardLeafLayout, buildBoardWritingPlan, chalkCharacterCount } from './board-writing-plan.js';
 
 test('板书落笔排练给出五个真实书写阶段和可写量', () => {
   const plan = buildBoardWritingPlan({
@@ -39,4 +39,18 @@ test('长问题只口头完整提出，长板书会提示教师收缩', () => {
 
 test('粉笔字符统计忽略标点、箭头和留白线', () => {
   assert.equal(chalkCharacterCount('阴景 → 悲；________'), 3);
+});
+
+
+test('SVG最多九条板书的边框不重叠，也不侵占课堂归纳与教师留白', () => {
+  const boxes = [260, 700, 1140].flatMap(x => [0, 1, 2].map(index => boardLeafLayout({ x }, index)));
+  boxes.forEach((box, index) => {
+    assert.ok(box.x - box.width / 2 >= 0 && box.x + box.width / 2 <= 1400);
+    assert.ok(box.y - 25 > 358 && box.y - 25 + box.height < 635);
+    boxes.slice(index + 1).forEach(other => {
+      const separateX = Math.abs(box.x - other.x) >= (box.width + other.width) / 2 + 16;
+      const separateY = Math.abs(box.y - other.y) >= Math.max(box.height, other.height) + 16;
+      assert.ok(separateX || separateY, '所有相邻节点至少留出16个SVG单位');
+    });
+  });
 });

@@ -1,6 +1,12 @@
 const MAX_ITEM_CHARS = 16;
 const MAX_TOTAL_CHARS = 84;
 
+// Three rows fit between the branch labels and the conclusion/teacher blanks.
+// Keep each leaf within its own column rather than overlapping sibling boxes.
+export function boardLeafLayout(branch, index) {
+  return { x: branch.x, y: 430 + index * 78, width: 320, height: 58 };
+}
+
 function text(value, limit = 120) {
   return String(value || '').replace(/\s+/gu, ' ').trim().slice(0, limit);
 }

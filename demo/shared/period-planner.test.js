@@ -98,3 +98,18 @@ test('同一课时可以调整环节先后，不依赖只有图标的左右移�
   assert.equal(moved.sequenceIssues.length, 1);
   assert.deepEqual(repairPeriodSequence(moved).activities.map(item => item.title), ['朗读', '比较', '归纳']);
 });
+
+test('真实回归：环节说明中的“导入上节课”不把第5段研读排到第3、4段之前', () => {
+  const lessonPlan = [
+    { title: '诵读课文，整体感知', content: '导入：朗读课文，正音。', durationMinutes: 15 },
+    { title: '梳理第3、4段，探究两种览物之情', content: '追问：找出景物描写和心情词语。', durationMinutes: 25 },
+    { title: '研读第5段，理解古仁人的忧乐观', content: '导入上节课表格，请朗读第5段并找出依据。', durationMinutes: 25 },
+    { title: '总结对比，检测提升', content: '组织学生齐读第5段，回扣先忧后乐。', durationMinutes: 15 }
+  ];
+  const plan = buildPeriodPlan({ periods: 2, lessonPlan });
+  assert.deepEqual(plan.activities.map(item => item.title), lessonPlan.map(item => item.title));
+  assert.deepEqual(plan.activities.map(item => item.period), [1, 1, 2, 2]);
+  const restored = buildPeriodPlan({ periods: 2, lessonPlan, existing: serializePeriodPlan(plan) });
+  assert.equal(restored.sequenceIssues.length, 0);
+  assert.deepEqual(restored.activities.map(item => item.title), lessonPlan.map(item => item.title));
+});
