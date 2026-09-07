@@ -2,7 +2,6 @@
 // drift back into infrastructure terminology as the product grows.
 export const UI_COPY = Object.freeze({
   provider: {
-    systemGateway: '系统智能（默认）',
     personalKey: '我的智能连接',
     stableSnapshot: '已核验教材固定版'
   },
@@ -11,7 +10,7 @@ export const UI_COPY = Object.freeze({
     ready: '三类教学材料和系统智能服务已准备好。输入篇目或课堂问题，先找可核验依据，再组织课堂方案。',
     personalReady: '我的智能连接 连接已准备好。系统会沿用当前篇目和材料范围，并把引用重新绑定到真实 PDF 页面。',
     loginReady: '三类教学材料和系统智能服务已准备好。登录后可以连续提问、保存方案并在下次备课时继续编辑。',
-    noProvider: '当前没有可用的 AI 服务，请稍后重试或联系部署人员。',
+    noProvider: '请先登录，在 AI 设置中添加并测试个人 DeepSeek 密钥。',
     title: '先把这节课讲清楚，',
     subtitle: '再让每个判断回到教材原页',
     description: '先固定篇目，再分别核对课程标准的学段要求、教师用书的教学建议和学生教材的原文任务。教师可以连续追问，再把已核验依据转成课时流程、问题链、评价和三张课堂卡。',
@@ -38,7 +37,7 @@ export const UI_COPY = Object.freeze({
     deepseek_unavailable: '我的智能连接 暂时不可用，请稍后重试。',
     deepseek_invalid_response: '我的智能连接 返回内容无法解析，请重试。',
     deepseek_invalid_request: '我的智能连接 请求参数无效，请检查模型设置。',
-    deepseek_request_failed: '我的智能连接 连接失败。系统 AI 仍可使用，请切换为“系统智能（默认）”后重试。',
+    deepseek_request_failed: '我的智能连接 连接失败。请在 AI 设置中测试并检查当前个人密钥。',
     gateway_not_configured: '系统 AI 尚未配置，暂时无法生成方案，请联系部署人员。',
     gateway_invalid_url: '系统 AI 地址无效，暂时无法生成方案，请联系部署人员。',
     gateway_unauthorized: '系统 AI 的连接凭据暂时不可用。当前定稿和已保存内容都已保留，请稍后重试生成。',

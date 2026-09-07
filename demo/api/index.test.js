@@ -1,3 +1,4 @@
+import { encryptSecret } from '../serverless/auth.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import handler, { aggregateLearningContext, classAdaptationPlanContext, confirmedDeliberationContext, confirmedHomeworkReviewContext, completedAskHistory, mergeAskHistory, ownedClassLearningContext, ownedDraftAskContext, ownedDraftTeachingContext, previousLessonCarryoverContext } from './index.js';
@@ -419,7 +420,10 @@ test('index API contract', { concurrency: false }, async t => {
     delete process.env.PAGEINDEX_API_KEY;
   });
 
-  await t.test('search, retrieve and ask enforce JWT-owned document scope and filter a scope-ignoring provider', async () => {
+  await t.test('search, retrieve and ask enforce JWT-owned document scope and filter a scope-ignoring provider', async t => {
+    const oldEncryption = process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET;
+    process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET = 'fixture-encryption-only';
+    t.after(() => { if (oldEncryption === undefined) delete process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET; else process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET = oldEncryption; });
     process.env.DOCUMENT_INDEX_PROVIDER = 'pageindex';
     process.env.PAGEINDEX_BASE_URL = 'https://pageindex.test';
     process.env.PAGEINDEX_API_KEY = secret;
@@ -428,6 +432,11 @@ test('index API contract', { concurrency: false }, async t => {
     global.fetch = async (url, options = {}) => {
       const target = String(url);
       const authorization = String(options.headers?.Authorization || options.headers?.authorization || '');
+      if (target.startsWith('https://api.deepseek.com/')) return Response.json({ choices: [{ message: { content: JSON.stringify({answer:{summary:'教材建议'}}) }, finish_reason:'stop' }] });
+      if (target.includes('/rest/v1/user_deepseek_keys')) {
+        const e=encryptSecret('sk-fixture', process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET);
+        return Response.json([{id:'personal',model:'deepseek-v4-flash',key_ciphertext:e.ciphertext,key_iv:e.iv,key_tag:e.tag}]);
+      }
       if (target === 'https://supabase.test/auth/v1/user') {
         const owner = authorization === 'Bearer owner-token';
         return new Response(JSON.stringify({ id: owner ? 'owner-1' : 'other-1', email: `${owner ? 'owner' : 'other'}@example.test` }), {

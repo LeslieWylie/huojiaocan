@@ -112,7 +112,13 @@ test('JWT owner isolates drafts, keys, and ask history across A/B accounts', asy
     }
     await request(askHandler, '/api/ask', { method: 'POST', body: { question: '新对话', history: [{ role: 'user', content: 'A-private-history' }] } });
     assert.deepEqual(asks.at(-1).history, []);
-    assert.equal(asks.at(-1).deepseek, null);
+    assert.equal(asks.at(-1).deepseek.record.user_id, 'B');
+    for (let i = keys.length - 1; i >= 0; i--) if (keys[i].user_id === 'B') keys.splice(i, 1);
+    const before = asks.length;
+    const missing = await request(askHandler, '/api/ask', { method: 'POST', body: { question: '没有连接时不要生成' } });
+    assert.equal(missing.statusCode, 404);
+    assert.equal(asks.length, before, 'no personal key must never invoke a system provider');
+
   });
 });
 

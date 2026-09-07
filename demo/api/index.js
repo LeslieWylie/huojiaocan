@@ -460,13 +460,7 @@ export default async function handler(req, res) {
       try { user = await requireUser(req); } catch (error) { return safeAuthResponse(res, error); }
       try {
         const scope = await resolveDocumentScope(req, provider, body.scope ?? body.documentIds ?? body.documentId, user);
-        // An empty keyId is an explicit choice of the configured system
-        // service. Do not resolve the account's old active key in that case;
-        // a personal key is used only when its id is selected explicitly.
-        let active = null;
-        if (typeof body.keyId === 'string' && body.keyId.trim()) {
-          active = await resolveActiveDeepSeekKey(user, body.keyId.trim());
-        }
+        const active = await resolveActiveDeepSeekKey(user, typeof body.keyId === 'string' ? body.keyId.trim() : undefined);
         // Learning observations are trusted only when read from this user's
         // stored draft. Browser-supplied prose can never impersonate a
         // teacher-confirmed classroom or homework record.
