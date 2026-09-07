@@ -9,6 +9,10 @@ function credentials() {
 }
 
 test('login recovery preserves the question through continuous Q&A, finalization, cards, locking and classroom', async ({ page }) => {
+  const asks = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/index/ask') asks.push(request.postDataJSON());
+  });
   const account = credentials();
   await page.goto('/ask/?doc=textbook&page=56&node=textbook-u3-n1&lesson=11%20岳阳楼记&scope=both');
 
@@ -37,6 +41,33 @@ test('login recovery preserves the question through continuous Q&A, finalization
   await expect(page.getByText('已沿用本场对话上下文').last()).toBeVisible();
   await expect(page.locator('form.ask-large textarea')).toHaveValue('');
 
+  // A repeated request is a new turn, not duplicate text to discard. The
+  // pending request itself must never be smuggled into completed history.
+  for (let round = 0; round < 2; round += 1) {
+    await composer.fill('请再举一个例子');
+    await page.getByRole('button', { name: '开始提问', exact: true }).click();
+    await expect(composer).toHaveValue('');
+    await expect(page.locator('.conversation-latest').getByText('请再举一个例子', { exact: true })).toBeVisible();
+    const sent = asks.at(-1);
+    expect(sent.history.at(-1).role).toBe('assistant');
+    expect(sent.history.filter(item => item.role === 'user' && item.content === '请再举一个例子')).toHaveLength(round);
+  }
+  expect(asks).toHaveLength(4);
+  const savedUrl = page.url();
+  await page.reload();
+  await expect(composer).toHaveValue('');
+  await expect(page.locator('.conversation-latest').getByText('请再举一个例子', { exact: true })).toBeVisible();
+  expect(page.url()).toBe(savedUrl);
+  expect(asks).toHaveLength(4); // Refresh restores; it must not call the model.
+
+  await page.locator('.conversation-latest').getByRole('button', { name: '换成两课时', exact: true }).click();
+  await expect(page.getByRole('button', { name: '开始提问', exact: true })).toBeVisible();
+  expect(asks).toHaveLength(5);
+  expect(asks.at(-1).history.at(-1).role).toBe('assistant');
+  expect(asks.at(-1).history.some(item => item.content === asks.at(-1).followUpInstruction)).toBe(false);
+  expect(asks.at(-1).lessonContext.periods).toBe(2);
+  expect(asks.at(-1).lessonIdentity.title).toContain('岳阳楼记');
+
   const evidence = page.locator('.conversation-latest details.raw-evidence');
   await evidence.getByText('查看原文片段与页码').click();
   await evidence.locator('a').first().click();
@@ -55,6 +86,8 @@ test('login recovery preserves the question through continuous Q&A, finalization
   await expect(page.locator('#teacher-plan-editor')).toBeInViewport();
   await page.getByRole('button', { name: /确认本版并生成三卡|生成板书与三卡/ }).click();
   await expect(page.getByRole('heading', { name: '三张卡，分别对应课堂中的三个动作' })).toBeVisible();
+
+  await page.locator('.card-editor').screenshot({ path: test.info().outputPath('teacher-card-editor.png') });
 
   for (const cardName of ['板书卡', '提问卡', '评价卡']) {
     await page.getByRole('button', { name: new RegExp(cardName) }).first().click();

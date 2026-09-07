@@ -765,7 +765,8 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   // Keep enough output budget for the actual teaching workflow. The UI now
   // renders this as a readable two-part document instead of truncating it into
   // a dense single-screen summary.
-  const reviewInstruction = [...history].reverse().find(item => item?.role === 'user' && typeof item.content === 'string')?.content || '';
+  const cardInstruction = expectedCardTypes.length ? [...history].reverse().find(item => item?.role === 'user' && typeof item.content === 'string')?.content : '';
+  const reviewInstruction = followUpInstruction || cardInstruction || question;
   const planningQuestion = expectedCardTypes.length ? '' : question;
   const workflow = await runStructuredReviewLoop({
     model,

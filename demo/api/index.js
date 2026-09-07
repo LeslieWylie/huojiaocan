@@ -72,15 +72,27 @@ function normalizedConversationHistory(value = []) {
  * teacher-confirmed status. Merge the two without silently discarding either.
  */
 export function mergeAskHistory(stored = [], recent = []) {
-  const merged = [];
-  const seen = new Set();
-  for (const item of [...normalizedConversationHistory(stored), ...normalizedConversationHistory(recent)]) {
-    const key = `${item.role}:${item.content}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(item);
-  }
-  return merged.slice(-10);
+  const baseline = normalizedConversationHistory(stored);
+  const local = normalizedConversationHistory(recent);
+  const equal = (left, right) => left.role === right.role && left.content === right.content;
+  const contains = (whole, part) => part.length <= whole.length && whole.some((_, start) =>
+    start + part.length <= whole.length && part.every((item, index) => equal(item, whole[start + index])));
+  // A stale tab can return an older window, not necessarily the latest suffix.
+  // Reconcile whole sequences: repeated questions are legitimate new turns.
+  if (!local.length || contains(baseline, local)) return baseline.slice(-10);
+  if (!baseline.length || contains(local, baseline)) return local.slice(-10);
+  let overlap = Math.min(baseline.length, local.length);
+  while (overlap > 0 && !baseline.slice(-overlap).every((item, index) => equal(item, local[index]))) overlap -= 1;
+  return [...baseline, ...local.slice(overlap)].slice(-10);
+}
+
+export function completedAskHistory(history = [], currentQuestion = '', followUpInstruction = '') {
+  const completed = normalizedConversationHistory(history);
+  const pending = new Set([currentQuestion, followUpInstruction].map(value => String(value || '').trim().slice(0, 1800)).filter(Boolean));
+  // Legacy clients appended a pending quick action to history as well as the
+  // current request. Remove only that unmatched tail, never a completed turn.
+  while (completed.at(-1)?.role === 'user' && pending.has(completed.at(-1).content)) completed.pop();
+  return completed.slice(-10);
 }
 
 function askDeadlineAt(env = process.env) {
@@ -178,9 +190,7 @@ export function previousLessonCarryoverContext(value = {}) {
 }
 
 function storedConversationHistory(value) {
-  return (Array.isArray(value) ? value : []).filter(item => item && ['user', 'assistant'].includes(item.role) && typeof item.content === 'string')
-    .slice(-10)
-    .map(item => ({ role: item.role, content: item.content.slice(0, 1200) }));
+  return normalizedConversationHistory(value).slice(-10);
 }
 
 function storedLessonIdentity(draft = {}) {
@@ -305,7 +315,16 @@ function publicDocument(document = {}) {
 
 async function filterAccessibleDocuments(req, documents = []) {
   const list = Array.isArray(documents) ? documents : [];
-  const owned = hasBearerToken(req) ? await ownedDocumentIds(req) : new Set();
+  let owned = new Set();
+  if (hasBearerToken(req)) {
+    try {
+      owned = await ownedDocumentIds(req);
+    } catch (error) {
+      // Only catalogue listing degrades to anonymous public books when the
+      // session cannot be verified. Private reads and AI still require auth.
+      if (!(error instanceof AuthError)) throw error;
+    }
+  }
   return list.filter(document => publicDocument(document) || owned.has(String(document.id || document.documentId || '')));
 }
 
@@ -467,7 +486,7 @@ export default async function handler(req, res) {
           // Keep the account draft as the durable baseline, but merge any
           // newer locally recovered turns so a temporary save failure does
           // not make the next follow-up forget the conversation.
-          history: mergeAskHistory(ownedContext?.history, body.history),
+          history: completedAskHistory(mergeAskHistory(ownedContext?.history, body.history), body.question, body.followUpInstruction),
           teacherReflectionContext,
           lessonContext,
           lessonIdentity: ownedContext?.lessonIdentity || (body.lessonIdentity && typeof body.lessonIdentity === 'object' ? body.lessonIdentity : undefined),

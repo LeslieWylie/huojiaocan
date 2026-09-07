@@ -643,3 +643,8 @@
 .inspect-toolbar>div:last-child{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.inspect-toolbar>div:last-child input{width:76px;min-height:40px;border:1px solid var(--line);border-radius:9px;text-align:center;color:#285c53;background:#fff}.inspect-toolbar>div:last-child button,.inspect-toolbar>div:last-child a,.source-tabs button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;font-size:13px;text-decoration:none}
 .decision-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.decision-grid article{display:flex;flex-direction:column;min-width:0;padding:22px;border:1px solid var(--line);border-top:4px solid #c3943f;border-radius:14px;background:#fbfdfc}.decision-grid article:nth-child(2){border-top-color:#6c9bbb}.decision-grid article:nth-child(3){border-top-color:#8f78b8}.decision-grid h3{margin:14px 0 8px;font-size:20px;line-height:1.45}.decision-grid p{margin:0;color:#657b74;font-size:15px;line-height:1.75}.decision-grid a{display:inline-flex;align-items:center;gap:6px;min-height:40px;margin-top:auto;padding-top:14px;color:#286d61;font-size:14px;font-weight:800;text-decoration:none}.decision-grid a svg{width:16px}
 @media(max-width:800px){.decision-grid{grid-template-columns:1fr}.inspect-toolbar{align-items:flex-start}.inspect-toolbar>div:last-child{width:100%}.inspect-toolbar>div:last-child a{flex:1}}
+
+/* Cards editor: dependent plan controls must not replace unsaved card text. */
+.cards-edit-dependent { border: 0; padding: 0; margin: 0; min-width: 0; }
+.cards-edit-dependent:disabled { opacity: .65; }
+.cards-edit-recovery { padding: 1rem; border: 1px solid currentColor; }

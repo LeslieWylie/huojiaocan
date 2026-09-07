@@ -129,7 +129,7 @@ test('1.6 classroom co-creation keeps live notes lightweight and teacher-confirm
   assert.doesNotMatch(appSource, /studentName|classroomAudio|classroomVideo/u);
   assert.match(stylesSource, /\.classroom-record-strip/u);
   assert.match(stylesSource, /\.classroom-session:fullscreen/u);
-  assert.match(appSource, /const current = dirty \? await save\(cards\) : draft/u);
+  assert.match(appSource, /const current = dirty \? await save\(cards, \{ nested: true \}\) : draft/u);
   assert.match(appSource, /version: current\.version/u);
 });
 

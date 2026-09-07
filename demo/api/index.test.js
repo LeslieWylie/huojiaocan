@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import handler, { aggregateLearningContext, classAdaptationPlanContext, confirmedDeliberationContext, confirmedHomeworkReviewContext, mergeAskHistory, ownedClassLearningContext, ownedDraftAskContext, ownedDraftTeachingContext, previousLessonCarryoverContext } from './index.js';
+import handler, { aggregateLearningContext, classAdaptationPlanContext, confirmedDeliberationContext, confirmedHomeworkReviewContext, completedAskHistory, mergeAskHistory, ownedClassLearningContext, ownedDraftAskContext, ownedDraftTeachingContext, previousLessonCarryoverContext } from './index.js';
 
 const envKeys = ['DOCUMENT_INDEX_PROVIDER', 'PAGEINDEX_BASE_URL', 'PAGEINDEX_API_KEY', 'PAGEINDEX_API_PREFIX', 'PAGEINDEX_TIMEOUT_MS', 'ALLOW_INDEX_PROVIDER_FALLBACK', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'INDEX_MAINTAINER_EMAILS'];
 const originalEnv = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
@@ -23,6 +23,34 @@ test('saved and locally recovered turns are merged without losing a follow-up', 
     { role: 'assistant', content: '先核对篇目和三类材料。' },
     { role: 'user', content: '那如何调整为两课时？' }
   ]);
+});
+
+test('history preserves completed repeated teacher questions and assistant answers', () => {
+  const turns = [
+    { role: 'user', content: '请再举一个例子' },
+    { role: 'assistant', content: '从景物与情感关系入手。' },
+    { role: 'user', content: '请再举一个例子' },
+    { role: 'assistant', content: '这次比较阴晴两景。' }
+  ];
+  assert.deepEqual(mergeAskHistory(turns, turns), turns);
+});
+
+test('an older contained browser snapshot must not append stale turns after the latest answer', () => {
+  const turns = [
+    { role: 'user', content: '从哪里开始？' },
+    { role: 'assistant', content: '先比较两景。' },
+    { role: 'user', content: '然后呢？' },
+    { role: 'assistant', content: '再讨论古仁人之心。' }
+  ];
+  assert.deepEqual(mergeAskHistory(turns, turns.slice(0, 2)), turns);
+  assert.deepEqual(mergeAskHistory(turns.slice(0, 2), turns), turns);
+});
+
+test('only the unpaired current instruction is removed from legacy history', () => {
+  const completed = [{ role: 'user', content: '再举一个例子' }, { role: 'assistant', content: '比较两景。' }];
+  assert.deepEqual(completedAskHistory([...completed, { role: 'user', content: '再举一个例子' }], '再举一个例子'), completed);
+  assert.deepEqual(completedAskHistory(completed, '再举一个例子'), completed);
+  assert.deepEqual(completedAskHistory([{ role: 'user', content: '旧问题' }], '新问题'), [{ role: 'user', content: '旧问题' }]);
 });
 
 test('confirmed teaching choices become teacher context but never textbook evidence', () => {
@@ -114,7 +142,7 @@ test('saved draft ask context owns lesson identity and history', { concurrency: 
   global.fetch = async () => new Response(JSON.stringify([{
     id: 'draft-1', title: '我爱这土地怎么备课', question: '怎样理解土地意象？',
     lesson_context: { periods: 2, lessonRef: { title: '我爱这土地', nodeId: 'textbook-u1-n4' } },
-    answer: { lesson: { title: '我爱这土地怎么备课', coreQuestion: '土地意象如何推进情感？' }, conversationHistory: [{ role: 'user', content: '先分析意象' }, { role: 'assistant', content: '先回到原文。' }] },
+    answer: { lesson: { title: '我爱这土地怎么备课', coreQuestion: '土地意象如何推进情感？' }, conversationHistory: [{ role: 'user', content: '先分析意象' }, { role: 'assistant', content: '先回到原文。'.repeat(300) }] },
     citations: [], cards: []
   }]), { status: 200, headers: { 'content-type': 'application/json' } });
   try {
@@ -122,6 +150,8 @@ test('saved draft ask context owns lesson identity and history', { concurrency: 
     assert.equal(context.lessonIdentity.title, '《我爱这土地》');
     assert.equal(context.lessonContext.periods, 2);
     assert.deepEqual(context.history.map(item => item.role), ['user', 'assistant']);
+    const local = [{ role: 'user', content: '先分析意象' }, { role: 'assistant', content: '先回到原文。'.repeat(300) }];
+    assert.equal(mergeAskHistory(context.history, local).length, 2, 'saved and browser histories use the same text window');
   } finally {
     global.fetch = previousFetch;
     if (previousUrl === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previousUrl;
@@ -357,8 +387,8 @@ test('index API contract', { concurrency: false }, async t => {
     assert.deepEqual(otherCatalog.payload.documents.map(document => document.id), ['textbook', 'teacher-guide', 'curriculum-standard']);
 
     const invalidCatalog = await request('/documents', { headers: { authorization: 'Bearer invalid-token' } });
-    assert.equal(invalidCatalog.statusCode, 401);
-    assert.deepEqual(invalidCatalog.payload, { ok: false, error: 'auth_invalid' });
+    assert.equal(invalidCatalog.statusCode, 200);
+    assert.deepEqual(invalidCatalog.payload.documents.map(document => document.id), ['textbook', 'teacher-guide', 'curriculum-standard']);
 
     const anonymousPrivatePage = await request('/documents/private-doc/pages/1', { headers: {} });
     assert.equal(anonymousPrivatePage.statusCode, 404);

@@ -93,7 +93,10 @@ test('grounded gateway prose cannot replace trusted citation identity', async t 
 test('follow-up instruction cannot replace the fixed lesson identity', async t => {
   const originalFetch = global.fetch;
   t.after(() => { global.fetch = originalFetch; });
-  global.fetch = async () => new Response(JSON.stringify({
+  const requests = [];
+  global.fetch = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({
     model: 'test-model',
     choices: [{ message: { content: JSON.stringify({
       lesson: { title: '换成两课时设计', coreQuestion: '换成两课时设计' },
@@ -102,11 +105,13 @@ test('follow-up instruction cannot replace the fixed lesson identity', async t =
       threeCardSuggestions: { board: ['景物描写 → 迁客悲喜 → 先忧后乐'], question: ['回到第3、4段，比较两种景象'], assessment: ['学生能够引用原文说明情景关系'] }
     }) } }]
   }), { status: 200 });
+  };
 
   const result = await generateGroundedAnswer({
     question: '怎样备课《岳阳楼记》？',
     lessonIdentity: { title: '《岳阳楼记》', coreQuestion: '作者如何由写景转入先忧后乐的价值判断？' },
     followUpInstruction: '请保持当前篇目与核心问题，改为两课时设计。',
+    history: [{ role: 'user', content: '先按一课时安排' }, { role: 'assistant', content: '上一版为一课时。' }],
     scope: ['textbook', 'teacher-guide'],
     evidence,
     env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-secret', LLM_GATEWAY_MODEL: 'test-model', LLM_ANSWER_MODE: 'gateway' }
@@ -115,6 +120,11 @@ test('follow-up instruction cannot replace the fixed lesson identity', async t =
   assert.equal(result.answer.lesson.title, '《岳阳楼记》');
   assert.equal(result.answer.lesson.coreQuestion, '作者如何由写景转入先忧后乐的价值判断？');
   assert.match(result.answer.summary, /第一课时/u);
+  const reviews = requests.flatMap(request => request.messages).flatMap(message => {
+    try { const payload = JSON.parse(message.content); return payload.reviewInstruction ? [payload] : []; } catch { return []; }
+  });
+  assert.ok(reviews.length > 0, 'the actual model review request was captured');
+  assert.ok(reviews.every(review => review.reviewInstruction === '请保持当前篇目与核心问题，改为两课时设计。'));
 });
 
 test('prompt keeps three material roles distinct and asks for a complete evidence workflow', async t => {

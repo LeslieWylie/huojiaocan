@@ -18,6 +18,7 @@ import { analyzeTeachingPlanQuality } from '../lesson-quality.js';
 import { classroomAdaptationAdvice } from '../../shared/classroom-adaptation.js';
 import { buildOfflineClassroomPack } from '../../shared/offline-classroom-pack.js';
 import { preClassPulseClassroomCue } from '../../shared/preclass-pulse.js';
+import { clearCardEdits, readCardEdits, recoverEditableCards, writeCardEdits } from '../../shared/cards-edit-recovery.js';
 
 export function Cards() {
 
@@ -29,6 +30,9 @@ export function Cards() {
   const [planDirty, setPlanDirty] = useState(false);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [locking, setLocking] = useState('');
+  const [recoveryConflict, setRecoveryConflict] = useState(null);
+  const [cardNotice, setCardNotice] = useState('');
   const [copying, setCopying] = useState(false);
   const [generating, setGenerating] = useState('');
   const [generationStage, setGenerationStage] = useState(0);
@@ -70,12 +74,20 @@ export function Cards() {
   const classroomSaveRef = useRef(false);
   const cardsLoadRef = useRef(0);
   const generationRequestRef = useRef(false);
+  const cardRequestRef = useRef(false);
+  const loadedScopeRef = useRef('');
+  const editorBusy = busy || saving || Boolean(locking || generating || historyWorking) || feedbackSaving || classroomSaving;
+  const cardsBlocked = editorBusy || Boolean(recoveryConflict);
   const draftId = params.get('draftId') || params.get('id') || '';
   const userId = String(session?.user?.id || '');
   const cardsReaderReturn = draftId ? `/cards/?draftId=${encodeURIComponent(draftId)}` : 'cards';
 
   useEffect(() => {
     const loadId = ++cardsLoadRef.current;
+    loadedScopeRef.current = '';
+    cardRequestRef.current = false; generationRequestRef.current = false;
+    setSaving(false); setLocking(''); setGenerating('');
+    setRecoveryConflict(null); setCardNotice('');
     setDraft(null); setCards([]); setPlanForm(planFormFromDraft()); setPlanDirty(false); setDirty(false); setHistory(null); setBusy(true); setError(''); setErrorCode(''); setRepairMessage(''); setFeedbackForm(normalizeFeedbackForm()); setFeedbackAdvice([]); setFeedbackDirty(false); setFeedbackMessage(''); setClassroom(false); setClassroomRun(emptyClassroomRun()); setClassroomDirty(false); setClassroomKeyword(''); setClassroomMoment(''); setClassroomClock(Date.now()); setClassroomNotice(''); setClassroomConflictRun(null); setWritingRehearsal(false); setPlanEditorOpen(false); setSupportToolsOpen(false); setExportNotice(''); classroomSaveRef.current = false;
     if (!userId) {
       setError('请先登录，再打开课堂设计。为保护账号资料，身份未知时不会读取任何课堂草稿缓存。');
@@ -100,8 +112,18 @@ export function Cards() {
         const recovery = readClassroomRecovery(userId, draftId);
         const resolvedRecovery = resolveClassroomRecovery(serverRun, next.version, recovery);
         const nextRun = resolvedRecovery.classroomRun;
+        loadedScopeRef.current = `${userId}:${draftId}`;
         setDraft(next);
-        setCards(loadedCards);
+        const edits = readCardEdits(localStorage, userId, draftId);
+        if (edits && edits.version === next.version) {
+          const recoveredCards = recoverEditableCards(loadedCards, edits.cards);
+          setCards(recoveredCards);
+          setDirty(JSON.stringify(recoveredCards) !== JSON.stringify(loadedCards));
+          setCardNotice('已恢复本机未保存的三卡修改，请检查后保存。');
+        } else {
+          setCards(loadedCards);
+          if (edits) setRecoveryConflict(edits);
+        }
         setPlanForm(planFormFromDraft(next));
         setFeedbackForm(nextFeedback);
         setFeedbackAdvice(feedbackAdviceFromForm(nextFeedback));
@@ -122,12 +144,17 @@ export function Cards() {
       })
       .catch(err => {
         if (loadId !== cardsLoadRef.current) return;
-        const cached = readDraftRecovery(userId, draftId);
+        const cached = readDraftRecovery(localStorage, userId, draftId);
         if (cached) {
           const cachedFeedback = normalizeFeedbackForm(cached.draft?.answer?.lessonReflection || cached.draft?.answer?.teachingFeedback || {});
           const cachedRecovery = readClassroomRecovery(userId, draftId);
           const cachedRun = cachedRecovery?.classroomRun || normalizeClassroomRun(cached.draft?.answer?.classroomRun || {});
+          loadedScopeRef.current = `${userId}:${draftId}`;
           setDraft(cached.draft);
+          const pendingEdits = readCardEdits(localStorage, userId, draftId);
+          if (pendingEdits && pendingEdits.version !== cached.draft.version) setRecoveryConflict(pendingEdits);
+          setDirty(true);
+          setCardNotice('当前为本机恢复内容，尚未确认保存到账号。');
           setCards(withBoardPlan(cached.cards, cached.draft?.answer?.lesson?.coreQuestion || cached.draft?.question || cached.draft?.title || ''));
           setPlanForm(planFormFromDraft(cached.draft));
           setFeedbackForm(cachedFeedback);
@@ -144,7 +171,36 @@ export function Cards() {
     return () => { cardsLoadRef.current += 1; };
   }, [draftId, userId, session?.access_token]);
 
-  useEffect(() => { if (userId && draftId && draft) cacheDraftForRecovery(userId, draftId, draft, cards); }, [userId, draftId, draft, cards]);
+  useEffect(() => {
+    if (busy || !userId || !draftId || !draft || loadedScopeRef.current !== `${userId}:${draftId}`) return;
+    cacheDraftForRecovery(userId, draftId, draft, cards);
+    if (recoveryConflict) return; // Never overwrite an unresolved local version.
+    if (dirty) {
+      if (!writeCardEdits(localStorage, userId, draftId, draft.version, cards)) {
+        setCardNotice('本机暂存失败，请勿离页；请先保存修改到账号。');
+      }
+    } else clearCardEdits(localStorage, userId, draftId);
+  }, [busy, userId, draftId, draft, cards, dirty, recoveryConflict]);
+
+  useEffect(() => {
+    if (!dirty && !planDirty && !feedbackDirty && !classroomDirty && !saving && !locking && !generating && !recoveryConflict) return;
+    const warnBeforeLeaving = event => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [dirty, planDirty, feedbackDirty, classroomDirty, saving, locking, generating, recoveryConflict]);
+
+  const resolveCardRecovery = useLocal => {
+    if (useLocal) {
+      const recoveredCards = recoverEditableCards(cards, recoveryConflict.cards);
+      setCards(recoveredCards);
+      setDirty(JSON.stringify(recoveredCards) !== JSON.stringify(cards));
+      setCardNotice('已恢复本机文字；账号中已锁定的卡片保持不变，请检查后保存。');
+    } else {
+      clearCardEdits(localStorage, userId, draftId);
+      setCardNotice('已使用账号版本。');
+    }
+    setRecoveryConflict(null);
+  };
 
   useEffect(() => {
     let active = true;
@@ -177,15 +233,17 @@ export function Cards() {
     setAssetMessage('');
   };
 
-  const savePlan = async () => {
-    if (!draftId || !draft) return null;
+  const savePlan = async (base = draft, { nested = false } = {}) => {
+    if (!draftId || !base || (!nested && (cardsBlocked || dirty || cardRequestRef.current || generationRequestRef.current))) return null;
+    const loadId = cardsLoadRef.current;
     setSaving(true); setError(''); setErrorCode(''); setAssetMessage('');
     try {
-      const update = applyPlanForm(draft, planForm);
+      const update = applyPlanForm(base, planForm);
       const data = await rootRequest('/api/drafts/' + encodeURIComponent(draftId), {
         method: 'PATCH',
-        body: { ...update, version: draft.version }
+        body: { ...update, version: base.version }
       });
+      if (loadId !== cardsLoadRef.current) return null;
       const saved = data.draft || data;
       setDraft(saved);
       setCards(withBoardPlan(Array.isArray(saved.cards) ? saved.cards : cards, saved.answer?.lesson?.coreQuestion || saved.question || saved.title || ''));
@@ -194,10 +252,11 @@ export function Cards() {
       setAssetMessage('当前方案修改已保存，可以确认本版。');
       return saved;
     } catch (err) {
+      if (loadId !== cardsLoadRef.current) return null;
       setError(askErrorMessage(err)); setErrorCode(requestCode(err));
       return null;
     } finally {
-      setSaving(false);
+      if (loadId === cardsLoadRef.current) setSaving(false);
     }
   };
 
@@ -241,23 +300,23 @@ export function Cards() {
   };
 
   const confirmAndGenerate = async () => {
-    if (!draftId || generationRequestRef.current) return;
+    if (!draftId || cardsBlocked || cardRequestRef.current || generationRequestRef.current) return;
     generationRequestRef.current = true;
-    const current = planDirty ? await savePlan() : draft;
-    if (!current) {
-      generationRequestRef.current = false;
-      return;
-    }
+    const loadId = cardsLoadRef.current;
     setGenerating('all'); setError(''); setErrorCode(''); setAssetMessage('');
     let keyId = '';
     try { keyId = sessionStorage.getItem('activeDeepSeekKeyId') || ''; } catch {}
     try {
+      const savedCards = dirty ? await save(cards, { nested: true }) : draft;
+      const current = savedCards && (planDirty ? await savePlan(savedCards, { nested: true }) : savedCards);
+      if (!current || loadId !== cardsLoadRef.current) return;
       let confirmed = current;
       if (!isTeacherConfirmed(current)) {
         const confirmation = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/confirm`, {
           method: 'POST',
           body: { version: current.version }
         });
+        if (loadId !== cardsLoadRef.current) return;
         confirmed = confirmation.draft || confirmation;
         setDraft(confirmed);
       }
@@ -272,6 +331,7 @@ export function Cards() {
       } catch (generationError) {
         if (requestCode(generationError) !== 'edit_conflict') throw generationError;
         const refreshedData = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}`);
+        if (loadId !== cardsLoadRef.current) return;
         const refreshed = refreshedData.draft || refreshedData;
         setDraft(refreshed);
         if (Array.isArray(refreshed.cards) && refreshed.cards.length) {
@@ -283,6 +343,7 @@ export function Cards() {
           throw generationError;
         }
       }
+      if (loadId !== cardsLoadRef.current) return;
       const saved = data.draft || data;
       const generatedCards = withBoardPlan(Array.isArray(saved.cards) ? saved.cards : [], saved.answer?.lesson?.coreQuestion || saved.question || saved.title || '');
       setDraft(saved); setCards(generatedCards); setPlanForm(planFormFromDraft(saved)); setPlanDirty(false); setDirty(false);
@@ -294,22 +355,21 @@ export function Cards() {
         ? '三卡已保存：系统先形成初稿，再核对教材依据与课堂节奏，并完成了必要修订。'
         : '三卡已保存：系统已完成初稿与教材依据、课堂可用性审校。');
     } catch (err) {
+      if (loadId !== cardsLoadRef.current) return;
       const code = requestCode(err);
       setError(code === 'plan_incomplete' ? '这份方案还缺少完整的课堂流程、问题链或评价标准，请回到问答补齐后再确认。' : code === 'evidence_insufficient' ? '当前方案还没有足够的教材页级依据，请先补充并核验原始页面。' : askErrorMessage(err));
       setErrorCode(code);
     } finally {
-      setGenerating('');
-      generationRequestRef.current = false;
+      if (loadId === cardsLoadRef.current) { setGenerating(''); generationRequestRef.current = false; }
     }
   };
 
-  const save = async next => {
+  const save = async (next, { nested = false } = {}) => {
+    if (!draftId || !draft || (!nested && (cardsBlocked || cardRequestRef.current || generationRequestRef.current))) return null;
+    if (!nested) cardRequestRef.current = true;
+    const loadId = cardsLoadRef.current;
     const prepared = withBoardPlan(next, draft?.question || '');
     setCards(prepared);
-    if (!draftId) {
-      setDirty(false);
-      return draft;
-    }
     setSaving(true);
     setError('');
     setErrorCode('');
@@ -320,20 +380,27 @@ export function Cards() {
         method: 'POST',
         body: { cards: outboundCards, version: draft && draft.version }
       });
+      if (loadId !== cardsLoadRef.current) return null;
       const saved = data.draft || draft;
       setDraft(saved);
       setCards(Array.isArray(saved.cards) ? saved.cards : prepared);
       setDirty(false);
+      setCardNotice('三卡修改已保存到账号。');
       return saved;
     } catch (err) {
+      if (loadId !== cardsLoadRef.current) return null;
       setError(askErrorMessage(err)); setErrorCode(requestCode(err));
       return null;
     } finally {
-      setSaving(false);
+      if (loadId === cardsLoadRef.current) {
+        setSaving(false);
+        if (!nested) cardRequestRef.current = false;
+      }
     }
   };
 
   const updateItem = (cardIndex, itemIndex, value) => {
+    if (cardsBlocked || cardRequestRef.current || generationRequestRef.current) return;
     const next = cards.map((card, cardPosition) => {
       if (cardPosition !== cardIndex || card.status === 'locked') return card;
       return { ...card, items: (card.items || []).map((item, itemPosition) => itemPosition === itemIndex ? { ...item, text: value } : item) };
@@ -341,27 +408,39 @@ export function Cards() {
     setCards(next);
     setActiveCard(cardIndex);
     setDirty(true);
+    setCardNotice('');
   };
 
   const lock = async card => {
+    if (cardsBlocked || cardRequestRef.current || generationRequestRef.current || card.status === 'locked') return;
     if (!window.confirm(`锁定“${card.title}”后将不能继续编辑或重新生成。确认把当前内容作为课堂版本吗？`)) return;
-    const current = dirty ? await save(cards) : draft;
-    if (!current) return;
+    const loadId = cardsLoadRef.current;
+    cardRequestRef.current = true;
+    setLocking(card.id); setError(''); setErrorCode('');
     try {
+      const current = dirty ? await save(cards, { nested: true }) : draft;
+      if (!current) return;
       const data = await rootRequest('/api/drafts/' + draftId + '/cards/' + card.id + '/lock', { method: 'POST', body: { version: current.version } });
-      const next = data.draft || draft;
+      if (loadId !== cardsLoadRef.current) return;
+      const next = data.draft || current;
       setDraft(next);
       setCards(next.cards || cards);
       setDirty(false);
+      setCardNotice(`${card.title}已锁定。`);
     } catch (err) {
+      if (loadId !== cardsLoadRef.current) return null;
       setError(askErrorMessage(err)); setErrorCode(requestCode(err));
+    } finally {
+      if (loadId === cardsLoadRef.current) { cardRequestRef.current = false; setLocking(''); }
     }
   };
 
   const saveAndViewNext = async () => {
+    if (cardsBlocked || cardRequestRef.current || generationRequestRef.current) return;
+    const nextIndex = Math.min(activeCard + 1, Math.max(0, cards.length - 1));
     const saved = dirty ? await save(cards) : draft;
     if (!saved) return;
-    setActiveCard(index => Math.min(index + 1, Math.max(0, cards.length - 1)));
+    setActiveCard(nextIndex);
     requestAnimationFrame(() => document.getElementById('card-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
@@ -383,19 +462,22 @@ export function Cards() {
   };
 
   const regenerate = async card => {
-    if (card.status === 'locked' || generating) return;
-    const current = dirty ? await save(cards) : draft;
-    if (!current) return;
+    if (card.status === 'locked' || cardsBlocked || cardRequestRef.current || generationRequestRef.current) return;
+    const loadId = cardsLoadRef.current;
+    generationRequestRef.current = true;
     setGenerating(card.id);
     setError('');
     setErrorCode('');
     let keyId = '';
     try { keyId = sessionStorage.getItem('activeDeepSeekKeyId') || ''; } catch {}
     try {
+      const current = dirty ? await save(cards, { nested: true }) : draft;
+      if (!current) return;
       const data = await rootRequest('/api/drafts/' + draftId + '/cards/' + card.id + '/regenerate', {
         method: 'POST',
         body: { keyId: keyId || undefined, version: current.version }
       });
+      if (loadId !== cardsLoadRef.current) return;
       const next = data.draft || draft;
       setDraft(next);
       setCards(withBoardPlan(next.cards || cards, next.answer?.lesson?.coreQuestion || next.question || next.title || ''));
@@ -404,9 +486,10 @@ export function Cards() {
         ? `${card.title}已重做，并完成教材依据、课堂节奏与格式修订。`
         : `${card.title}已重做，并完成教材依据与课堂可用性审校。`);
     } catch (err) {
+      if (loadId !== cardsLoadRef.current) return null;
       setError(askErrorMessage(err)); setErrorCode(requestCode(err));
     } finally {
-      setGenerating('');
+      if (loadId === cardsLoadRef.current) { setGenerating(''); generationRequestRef.current = false; }
     }
   };
 
@@ -653,7 +736,7 @@ ${sourceNote}`;
     finally { setHistoryWorking(''); }
   };
   const restoreHistory = async revisionId => {
-    if (!draftId || !revisionId || !draft) return;
+    if (!draftId || !revisionId || !draft || cardsBlocked || dirty || planDirty) return;
     setHistoryWorking(`restore:${revisionId}`); setError('');
     try {
       const data = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/restore`, { method: 'POST', body: { revisionId, version: draft.version } });
@@ -759,7 +842,7 @@ ${sourceNote}`;
   const showPlanEditor = !workflowState.teacherConfirmed || !workflowState.cardsGenerated || planDirty || planEditorOpen;
   const lockedCardCount = cards.filter(card => card?.status === 'locked').length;
   const scrollToSection = id => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  const workflowGuideStep = !workflowState.teacherConfirmed || workflowState.unsavedChanges ? 0 : !workflowState.cardsGenerated ? 1 : dirty || !allCardsLocked ? 2 : 3;
+  const workflowGuideStep = !workflowState.teacherConfirmed || planDirty ? 0 : !workflowState.cardsGenerated ? 1 : dirty || !allCardsLocked ? 2 : 3;
   const workflowGuide = [
     ['核对方案', '检查课堂主线、目标与教材依据'],
     ['生成三卡', '依据已确认方案形成板书、提问和评价'],
@@ -774,7 +857,7 @@ ${sourceNote}`;
   ][workflowGuideStep];
   const citationNeedsReview = errorCode === 'citation_text_mismatch';
   const generationFailed = /^(gateway|deepseek|card_generation|evidence_)/u.test(errorCode);
-  const noticeTitle = ['auth_required','auth_invalid'].includes(errorCode) ? '登录后继续编辑课堂设计' : errorCode === 'draft_missing' ? '还没有选定备课方案' : errorCode === 'draft_not_found' ? '这份备课方案暂时无法读取' : citationNeedsReview ? '教材依据已更新，请重新核对' : generationFailed ? workflowState.cardsGenerated ? '本卡暂时无法重新生成' : '三卡暂时没有生成' : '课堂设计暂时没有打开';
+  const noticeTitle = ['auth_required','auth_invalid'].includes(errorCode) ? '登录后继续编辑课堂设计' : errorCode === 'draft_missing' ? '还没有选定备课方案' : errorCode === 'draft_not_found' ? '这份备课方案暂时无法读取' : citationNeedsReview ? '教材依据已更新，请重新核对' : generationFailed ? workflowState.cardsGenerated ? '本卡暂时无法重新生成' : '三卡暂时没有生成' : draft ? '本次操作未完成' : '课堂设计暂时没有打开';
   const noticeBody = ['auth_required','auth_invalid'].includes(errorCode) ? '为保护不同账号的课堂资料，只有确认当前账号后才会读取该账号自己的本机恢复副本。' : errorCode === 'draft_missing' ? '先在备课问答中提出问题，保存方案后再进入这里。' : errorCode === 'draft_not_found' ? '可能是链接已过期，或这份方案不属于当前账号。请回到备课问答重新建立方案。' : citationNeedsReview ? '教材页码或摘录发生变化。你的方案和教师修改仍在，请重新核对教材依据后再确认。' : generationFailed && workflowState.cardsGenerated ? `当前三卡和教师修改都已保留。${error || '请稍后再试。'}` : error || '请稍后重试，或回到备课问答重新建立方案。';
   const workflowCopy = CARD_META[currentCard?.type]?.action || '把教材依据转成课堂行动';
   const classroomCta = classroomRun.status === 'in_progress' ? '继续本节课堂' : classroomRun.status === 'pending_review' ? '完成课后复盘' : classroomRun.status === 'confirmed' ? '查看课堂记录' : '开始上课并记录';
@@ -860,6 +943,8 @@ ${sourceNote}`;
     </section>
     {error && <section className="cards-alert" role="alert"><div className="cards-alert-icon"><CircleAlert/></div><div className="cards-alert-copy"><b>{noticeTitle}</b><p>{noticeBody}</p></div><div className="cards-alert-actions">{['auth_required','auth_invalid'].includes(errorCode) && <a className="primary" href={'/login/?next=' + encodeURIComponent(location.pathname + location.search)} onClick={() => rememberAuthReturn({ draftId })}>重新登录</a>}{citationNeedsReview && <button type="button" className="primary" onClick={confirmAndGenerate} disabled={Boolean(generating) || saving}><RefreshCw/>{generating ? '正在重试' : '重新核对并重试'}</button>}{isTeacherConfirmed(draft) && !workflowState.cardsGenerated && /^(gateway|deepseek|card_generation|evidence_)/u.test(errorCode) && <button type="button" className="primary" onClick={confirmAndGenerate} disabled={Boolean(generating)}><RefreshCw/>重试生成三卡</button>}<a href={draftId ? `/ask/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}>{citationNeedsReview ? '回到本课问答核对依据' : draftId ? '返回本课问答' : '返回备课问答'}</a>{errorCode === 'draft_not_found' && <button type="button" onClick={() => location.reload()}><RefreshCw/>重新读取</button>}</div></section>}
     {busy ? <section className="panel cards-loading-skeleton" aria-label="正在读取课堂设计" aria-busy="true"><span className="sr-only">正在读取课堂设计…</span><div className="skeleton-line skeleton-title"/><div className="skeleton-line skeleton-copy"/><div className="skeleton-card-row"><i/><i/><i/></div></section> : showEmpty ? null : <>
+        {recoveryConflict && <div className="cards-edit-recovery" role="alert"><b>账号版本已更新，本机还有未保存修改</b><p>请选择使用哪份内容。恢复本机文字不会改动账号中已锁定的卡片。</p><button type="button" onClick={() => resolveCardRecovery(true)}>保留本机修改（待保存）</button><button type="button" onClick={() => resolveCardRecovery(false)}>使用账号版本</button></div>}
+        {cardNotice && <p role="status">{cardNotice}</p>}
       {assetMessage && <section className="quality-box"><CheckCircle2/><span>{assetMessage}</span><a href="/assets/">查看教研资产库</a></section>}
       {repairMessage && <section className="cards-repair-notice" role="status"><CheckCircle2/><span>{repairMessage}</span></section>}
       {exportNotice && <section className="quality-box offline-pack-notice"><CheckCircle2/><span>{exportNotice}</span><small>下载的 HTML 可以离线打开和打印；导出不会改动账号中的课堂记录。</small></section>}
@@ -882,21 +967,21 @@ ${sourceNote}`;
       {showPlanEditor && <section className="panel teacher-plan-editor" id="teacher-plan-editor">
         <header><div><span>教师定稿台</span><h2>把模型整理的方案改成你要带进课堂的版本</h2><p>先修改，再保存当前修改；确认本版后才会生成板书与三卡。</p></div><Badge tone={planDirty ? 'orange' : 'green'}>{planDirty ? '有未确认修改' : '当前修改已保存'}</Badge></header>
         <div className="teacher-plan-grid">
-          <label className="wide"><span>方案标题</span><input value={planForm.title} onChange={event => updatePlanField('title', event.target.value)}/></label>
-          <label><span>课时</span><input type="number" min="1" max="8" value={planForm.periods} onChange={event => updatePlanField('periods', event.target.value)}/></label>
-          <label><span>任教班级</span><input value={planForm.className} maxLength="40" onChange={event => updatePlanField('className', event.target.value)} placeholder="例如：九年级 3 班"/></label>
-          <label><span>班级情况</span><input value={planForm.classLevel} onChange={event => updatePlanField('classLevel', event.target.value)} placeholder="例如：基础较扎实"/></label>
-          <label><span>教学方式</span><input value={planForm.teachingMode} onChange={event => updatePlanField('teachingMode', event.target.value)} placeholder="例如：朗读探究"/></label>
-          <label className={`wide ${planForm.summary ? '' : 'empty'}`}><span>课堂主线</span><textarea rows="3" value={planForm.summary} onChange={event => updatePlanField('summary', event.target.value)} placeholder="用一两句话说明：学生围绕什么问题，经过哪些活动，最终形成什么理解。"/>{!planForm.summary && <small>本轮回答还没有形成课堂主线，请先补充后再定稿。</small>}</label>
-          <label className={`wide ${planForm.objectives ? '' : 'empty'}`}><span>教学目标（每行一项）</span><textarea rows="3" value={planForm.objectives} onChange={event => updatePlanField('objectives', event.target.value)} placeholder="写可观察的学习结果，例如：学生能够结合反语词句说明雨果的立场。"/>{!planForm.objectives && <small>未从当前方案中读取到明确目标，不会用空白内容生成三卡。</small>}</label>
-          <label className={`wide ${planForm.keyPoints ? '' : 'empty'}`}><span>教学重点与学习难点（每行一项）</span><textarea rows="3" value={planForm.keyPoints} onChange={event => updatePlanField('keyPoints', event.target.value)} placeholder="重点写本课必须学会的内容；难点写学生最可能卡住的理解。"/>{!planForm.keyPoints && <small>请至少补充一项重点或难点，再确认本版。</small>}</label>
-          <label className="wide"><span>本课目标补充</span><input value={planForm.teachingGoal} onChange={event => updatePlanField('teachingGoal', event.target.value)} placeholder="教师希望学生最终能够……"/></label>
+          <label className="wide"><span>方案标题</span><input disabled={cardsBlocked} value={planForm.title} onChange={event => updatePlanField('title', event.target.value)}/></label>
+          <label><span>课时</span><input disabled={cardsBlocked} type="number" min="1" max="8" value={planForm.periods} onChange={event => updatePlanField('periods', event.target.value)}/></label>
+          <label><span>任教班级</span><input disabled={cardsBlocked} value={planForm.className} maxLength="40" onChange={event => updatePlanField('className', event.target.value)} placeholder="例如：九年级 3 班"/></label>
+          <label><span>班级情况</span><input disabled={cardsBlocked} value={planForm.classLevel} onChange={event => updatePlanField('classLevel', event.target.value)} placeholder="例如：基础较扎实"/></label>
+          <label><span>教学方式</span><input disabled={cardsBlocked} value={planForm.teachingMode} onChange={event => updatePlanField('teachingMode', event.target.value)} placeholder="例如：朗读探究"/></label>
+          <label className={`wide ${planForm.summary ? '' : 'empty'}`}><span>课堂主线</span><textarea disabled={cardsBlocked} rows="3" value={planForm.summary} onChange={event => updatePlanField('summary', event.target.value)} placeholder="用一两句话说明：学生围绕什么问题，经过哪些活动，最终形成什么理解。"/>{!planForm.summary && <small>本轮回答还没有形成课堂主线，请先补充后再定稿。</small>}</label>
+          <label className={`wide ${planForm.objectives ? '' : 'empty'}`}><span>教学目标（每行一项）</span><textarea disabled={cardsBlocked} rows="3" value={planForm.objectives} onChange={event => updatePlanField('objectives', event.target.value)} placeholder="写可观察的学习结果，例如：学生能够结合反语词句说明雨果的立场。"/>{!planForm.objectives && <small>未从当前方案中读取到明确目标，不会用空白内容生成三卡。</small>}</label>
+          <label className={`wide ${planForm.keyPoints ? '' : 'empty'}`}><span>教学重点与学习难点（每行一项）</span><textarea disabled={cardsBlocked} rows="3" value={planForm.keyPoints} onChange={event => updatePlanField('keyPoints', event.target.value)} placeholder="重点写本课必须学会的内容；难点写学生最可能卡住的理解。"/>{!planForm.keyPoints && <small>请至少补充一项重点或难点，再确认本版。</small>}</label>
+          <label className="wide"><span>本课目标补充</span><input disabled={cardsBlocked} value={planForm.teachingGoal} onChange={event => updatePlanField('teachingGoal', event.target.value)} placeholder="教师希望学生最终能够……"/></label>
         </div>
-        <footer><div><b>{!planFormReady && !workflowState.teacherConfirmed ? '先补齐课堂主线、目标与重难点' : workflowState.teacherConfirmed ? '本版已经确认' : '确认前请检查'}</b><small>{!planFormReady && !workflowState.teacherConfirmed ? '缺失内容会在上方明确标出；系统不会拿空表单生成三卡。' : workflowState.teacherConfirmed ? '可以直接生成三卡；失败重试不会重复确认，也不会丢失这份定稿。' : '篇目、课时、目标、重难点和材料依据是否符合你的班级。'}</small></div><button type="button" onClick={savePlan} disabled={saving || !planDirty}>{saving ? '正在保存…' : '保存当前修改'}</button><button type="button" className="primary" onClick={confirmAndGenerate} disabled={saving || Boolean(generating) || planDirty || (!planFormReady && !workflowState.teacherConfirmed)}>{generating === 'all' ? CARD_GENERATION_STEPS[generationStage] : !workflowState.teacherConfirmed && workflowState.cardsGenerated ? '确认本版并重新生成三卡' : workflowState.cardsGenerated ? '重新生成未锁定三卡' : workflowState.teacherConfirmed ? '生成板书与三卡' : '确认本版并生成三卡'}</button></footer>
+        <footer><div><b>{!planFormReady && !workflowState.teacherConfirmed ? '先补齐课堂主线、目标与重难点' : workflowState.teacherConfirmed ? '本版已经确认' : '确认前请检查'}</b><small>{!planFormReady && !workflowState.teacherConfirmed ? '缺失内容会在上方明确标出；系统不会拿空表单生成三卡。' : workflowState.teacherConfirmed ? '可以直接生成三卡；失败重试不会重复确认，也不会丢失这份定稿。' : '篇目、课时、目标、重难点和材料依据是否符合你的班级。'}</small></div><button type="button" onClick={() => savePlan()} title={dirty ? '请先保存三卡修改，或直接确认并生成' : undefined} disabled={cardsBlocked || dirty || !planDirty}>{saving ? '正在保存…' : '保存当前修改'}</button><button type="button" className="primary" onClick={confirmAndGenerate} disabled={cardsBlocked || (!planFormReady && !workflowState.teacherConfirmed)}>{generating === 'all' ? CARD_GENERATION_STEPS[generationStage] : !workflowState.teacherConfirmed && workflowState.cardsGenerated ? '确认本版并重新生成三卡' : workflowState.cardsGenerated ? '重新生成未锁定三卡' : workflowState.teacherConfirmed ? '生成板书与三卡' : '确认本版并生成三卡'}</button></footer>
       </section>}
       {generating && <section className="panel card-generation-progress" role="status" aria-live="polite"><div className="card-generation-spinner"><Activity/></div><div><span>{generating === 'all' ? '正在生成一课三卡' : '正在重新生成当前卡片'}</span><h2>{CARD_GENERATION_STEPS[generationStage]}</h2><p>系统会先形成课堂初稿，再核对教师用书、学生教材、问题递进和评价标准。页面可以停留在这里，原有内容会保留到新结果完整保存。</p><ol>{CARD_GENERATION_STEPS.map((step, index) => <li className={index < generationStage ? 'done' : index === generationStage ? 'active' : ''} key={step}><i>{index < generationStage ? <Check size={13}/> : index + 1}</i><b>{step}</b></li>)}</ol></div></section>}
-      {(!workflowState.cardsGenerated || supportToolsOpen) && <PeriodPlanner draft={draft} onSaved={saved => { setDraft(saved); setCards(withBoardPlan(Array.isArray(saved.cards) ? saved.cards : cards, saved.answer?.lesson?.coreQuestion || saved.question || saved.title || '')); setPlanForm(planFormFromDraft(saved)); }} />}
-      {history && <section className="panel cards-history"><header><div><span>方案历史</span><h2>先对比，再决定是否恢复</h2><p>恢复会把方案带回所选版本；当前已锁定的课堂卡片不会被覆盖。</p></div><button type="button" onClick={() => setHistory(null)}><X/>关闭</button></header><div>{(history.versions || []).length ? history.versions.map(item => <article key={item.id}><b>{item.id === 'current' ? '当前' : `V${item.version || '—'}`}</b><span>{item.id === 'current' ? '当前方案' : item.reason || '已保存版本'}</span><small>{item.updatedAt || item.createdAt ? new Date(item.updatedAt || item.createdAt).toLocaleString() : '—'}</small>{item.id === 'current' ? <Badge tone="green">正在使用</Badge> : <div className="cards-history-actions"><button type="button" onClick={() => compareHistory(item.id)} disabled={Boolean(historyWorking)}>{historyWorking === `compare:${item.id}` ? '对比中…' : '对比当前'}</button><button type="button" onClick={() => restoreHistory(item.id)} disabled={Boolean(historyWorking)}>{historyWorking === `restore:${item.id}` ? '恢复中…' : '恢复此版'}</button></div>}</article>) : <p>当前还没有可回看的历史版本。</p>}</div>{history.comparison && <div className="asset-comparison"><header><b>与当前方案的差异</b><small>{history.comparison.changed ? `${history.comparison.changes.length} 处变化` : '主要内容一致'}</small></header>{history.comparison.changes?.length ? <ul>{history.comparison.changes.map(change => <li key={change.field}><b>{change.label}</b><span>旧版：{change.before}</span><span>当前：{change.after}</span></li>)}</ul> : <p>所选版本与当前方案的主要内容一致。</p>}</div>}</section>}
+      {(!workflowState.cardsGenerated || supportToolsOpen) && <fieldset className="cards-edit-dependent" disabled={cardsBlocked || dirty || planDirty}><PeriodPlanner draft={draft} onSaved={saved => { setDraft(saved); setCards(withBoardPlan(Array.isArray(saved.cards) ? saved.cards : cards, saved.answer?.lesson?.coreQuestion || saved.question || saved.title || '')); setPlanForm(planFormFromDraft(saved)); }} /></fieldset>}
+      {history && <section className="panel cards-history"><header><div><span>方案历史</span><h2>先对比，再决定是否恢复</h2><p>恢复会把方案带回所选版本；当前已锁定的课堂卡片不会被覆盖。</p></div><button type="button" onClick={() => setHistory(null)}><X/>关闭</button></header><div>{(history.versions || []).length ? history.versions.map(item => <article key={item.id}><b>{item.id === 'current' ? '当前' : `V${item.version || '—'}`}</b><span>{item.id === 'current' ? '当前方案' : item.reason || '已保存版本'}</span><small>{item.updatedAt || item.createdAt ? new Date(item.updatedAt || item.createdAt).toLocaleString() : '—'}</small>{item.id === 'current' ? <Badge tone="green">正在使用</Badge> : <div className="cards-history-actions"><button type="button" onClick={() => compareHistory(item.id)} disabled={Boolean(historyWorking)}>{historyWorking === `compare:${item.id}` ? '对比中…' : '对比当前'}</button><button type="button" onClick={() => restoreHistory(item.id)} disabled={cardsBlocked || dirty || planDirty}>{historyWorking === `restore:${item.id}` ? '恢复中…' : '恢复此版'}</button></div>}</article>) : <p>当前还没有可回看的历史版本。</p>}</div>{history.comparison && <div className="asset-comparison"><header><b>与当前方案的差异</b><small>{history.comparison.changed ? `${history.comparison.changes.length} 处变化` : '主要内容一致'}</small></header>{history.comparison.changes?.length ? <ul>{history.comparison.changes.map(change => <li key={change.field}><b>{change.label}</b><span>旧版：{change.before}</span><span>当前：{change.after}</span></li>)}</ul> : <p>所选版本与当前方案的主要内容一致。</p>}</div>}</section>}
       {!workflowState.cardsGenerated && <section className="panel cards-generation-gate"><div><FileCheck2/></div><span>下一步</span><h2>教师确认后再生成板书与三卡</h2><p>当前只有可编辑的方案草稿。保存修改并点击“确认本版”后，系统才会调用生成服务；不会把问答阶段的模型建议冒充为最终卡片。</p></section>}
       {workflowState.cardsGenerated && <>
       {supportToolsOpen && <><TeachingBrief brief={teachingBrief}/><TeachingEvidenceChain chain={teachingEvidenceChain} returnTo={cardsReaderReturn}/><section className="worksheet-entry panel"><div className="worksheet-entry-mark"><FileText/><span>03</span></div><div><span>正式课堂材料</span><h2>把定稿三卡整理成学生页与教师页</h2><p>学生页只给任务和学生教材页码；教师页保留观察要点与教师用书依据。下载后可以分别打印，不会把参考提示提前交给学生。</p></div><a className="primary" href={`/worksheet/?draftId=${encodeURIComponent(draftId)}`}>生成双页课堂任务单 <ArrowRight/></a></section></>}
@@ -909,16 +994,18 @@ ${sourceNote}`;
       </section>
         <footer className="board-preview-footer"><div className="board-step-tabs" aria-label="板书展开步骤">{stages.map((stage, index) => <button type="button" className={revealed === index + 1 ? 'active' : ''} aria-current={revealed === index + 1 ? 'step' : undefined} key={stage} onClick={() => setRevealed(index + 1)}><span>0{index + 1}</span>{stage}</button>)}</div><button type="button" className="primary" onClick={startClassroom} disabled={!classroomReady}><Maximize2/>{classroomButtonCopy}</button></footer>
       </section>
-      <section className="card-workspace panel" id="card-workspace">
+      <section className="card-workspace panel" id="card-workspace" aria-busy={editorBusy}>
+
         <header className="card-workspace-head"><div><span>课堂产物</span><h2>三张卡，分别对应课堂中的三个动作</h2><p>先选一张卡作为主编辑区；每条内容都可以修改、保存、锁定，并从依据芯片回到真实教材页面。</p></div><Badge tone="gold">{currentCard?.status === 'locked' ? '当前卡已锁定' : workflowCopy}</Badge></header>
-        <nav className="card-nav" aria-label="选择课堂卡片">{cards.map((card, index) => <button type="button" className={`card-nav-item card-nav-${card.type}${activeCard === index ? ' active' : ''}`} aria-current={activeCard === index ? 'step' : undefined} onClick={() => setActiveCard(index)} key={card.id || (card.type + '-' + index)}><span className="card-nav-number">0{index + 1}</span><span><small className="card-nav-role">{CARD_META[card.type]?.role || '课堂行动'}</small><b>{card.title}</b><small>{card.subtitle || '把教材依据整理成课堂动作'}</small></span><em>{card.status === 'locked' ? '已锁定' : (card.items || []).length + ' 项内容'}</em><ChevronRight/></button>)}</nav>
+        <nav className="card-nav" aria-label="选择课堂卡片">{cards.map((card, index) => <button type="button" className={`card-nav-item card-nav-${card.type}${activeCard === index ? ' active' : ''}`} aria-current={activeCard === index ? 'step' : undefined} onClick={() => setActiveCard(index)} disabled={cardsBlocked} key={card.id || (card.type + '-' + index)}><span className="card-nav-number">0{index + 1}</span><span><small className="card-nav-role">{CARD_META[card.type]?.role || '课堂行动'}</small><b>{card.title}</b><small>{card.subtitle || '把教材依据整理成课堂动作'}</small></span><em>{card.status === 'locked' ? '已锁定' : (card.items || []).length + ' 项内容'}</em><ChevronRight/></button>)}</nav>
         <div className="card-editor-layout">
           {currentCard && <article className={`card-editor card-editor-${currentCard.type}`}>
             <header className="card-editor-head"><div><span className="card-editor-kicker">{workflowCopy}</span><h3>{currentCard.title}</h3><p>{currentCard.subtitle || '把教材依据整理成课堂动作'}</p></div><Badge tone={currentCard.status === 'locked' ? 'gold' : dirty ? 'orange' : 'green'}>{currentCard.status === 'locked' ? '已锁定' : dirty ? '待保存' : '已保存'}</Badge></header>
             <div className="card-ribbon"><span>{workflowCopy}</span><i/></div>
             <div className="card-editor-guidance"><Sparkles/><div><b>这一张卡怎么写</b><p>{cardEditGuidance(currentCard.type)}</p></div></div>
-            <ul className="card-items">{(currentCard.items || []).length ? (currentCard.items || []).map((item, itemIndex) => <li key={item.id || (currentCard.id + '-' + itemIndex)}><div className="card-item-mark"><Check/></div><div className="card-item-body"><textarea rows={3} value={item.text || ''} disabled={currentCard.status === 'locked'} onChange={event => updateItem(activeCard, itemIndex, event.target.value)} aria-label={currentCard.title + '第' + (itemIndex + 1) + '项'}/><div className="card-item-meta"><span>0{itemIndex + 1}</span><span className="source-type-chip">{sourceTypeLabel(item.sourceType)}</span>{cardItemNeedsDetail(currentCard.type, item.text) && currentCard.status !== 'locked' && <span className="detail-needed-chip">建议补全</span>}<CardSourceList citations={(draft && draft.citations) || []} refs={item.citationIds} returnTo={cardsReaderReturn}/></div></div></li>) : <li className="card-empty"><Sparkles/><span>这张卡暂时还没有内容。可以回到备课问答重新生成，也可以先保留这张卡，稍后补写。</span></li>}</ul>
-            <footer className="card-actions"><span className={'save-state ' + (dirty ? 'pending' : '')}>{saving ? '正在保存…' : dirty ? '有未保存修改' : '内容已保存'}</span>{currentCard.status !== 'locked' ? <>{activeCard < cards.length - 1 ? <button type="button" className="primary" onClick={saveAndViewNext} disabled={saving}>{saving ? '保存中…' : '保存并查看下一张'}</button> : <button type="button" onClick={() => save(cards)} disabled={saving || !dirty}>{saving ? '保存中' : '保存修改'}</button>}{workflowState.teacherConfirmed ? <><button type="button" onClick={() => regenerate(currentCard)} disabled={Boolean(generating)}>{generating === currentCard.id ? '正在依据中生成' : currentCard.items?.some(item => cardItemNeedsDetail(currentCard.type, item.text)) ? '补全本卡' : '重新生成本卡'}</button><button type="button" onClick={() => lock(currentCard)} disabled={saving}>锁定本卡</button></> : <button type="button" onClick={() => scrollToSection('teacher-plan-editor')}>先确认上方方案</button>}</> : <button type="button" className="copy-version-action" onClick={copyVersion} disabled={copying}><Plus/>{copying ? '正在复制…' : '复制为新版本'}</button>}<a href={draftId ? `/ask/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}>回到本课问答</a></footer>
+            <ul className="card-items">{(currentCard.items || []).length ? (currentCard.items || []).map((item, itemIndex) => <li key={item.id || (currentCard.id + '-' + itemIndex)}><div className="card-item-mark"><Check/></div><div className="card-item-body"><textarea rows={3} value={item.text || ''} disabled={currentCard.status === 'locked' || cardsBlocked} onChange={event => updateItem(activeCard, itemIndex, event.target.value)} aria-label={currentCard.title + '第' + (itemIndex + 1) + '项'}/><div className="card-item-meta"><span>0{itemIndex + 1}</span><span className="source-type-chip">{sourceTypeLabel(item.sourceType)}</span>{cardItemNeedsDetail(currentCard.type, item.text) && currentCard.status !== 'locked' && <span className="detail-needed-chip">建议补全</span>}<CardSourceList citations={(draft && draft.citations) || []} refs={item.citationIds} returnTo={cardsReaderReturn}/></div></div></li>) : <li className="card-empty"><Sparkles/><span>这张卡暂时还没有内容。可以回到备课问答重新生成，也可以先保留这张卡，稍后补写。</span></li>}</ul>
+            {error && <p role="alert">{dirty ? '修改尚未保存，内容仍保留在本页。' : '本次操作未完成，原有内容仍保留。'}{error}</p>}
+            <footer className="card-actions"><span className={'save-state ' + (dirty ? 'pending' : '')}>{locking ? '正在锁定…' : generating ? '正在生成…' : saving ? '正在保存…' : dirty ? '有未保存修改' : '内容已保存'}</span>{currentCard.status !== 'locked' ? <>{activeCard < cards.length - 1 ? <button type="button" className="primary" onClick={saveAndViewNext} disabled={cardsBlocked}>{saving ? '保存中…' : '保存并查看下一张'}</button> : <button type="button" onClick={() => save(cards)} disabled={cardsBlocked || !dirty}>{saving ? '保存中' : '保存修改'}</button>}{workflowState.teacherConfirmed ? <><button type="button" onClick={() => regenerate(currentCard)} disabled={cardsBlocked}>{generating === currentCard.id ? '正在依据中生成' : currentCard.items?.some(item => cardItemNeedsDetail(currentCard.type, item.text)) ? '补全本卡' : '重新生成本卡'}</button><button type="button" onClick={() => lock(currentCard)} disabled={cardsBlocked}>{locking === currentCard.id ? '锁定中…' : '锁定本卡'}</button></> : <button type="button" onClick={() => scrollToSection('teacher-plan-editor')}>先确认上方方案</button>}</> : <button type="button" className="copy-version-action" onClick={copyVersion} disabled={copying || cardsBlocked || dirty}><Plus/>{copying ? '正在复制…' : '复制为新版本'}</button>}<a href={draftId ? `/ask/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}>回到本课问答</a></footer>
           </article>}
           <aside className="card-editor-rail"><div className="rail-note"><span>当前动作</span><b>{workflowCopy}</b><p>{CARD_META[currentCard?.type]?.rail || '把教材依据转成可以直接使用的课堂行动。'}</p></div><div className="rail-note rail-paper"><span>依据提示</span><b>优先看教师用书</b><p>教师用书中的教学建议优先作为课堂组织参考；学生教材用于锁定原文、任务和学习证据。</p></div></aside>
         </div>
