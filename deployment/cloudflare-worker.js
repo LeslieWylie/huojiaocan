@@ -4,9 +4,11 @@
  * 固定代理到 Vercel 生产别名，避免成为开放代理。模型网关、模型名称和密钥
  * 均不在此处配置；它们只能存在于 Vercel 服务端环境变量中。
  */
-addEventListener('fetch', (event) => {
-  event.respondWith(handleRequest(event.request));
-});
+export default {
+  fetch(request, env) {
+    return handleRequest(request, env);
+  }
+};
 
 const ORIGIN = 'https://live-teacher-guide-roy-leos-projects.vercel.app';
 const MATERIAL_ORIGIN = 'https://huojiaocan-materials.pages.dev';
@@ -44,8 +46,11 @@ const SECURITY_HEADERS = {
   'X-Robots-Tag': 'noindex, nofollow, noarchive',
 };
 
-async function handleRequest(request) {
+async function handleRequest(request, env = {}) {
   const incoming = new URL(request.url);
+  if (incoming.pathname.startsWith('/api/agent/')) {
+    return proxyAgentRuntime(request, env);
+  }
   const isMaterialPdf = incoming.pathname.startsWith('/materials/') && incoming.pathname.toLowerCase().endsWith('.pdf');
   const materialName = isMaterialPdf ? decodeURIComponent(incoming.pathname.replace(/^\/materials\//, '')) : '';
   const materialOnVercel = isMaterialPdf && VERCEL_MATERIALS.has(materialName);
@@ -166,6 +171,27 @@ async function handleRequest(request) {
   });
 }
 
+async function proxyAgentRuntime(request, env) {
+  if (!env.AGENT_RUNTIME?.fetch) {
+    const headers = new Headers({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+    return new Response(JSON.stringify({ ok: false, error: 'agent_runtime_not_enabled' }), { status: 404, headers });
+  }
+  let upstream;
+  try {
+    upstream = await env.AGENT_RUNTIME.fetch(request);
+  } catch {
+    return createUpstreamErrorResponse();
+  }
+  const headers = new Headers(upstream.headers);
+  for (const name of ['server', 'x-powered-by', 'access-control-allow-origin']) headers.delete(name);
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+  headers.set('Cache-Control', 'no-store, max-age=0');
+  headers.set('CDN-Cache-Control', 'no-store');
+  headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+  return new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
+}
+
 function parseRange(value, size) {
   const match = /^bytes=(\d*)-(\d*)$/.exec(String(value || '').trim());
   if (!match) return null;
@@ -205,3 +231,5 @@ function rewriteOriginRedirect(headers, incoming) {
     // 非法 Location 交由浏览器按原响应处理，不扩大代理范围。
   }
 }
+
+export { handleRequest, proxyAgentRuntime };

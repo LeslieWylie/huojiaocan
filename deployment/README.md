@@ -17,3 +17,12 @@ Worker 不接受用户指定上游地址，因此不是开放代理。它负责�
 2026 年 8 月 6 日，V1.1 已重新部署到 Vercel，并将 `live-teacher-guide.vercel.app` 重新指向最新生产实例。Cloudflare 固定入口已通过 ego lite 回归。
 
 模型网关配置不属于 Worker。`LLM_GATEWAY_API_KEY` 等敏感值只能保存于 Vercel 服务端环境变量，不能提交到源码。
+
+## 持久 Agent 路由
+
+源码现已改为 Module Worker。配置 `AGENT_RUNTIME` Service Binding 后，只有 `/api/agent/*` 由
+`huojiaocan-agent-runtime` 处理，其余页面、现有 API 和教材 PDF 仍走原 Vercel/Pages 固定源站。
+绑定缺失时 Agent 路径固定返回 `404 agent_runtime_not_enabled`，不会落回 Vercel 同名路径或开放任意上游。
+
+该路由代码尚未发布；必须先完成 `deployment/agent-runtime/README.md` 中的 PostgreSQL、Hyperdrive、Queue、
+测试账号白名单和内部教学执行器前置条件。

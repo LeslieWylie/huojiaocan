@@ -14,8 +14,8 @@
 
 ## 验证
 
-- PGlite PostgreSQL 兼容集成测试 12 项通过：重复 requestId、并发领取、租约过期、接管上限、取消、事件顺序、账号隔离、保存失败不重跑模型、执行错误终态和白名单关闭边界。
-- Wrangler 4.129.0 dry-run 通过，Worker 产物 256.64 KiB，gzip 53.62 KiB。
+- PGlite PostgreSQL 兼容及代理契约测试 14 项通过：重复 requestId、并发领取、租约过期、接管上限、取消、事件顺序、账号隔离、保存失败不重跑模型、执行错误终态、白名单关闭边界和 Service Binding 路由。
+- Wrangler 4.129.0 dry-run 通过，Worker 产物 256.80 KiB，gzip 53.67 KiB。
 - 迁移由已安装 OpenMAIC 包的 `AGENT_SESSION_PG_SCHEMA` 生成，避免手抄上游六表定义后漂移。
 
 ## 还不能声称上线

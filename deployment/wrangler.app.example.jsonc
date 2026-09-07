@@ -1,0 +1,13 @@
+{
+  "$schema": "./agent-runtime/node_modules/wrangler/config-schema.json",
+  "name": "app",
+  "main": "cloudflare-worker.js",
+  "compatibility_date": "2026-09-07",
+  "workers_dev": true,
+  "services": [
+    {
+      "binding": "AGENT_RUNTIME",
+      "service": "huojiaocan-agent-runtime"
+    }
+  ]
+}

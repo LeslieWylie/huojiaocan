@@ -39,6 +39,9 @@ function sessionView(session, requests = []) {
 export async function handleAgentRequest(request, { runtime, user }) {
   const url = new URL(request.url);
   const path = url.pathname.replace(/^\/api\/agent/, '') || '/';
+  if (path === '/capabilities' && request.method === 'GET') {
+    return json({ enabled: true, version: 1, transport: 'sse', maxRunMs: runtime.limits.deadlineMs });
+  }
   if (path === '/sessions' && request.method === 'POST') {
     const input = await body(request);
     const session = await runtime.createSession(user.id, input);
