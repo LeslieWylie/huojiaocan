@@ -253,17 +253,16 @@ function safeCoreQuestion(value, lessonTitle) {
 }
 
 function boardPlanFromItems(items, coreQuestion, previous = {}) {
-  const names = ['文本发现', '关键依据', '课堂归纳'];
   const clean = (Array.isArray(items) ? items : [])
     .filter(item => String(item?.text || '').trim())
     .slice(0, 9);
   return {
     version: Number(previous.version) || 1,
     coreQuestion,
-    branches: names.map((title, index) => ({
-      id: `branch-${index + 1}`,
-      title,
-      nodes: clean.filter((_, itemIndex) => itemIndex % names.length === index)
+    branches: Array.from({ length: Math.ceil(clean.length / 3) }, (_, index) => ({
+      id: `writing-${index + 1}`,
+      title: `落笔 ${clean.slice(index * 3, index * 3 + 3).map((_, offset) => index * 3 + offset + 1).join('、')}`,
+      nodes: clean.slice(index * 3, index * 3 + 3)
         .map(item => ({ id: item.id, text: item.text, citationIds: Array.isArray(item.citationIds) ? item.citationIds : [] }))
     })),
     blankZones: Array.isArray(previous.blankZones) && previous.blankZones.length

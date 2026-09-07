@@ -70,3 +70,14 @@ test('one and two board columns stay centered instead of leaving a phantom third
   assert.deepEqual(buildBoardPresentation({ items: items.slice(0, 2) }).branches.map(branch => branch.x), [700]);
   assert.deepEqual(buildBoardPresentation({ items: items.slice(0, 5) }).branches.map(branch => branch.x), [450, 950]);
 });
+
+
+test('server-generated legacy round robin is also neutralized after text edits', () => {
+  const original = items.slice(0, 5);
+  const boardPlan = { version: 1, branches: ['文本发现', '关键依据', '课堂归纳'].map((title, i) => ({ id: `branch-${i + 1}`, title, nodes: original.filter((_, index) => index % 3 === i) })) };
+  const edited = original.map((item, i) => i ? item : { ...item, text: '教师修改的文字' });
+  const board = buildBoardPresentation({ items: edited, boardPlan });
+  assert.deepEqual(board.branches.map(branch => branch.title), ['落笔 1、2、3', '落笔 4、5']);
+  assert.deepEqual(board.branches.map(branch => branch.x), [450, 950]);
+  assert.equal(board.branches[0].items[0].text, '教师修改的文字');
+});

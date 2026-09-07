@@ -187,7 +187,6 @@ export function normalizeCards(source, citations = [], coreQuestion = '', previo
   });
 }
 export function makeBoardPlan(items = [], coreQuestion = '') {
-  const branches = ['文本结构', '语言证据', '情感主旨'];
   const nodes = (Array.isArray(items) ? items : [])
     .filter(item => String(item?.text || '').trim())
     .slice(0, 9)
@@ -204,10 +203,10 @@ export function makeBoardPlan(items = [], coreQuestion = '') {
   return {
     version: 1,
     coreQuestion: safeQuestion || '学生读完后要带走什么？',
-    branches: branches.map((title, branchIndex) => ({
-      id: `branch-${branchIndex + 1}`,
-      title,
-      nodes: nodes.filter((_, index) => index % branches.length === branchIndex).map(item => ({ id: item.id, text: item.text, label: item.label, citationIds: item.citationIds || [] }))
+    branches: Array.from({ length: Math.ceil(nodes.length / 3) }, (_, branchIndex) => ({
+      id: `writing-${branchIndex + 1}`,
+      title: `落笔 ${nodes.slice(branchIndex * 3, branchIndex * 3 + 3).map((_, offset) => branchIndex * 3 + offset + 1).join('、')}`,
+      nodes: nodes.slice(branchIndex * 3, branchIndex * 3 + 3).map(item => ({ id: item.id, text: item.text, label: item.label, citationIds: item.citationIds || [] }))
     })),
     blankZones: ['学生关键词', '教师补写', '课堂生成结论'],
     stage: 1

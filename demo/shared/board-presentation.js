@@ -19,7 +19,9 @@ export function resolveBoardQuestion(...candidates) {
 // Recognize only the exact old makeBoardPlan round-robin shape, not arbitrary
 // plans that happen to use these headings. It carries no semantic evidence.
 function isLegacyRoundRobin(plan, items) {
-  const titles = ['文本结构', '语言证据', '情感主旨'];
+  const titles = [['文本结构', '语言证据', '情感主旨'], ['文本发现', '关键依据', '课堂归纳']]
+    .find(labels => plan?.branches?.every((branch, index) => branch?.title === labels[index]));
+  if (!titles) return false;
   return plan?.version === 1 && plan.branches?.length === 3 && plan.branches.every((branch, index) => {
     const expected = items.filter((_, position) => position % 3 === index);
     return branch?.id === `branch-${index + 1}` && branch.title === titles[index]
