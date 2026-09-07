@@ -88,7 +88,8 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
     async completeJson({ messages, maxTokens = 4200, temperature = 0.2 } = {}) {
       if (!Array.isArray(messages) || !messages.length) throw new GatewayError('gateway_invalid_request');
       if (!usePersonalDeepSeek && !gatewayReady) throw new GatewayError('gateway_not_configured');
-      const completion = await withBoundedRetry(() => {
+      let repairFormat = false;
+      return withBoundedRetry(async () => {
         // Recompute the timeout for every retry. A second attempt receives
         // only the time that is still available, never a fresh full budget.
         const callTimeoutMs = Math.min(
@@ -100,15 +101,16 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
         const requestedMaxTokens = !usePersonalDeepSeek && gatewayMaxTokens(config.maxTokens)
           ? Math.min(maxTokens, gatewayMaxTokens(config.maxTokens))
           : maxTokens;
-        return usePersonalDeepSeek
+        const effectiveMessages = repairFormat ? [...messages, { role: 'user', content: '上一份输出未形成完整可解析的 JSON。本次重新输出一个完整 JSON 对象；不续写、不加代码块，压缩重复说明以保证闭合。保留教材依据、核心课堂任务和全部必需字段，sourceChecks最多3条；不要添加材料外信息。' }] : messages;
+        const completion = await (usePersonalDeepSeek
           ? createDeepSeekClient({
               apiKey: deepseek.apiKey,
               model: deepseek.model,
               timeout: callTimeoutMs
-            }).chat({ messages, responseFormat: true, maxTokens: requestedMaxTokens })
+            }).chat({ messages: effectiveMessages, responseFormat: true, maxTokens: requestedMaxTokens })
           : callGatewayChatCompletion(
               {
-                messages,
+                messages: effectiveMessages,
                 temperature,
                 maxTokens: requestedMaxTokens,
                 stream: false,
@@ -116,15 +118,16 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
                 response_format: { type: 'json_object' }
               },
               { env, model: config.gatewayModel || config.textModel, timeoutMs: callTimeoutMs }
-            );
+            ));
+        const value = parseStructuredJson(completion.content);
+        if (!value || completion.finishReason === 'length') {
+          repairFormat = true;
+          const error = usePersonalDeepSeek ? new DeepSeekError('deepseek_invalid_response') : new GatewayError('gateway_invalid_response');
+          error.retryable = true;
+          throw error;
+        }
+        return { completion, value };
       }, remainingMs, retryDelayMs(env));
-
-      const value = parseStructuredJson(completion.content);
-      if (!value) {
-        if (usePersonalDeepSeek) throw new DeepSeekError('deepseek_invalid_response');
-        throw new GatewayError('gateway_invalid_response');
-      }
-      return { completion, value };
     }
   };
 }

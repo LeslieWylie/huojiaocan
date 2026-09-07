@@ -179,3 +179,24 @@ test('expired shared workflow deadline never starts a fresh model budget', async
   await assert.rejects(model.completeJson({ messages: [{ role: 'user', content: 'test' }] }), /gateway_timeout/);
   assert.equal(calls, 0);
 });
+
+test('malformed or truncated JSON gets one bounded format repair, not an endless retry', async t => {
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return Response.json({ model: 'test', choices: [{ finish_reason: requests.length === 1 ? 'length' : 'stop', message: { content: requests.length === 1 ? '{"answer":"未闭合' : '{"answer":"完整对象"}' } }] });
+  });
+  const model = createStructuredModel({ env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test', AI_RETRY_DELAY_MS: '0' } });
+  assert.deepEqual((await model.completeJson({ messages: [{ role: 'user', content: '本轮问题' }] })).value, { answer: '完整对象' });
+  assert.equal(requests.length, 2);
+  assert.match(requests[1].messages.at(-1).content, /重新输出一个完整 JSON 对象/u);
+  assert.doesNotMatch(JSON.stringify(requests[1].messages), /未闭合/u);
+});
+
+test('persistent invalid JSON stops after two transport attempts', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return Response.json({ choices: [{ message: { content: 'not json' } }] }); });
+  const model = createStructuredModel({ env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test', AI_RETRY_DELAY_MS: '0' } });
+  await assert.rejects(model.completeJson({ messages: [{ role: 'user', content: 'test' }] }), /gateway_invalid_response/);
+  assert.equal(calls, 2);
+});

@@ -65,3 +65,8 @@ test('prefer a specific classroom question to generated templates and authoring 
   assert.equal(resolveBoardQuestion('怎样备课'), '核心问题待补充');
   assert.deepEqual(normalizeBoardCards([{ type: 'board', content: ['旧板书'] }])[0].items[0], { id: 'board-legacy-0', text: '旧板书', citationIds: [] });
 });
+
+test('one and two board columns stay centered instead of leaving a phantom third branch', () => {
+  assert.deepEqual(buildBoardPresentation({ items: items.slice(0, 2) }).branches.map(branch => branch.x), [700]);
+  assert.deepEqual(buildBoardPresentation({ items: items.slice(0, 5) }).branches.map(branch => branch.x), [450, 950]);
+});

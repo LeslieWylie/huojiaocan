@@ -707,7 +707,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
       })
     }
   ];
-  messages[0].content += '\n' + SOURCE_REVIEW_RULE;
+  messages[0].content += '\n' + SOURCE_REVIEW_RULE + ' sourceChecks最多3条，优先核对本轮争议；不要为每条常识重复记录。';
   messages[0].content += '\n\n补充的三源材料使用规则：课程标准说明“这个学段要发展什么能力、达到什么学业质量”；教师用书帮助理解编写意图和可供取舍的教学建议；学生教材说明“学生实际读什么、依据什么作答”。先引用直接命中的课程标准原文确认学段要求，再核对教师用书中的课时定位、教学目标、重点难点、活动建议、问题链、作业与评价，结合班情取舍，最后回到学生教材核对课文、段落、助学任务和可引用词句。不得把某篇课文与某个学习任务群的关系写成课标原话；除非有教师确认，必须标注“待教师确认”。所有较长的课堂安排必须说明依据来自哪类材料、教师如何操作、学生需要回到哪一处文本、预期出现什么具体回答，以及这一环节怎样推进到下一环节。不要用“引导学生理解”“培养语文能力”代替完整设计，也不要为了凑满字段重复同一条依据。每个重要判断都应能返回对应原页，或被明确标注为“基于三类材料的课堂转化”；若材料没有支持，宁可写“待教师结合班情确认”，不要自行补充材料外知识。';
   try {
     const request = JSON.parse(messages.at(-1).content);
@@ -772,7 +772,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   const workflow = await runStructuredReviewLoop({
     model,
     initialMessages: messages,
-    maxTokens: expectedCardTypes.length ? 2600 : 4200,
+    maxTokens: expectedCardTypes.length ? 3200 : 5600,
     reviewMessages: ({ value, round, issues }) => reviewGroundedMessages({
       parsed: value,
       references,
@@ -853,7 +853,9 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     documents: [...new Map(citations.map(item => [item.documentId, { id: item.documentId, title: item.documentTitle, type: item.documentType }])).values()],
     sectionPaths: [...new Set(citations.flatMap(item => item.sectionPath || []).filter(Boolean))],
     pageRanges: [...new Map(citations.map(item => [item.documentId, item])).values()].map(item => ({ documentId: item.documentId, from: Math.min(...citations.filter(c => c.documentId === item.documentId).map(c => c.pdfPage)), to: Math.max(...citations.filter(c => c.documentId === item.documentId).map(c => c.pdfPage)) })),
-    retrievalSteps: ['读取教材结构', '定位相关篇目', ...citations.length ? ['读取相关物理页', '绑定原始 PDF 引用'] : []],
+    retrievalSteps: ['定位相关篇目', ...react.trace?.some(step => step.action === 'read' && step.pagesRead > 0)
+      ? [`按目录补读${react.trace.filter(step => step.action === 'read').reduce((sum, step) => sum + (step.pagesRead || 0), 0)}个原页`] : [],
+      ...citations.length ? ['核对引用物理页', '绑定原始 PDF 引用'] : []],
     evidenceCount: citations.length,
     matchedNodes: [...new Set(citations.map(item => item.nodeId).filter(Boolean))]
   };

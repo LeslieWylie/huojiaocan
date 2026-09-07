@@ -102,4 +102,19 @@ test('login recovery preserves the question through continuous Q&A, finalization
   await expect(page.getByRole('dialog', { name: '课堂共创记录' })).toBeVisible();
   await expect(page.getByText('课堂共创板书 · 只记录学生真正说出的内容')).toBeVisible();
   await page.getByRole('button', { name: '关闭课堂模式' }).click();
+
+  // Resetting the URL alone leaves requestedDraftId memoized and permanently
+  // disables the empty composer. Exercise a new turn without a manual reload.
+  await page.goto(savedUrl);
+  await page.getByRole('button', { name: '另起一课', exact: true }).click();
+  await page.getByRole('button', { name: '保留草稿，另起一课', exact: true }).click();
+  await expect(page).toHaveURL(/\/ask\/\?new=1$/);
+  await composer.fill('《我爱这土地》的意象怎样组织课堂？');
+  const startNew = page.locator('form.ask-large').getByRole('button', { name: '开始提问', exact: true });
+  await expect(startNew).toBeEnabled();
+  await startNew.click();
+  await expect(page).toHaveURL(/draftId=/);
+  expect(page.url()).not.toBe(savedUrl);
+  expect(asks.at(-1).draftId || '').not.toBe(new URL(savedUrl).searchParams.get('draftId'));
+  expect(asks.at(-1).history || []).toHaveLength(0);
 });

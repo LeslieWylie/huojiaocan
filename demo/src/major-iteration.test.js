@@ -532,6 +532,9 @@ test('另起一场备课不会重新打开上一条本地会话', () => {
   assert.match(appSource, /const authRecovery = useMemo\(\(\) => isNewConversation \? null/u);
   assert.match(appSource, /const requestedDraftId = isNewConversation \? ''/u);
   assert.match(appSource, /url\.search = '\?new=1'/u);
+  const reset = appSource.split('const confirmStartNewConversation = () => {')[1]?.split('const startNewConversation')[0];
+  assert.match(reset, /location\.assign/u);
+  assert.doesNotMatch(reset, /history\?\.replaceState/u);
 });
 
 test('匿名快照可交接到登录用户的独立槽位', () => {

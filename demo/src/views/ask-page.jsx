@@ -760,7 +760,10 @@ export function AskPage() {
     // marker explicitly prevents the browser-local active snapshot and any
     // auth hand-off from silently reopening the previous thread.
     url.search = '?new=1';
-    globalThis.history?.replaceState?.(null, '', `${url.pathname}${url.search}`);
+    // This is a multipage app: remount to discard memoized draft parameters
+    // and in-flight restore callbacks. History-only replacement leaves the
+    // old requestedDraftId gating the empty composer forever.
+    location.assign(`${url.pathname}${url.search}`);
   };
   const startNewConversation = () => {
     if (messages.length) {

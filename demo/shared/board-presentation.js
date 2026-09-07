@@ -67,7 +67,12 @@ export function buildBoardPresentation({ items = [], boardPlan = null, coreQuest
     }
     return chunks;
   });
-  const branches = columns.map((branch, index) => ({ ...branch, id: `display-${index}`, x: [260, 700, 1140][index % 3], y: 330 + Math.floor(index / 3) * 390, color: ['gold', 'mint', 'lavender'][index % 3] }));
+  const branches = columns.map((branch, index) => {
+    const row = Math.floor(index / 3);
+    const count = Math.min(3, columns.length - row * 3);
+    const positions = count === 1 ? [700] : count === 2 ? [450, 950] : [260, 700, 1140];
+    return { ...branch, id: `display-${index}`, x: positions[index % 3], y: 330 + row * 390, color: ['gold', 'mint', 'lavender'][index % 3] };
+  });
   const extraHeight = Math.max(0, Math.ceil(branches.length / 3) - 1) * 390;
   return {
     items: cleanItems, branches, extraHeight,
