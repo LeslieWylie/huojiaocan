@@ -115,4 +115,8 @@ export function createModelsHandler({ env = process.env, fetchImpl = globalThis.
   };
 }
 
-export default createModelsHandler();
+// Legacy URL now advertises only supported personal models; never calls a gateway.
+export default function handler(req, res) {
+  if (!allowMethod(req, res, 'GET')) return;
+  return json(res, 200, { object: 'list', data: ['deepseek-v4-flash', 'deepseek-v4-pro'].map(id => ({ id, object: 'model', owned_by: 'deepseek' })) });
+}

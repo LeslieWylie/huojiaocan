@@ -1,3 +1,4 @@
+import { encryptSecret } from '../serverless/auth.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import handler, { assertLockedCardsUnchanged, persistedDraftCitationCandidates, relayDraftId, repairDraftForClassroom, sanitizeClientAnswer, sanitizeClientCards } from './drafts.js';
@@ -309,6 +310,7 @@ function responseJson(value, status = 200) {
 async function invokeApi({ method, url, body, draft = apiDraft(), deleteRows = [], listRows, createdRow, createStatus = 200, modelResponse }) {
   const calls = [];
   const previous = {
+    encryption: process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET,
     fetch: globalThis.fetch,
     url: process.env.SUPABASE_URL,
     anon: process.env.SUPABASE_ANON_KEY,
@@ -317,6 +319,7 @@ async function invokeApi({ method, url, body, draft = apiDraft(), deleteRows = [
     gatewayKey: process.env.LLM_GATEWAY_API_KEY,
     gatewayModel: process.env.LLM_GATEWAY_MODEL
   };
+  process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET = 'fixture-encryption-only';
   process.env.SUPABASE_URL = 'https://supabase.test';
   process.env.SUPABASE_ANON_KEY = 'anon-test';
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -327,7 +330,11 @@ async function invokeApi({ method, url, body, draft = apiDraft(), deleteRows = [
   }
   globalThis.fetch = async (target, options = {}) => {
     calls.push({ url: String(target), options });
-    if (String(target).startsWith('https://gateway.test/')) return responseJson({ choices: [{ message: { content: typeof modelResponse === 'string' ? modelResponse : JSON.stringify(modelResponse) }, finish_reason: 'stop' }], model: 'test-model' });
+    if (String(target).includes('/rest/v1/user_deepseek_keys')) {
+      const e = encryptSecret('sk-fixture-personal', process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET);
+      return responseJson([{ id: 'personal', user_id: 'teacher-1', is_active: true, model: 'deepseek-v4-flash', key_ciphertext: e.ciphertext, key_iv: e.iv, key_tag: e.tag }]);
+    }
+    if (String(target).startsWith('https://api.deepseek.com/')) return responseJson({ choices: [{ message: { content: typeof modelResponse === 'string' ? modelResponse : JSON.stringify(modelResponse) }, finish_reason: 'stop' }], model: 'test-model' });
     if (String(target).includes('/auth/v1/user')) return responseJson({ id: 'teacher-1', email: 'teacher@example.test' });
     if (options.method === 'PATCH') {
       const patchBody = JSON.parse(options.body);
@@ -350,6 +357,7 @@ async function invokeApi({ method, url, body, draft = apiDraft(), deleteRows = [
     await handler(req, res);
     return { ...result, calls };
   } finally {
+    if (previous.encryption === undefined) delete process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET; else process.env.USER_DEEPSEEK_KEY_ENCRYPTION_SECRET = previous.encryption;
     globalThis.fetch = previous.fetch;
     if (previous.url === undefined) delete process.env.SUPABASE_URL; else process.env.SUPABASE_URL = previous.url;
     if (previous.anon === undefined) delete process.env.SUPABASE_ANON_KEY; else process.env.SUPABASE_ANON_KEY = previous.anon;

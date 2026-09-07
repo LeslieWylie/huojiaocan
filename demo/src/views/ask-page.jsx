@@ -408,7 +408,7 @@ export function AskPage() {
     ]).then(([config, keyData]) => {
       if (cancelled) return;
       const list = Array.isArray(keyData.keys) ? keyData.keys : [];
-      const available = Boolean(config.gatewayConfigured && config.textModelConfigured);
+      const available = false; // Only account-owned DeepSeek connections are supported.
       setKeys(list);
       setGatewayAvailable(available);
       const rememberedKeyId = readAiConnectionSelection(session?.user?.id);
@@ -974,7 +974,7 @@ export function AskPage() {
           </form>
           {!session && <div className="ask-auth-note"><ShieldCheck/><span>公共教材可以浏览；登录后才能发起连续问答、保存方案和生成三卡。</span><a href={loginHref} onClick={rememberCurrentAsk}>立即登录</a></div>}
           {session && !draftReady && <div className="ask-auth-note"><Activity/><span>正在读取上次保存的篇目、对话和版本，完成后即可继续追问。</span></div>}
-          {session && draftReady && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
+          {session && draftReady && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>请先配置个人 DeepSeek 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
           {localSaveFailed && <div className="ask-error" role="alert"><CircleAlert/><span>{LOCAL_SAVE_FAILURE}</span></div>}
           {accountSaveFailed && <div className="ask-error ask-save-recovery" role="status"><CircleAlert/><span>{saveRetryError || ACCOUNT_SAVE_FAILURE}</span>{canRetryDraftSave(pendingSave.current, retrySaveContext()) && <button type="button" onClick={retrySave} disabled={busy || saveRetryBusy}>{saveRetryBusy ? '正在保存…' : '仅重试保存'}</button>}<button type="button" onClick={exportConversation}>导出记录</button></div>}
           {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
@@ -997,7 +997,7 @@ export function AskPage() {
           <ContextSelect label="班级水平" value={lessonContext.classLevel} onChange={e => setLessonContext(x => ({ ...x, classLevel: e.target.value }))} options={['基础','普通','较强'].map(value => ({value, label: value}))} hint="学生起点"/>
           <ContextSelect label="教学目标" value={lessonContext.teachingGoal} onChange={e => setLessonContext(x => ({ ...x, teachingGoal: e.target.value }))} options={['理解文本','朗读训练','写作迁移'].map(value => ({value, label: value}))} hint="本课主线"/>
           <ContextSelect label="教学方式" value={lessonContext.teachingMode} onChange={e => setLessonContext(x => ({ ...x, teachingMode: e.target.value }))} options={['讲授','探究','小组合作'].map(value => ({value, label: value}))} hint="课堂组织"/>
-          <ContextSelect label="AI 来源" value={keyId} onChange={e => setKeyId(e.target.value)} options={[{value:'', label: gatewayAvailable ? UI_COPY.provider.systemGateway : '暂无可用 AI'}, ...keys.map(key => ({value:key.id, label:`我的智能连接（${key.keyHint}）`}))]} hint={!aiReady ? '正在检查 AI 服务' : keyId ? '我的智能连接' : gatewayAvailable ? '系统智能' : '请稍后重试'}/>
+          <ContextSelect label="AI 来源" value={keyId} onChange={e => setKeyId(e.target.value)} options={[{value:'', label: '请选择个人 DeepSeek 连接'}, ...keys.map(key => ({value:key.id, label:`我的智能连接（${key.keyHint}）`}))]} hint={!aiReady ? '正在检查 AI 服务' : keyId ? '我的智能连接' : gatewayAvailable ? '系统智能' : '请稍后重试'}/>
         </div>
         {selectedClassProfile && <div className="class-memory-strip"><History/><div><span>已接上 {selectedClassProfile.className} 的教学记录</span><b>{selectedClassProfile.nextFocus || selectedClassProfile.confirmedObservation || '此前课堂已经留下教师确认的班级事实。'}</b><p>来自 {selectedClassProfile.lessonCount} 节已保存课程；只影响课堂组织，不会替代当前教材与教师用书依据。</p></div><a href={`/ask/?draftId=${encodeURIComponent(selectedClassProfile.latestDraftId)}`}>查看最近一课</a></div>}
         {contextChanged && <div className="context-recompute"><div><b>备课条件已变化</b><p>当前方案仍按上一组条件生成。重新整理后，会同步调整课堂流程、问题链、评价和三张卡；已锁定的卡片不会被覆盖。</p></div><button type="button" className="primary" disabled={busy || askBlocked} onClick={() => ask(null, { prompt: '请根据当前备课条件重新整理完整课堂方案。保持当前篇目与核心问题不变；先核对教师用书的教学建议，再回到学生教材核对原文，并结合当前班情取舍。请同步更新课堂流程、问题链、评价和未锁定的三张卡。', operation: { type: 'recompute_plan' } })}>重新整理本方案</button></div>}

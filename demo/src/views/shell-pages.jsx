@@ -74,19 +74,16 @@ export function Layout({ active, children }) {
   const [aiState, setAiState] = useState('checking');
   useEffect(() => {
     let cancelled = false;
-    rootRequest('/api/config').then(config => {
-      if (cancelled) return;
-      // Anonymous users can browse the public catalogue, but AI generation is
-      // account-bound even when the system gateway is configured.
-      const gatewayReady = Boolean(config.gatewayConfigured && config.textModelConfigured);
-      setAiState(gatewayReady ? (session ? 'ready' : 'login') : session ? 'needs-key' : 'unavailable');
+    if (!session) { setAiState('login'); return; }
+    rootRequest('/api/ai/keys').then(data => {
+      if (!cancelled) setAiState(data.keys?.length ? 'ready' : 'needs-key');
     }).catch(() => { if (!cancelled) setAiState('unavailable'); });
     return () => { cancelled = true; };
   }, [session?.user?.id, session?.access_token]);
-  const aiLabel = aiState === 'ready' ? '系统连接已配置' : aiState === 'needs-key' ? '需配置 AI 连接' : aiState === 'login' ? '需要登录后开始备课' : aiState === 'unavailable' ? 'AI 服务暂时不可用' : '正在检查 AI 服务';
+  const aiLabel = aiState === 'ready' ? '个人连接已配置' : aiState === 'needs-key' ? '需配置 AI 连接' : aiState === 'login' ? '需要登录后开始备课' : aiState === 'unavailable' ? 'AI 服务暂时不可用' : '正在检查 AI 服务';
   const currentDraftId = new URLSearchParams(location.search).get('draftId') || '';
   const askHref = currentDraftId ? `/ask/?draftId=${encodeURIComponent(currentDraftId)}` : '/ask/';
-  return <div className="app-shell"><a className="skip-link" href="#main-content">跳到主要内容</a><Sidebar active={active} open={open} close={() => setOpen(false)}/><main className="main-area" id="main-content" tabIndex={-1}><header className="topbar"><div className="breadcrumb"><button type="button" className="mobile-menu" aria-label="打开侧栏导航" onClick={() => setOpen(true)}><Menu/></button><span>活教参</span><ChevronRight/><b>{title}</b></div><div className="top-actions"><span className={`mode mode-${aiState}`} title="这里只检查配置是否存在，不代表连接已测试成功；实际使用以所选连接的响应为准"><i/>{aiLabel}</span>{session ? <><a href="/settings/">AI 设置</a><button type="button" className="text-action" onClick={async()=>{await signOut();location.reload();}}>退出</button></> : <a href="/login/">登录</a>}<a href={askHref}><MessageCircle/>{currentDraftId ? '本课问答' : '提问'}</a><a href="/ingest/"><Upload/>导入</a></div></header><div className="content">{children}</div></main></div>;
+  return <div className="app-shell"><a className="skip-link" href="#main-content">跳到主要内容</a><Sidebar active={active} open={open} close={() => setOpen(false)}/><main className="main-area" id="main-content" tabIndex={-1}><header className="topbar"><div className="breadcrumb"><button type="button" className="mobile-menu" aria-label="打开侧栏导航" onClick={() => setOpen(true)}><Menu/></button><span>活教参</span><ChevronRight/><b>{title}</b></div><div className="top-actions"><span className={`mode mode-${aiState}`} title="仅使用当前账号的 DeepSeek 连接；配置存在不代表连接已测试成功"><i/>{aiLabel}</span>{session ? <><a href="/settings/">AI 设置</a><button type="button" className="text-action" onClick={async()=>{await signOut();location.reload();}}>退出</button></> : <a href="/login/">登录</a>}<a href={askHref}><MessageCircle/>{currentDraftId ? '本课问答' : '提问'}</a><a href="/ingest/"><Upload/>导入</a></div></header><div className="content">{children}</div></main></div>;
 }
 
 export const GUIDANCE_STEPS = [

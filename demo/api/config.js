@@ -4,5 +4,5 @@ import authProxy from '../serverless/auth-proxy.js';
 export default function handler(req, res) {
   if (req.method === 'POST' && String(req.query?.auth || '') === '1') return authProxy(req, res);
   if (!allowMethod(req, res, 'GET')) return;
-  return json(res, 200, { ...safeConfig(), ...authConfigStatus() });
+  return json(res, 200, { ...safeConfig(), gatewayConfigured: false, textModelConfigured: false, imageModelConfigured: false, mode: 'personal-deepseek', ...authConfigStatus() });
 }

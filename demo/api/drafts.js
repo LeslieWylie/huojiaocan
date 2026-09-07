@@ -985,8 +985,7 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const body = await readJson(req);
       assertCurrentVersion(current, requestVersion(req, body));
-      let deepseek = null;
-      if (typeof body.keyId === 'string' && body.keyId.trim()) deepseek = await resolveActiveDeepSeekKey(user, body.keyId.trim());
+      const deepseek = await resolveActiveDeepSeekKey(user, typeof body.keyId === 'string' ? body.keyId.trim() : undefined);
       const analysis = await analyzeHomeworkResponses({ draft: current, taskId: body.taskId, responses: body.responses, deepseek });
       const answer = clone(current.answer || {});
       if (answer.homeworkReview) answer.homeworkReviewHistory = [clone(answer.homeworkReview), ...(Array.isArray(answer.homeworkReviewHistory) ? answer.homeworkReviewHistory : [])].slice(0, 8);
@@ -1137,8 +1136,7 @@ export default async function handler(req, res) {
       if (current.answer?.teachingDeliberation?.status === 'confirmed' && !teachingDeliberationIsStale(current)) {
         throw Object.assign(new Error('deliberation_confirmed'), { code: 'deliberation_confirmed', status: 409 });
       }
-      let deepseek = null;
-      if (typeof body.keyId === 'string' && body.keyId.trim()) deepseek = await resolveActiveDeepSeekKey(user, body.keyId.trim());
+      const deepseek = await resolveActiveDeepSeekKey(user, typeof body.keyId === 'string' ? body.keyId.trim() : undefined);
       const deliberation = await generateTeachingDeliberation({ draft: trustedCurrent, deepseek });
       const answer = clone(current.answer || {});
       if (answer.teachingDeliberation?.status === 'confirmed') {
@@ -1383,8 +1381,7 @@ export default async function handler(req, res) {
       assertCurrentVersion(current, requestVersion(req, body));
       const citations = await trustedCitationsForDraft(user, current);
       const trustedCurrent = { ...current, citations };
-      let deepseek = null;
-      if (typeof body.keyId === 'string' && body.keyId.trim()) deepseek = await resolveActiveDeepSeekKey(user, body.keyId.trim());
+      const deepseek = await resolveActiveDeepSeekKey(user, typeof body.keyId === 'string' ? body.keyId.trim() : undefined);
       const generated = await generateDraftCards({ draft: trustedCurrent, deepseek });
       const saved = await patchOwnedDraft(user, id, current.version || 1, {
         cards: generated.cards,
@@ -1410,10 +1407,7 @@ export default async function handler(req, res) {
       } else if (req.method === 'POST' && parts[3] === 'regenerate') {
         const citations = await trustedCitationsForDraft(user, current);
         const trustedCurrent = { ...current, citations };
-        let deepseek = null;
-        if (typeof body.keyId === 'string' && body.keyId.trim()) {
-          deepseek = await resolveActiveDeepSeekKey(user, body.keyId.trim());
-        }
+        const deepseek = await resolveActiveDeepSeekKey(user, typeof body.keyId === 'string' ? body.keyId.trim() : undefined);
         const generated = await regenerateDraftCard({
           draft: trustedCurrent,
           card,
