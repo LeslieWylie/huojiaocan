@@ -689,3 +689,24 @@
 .index-tree .tree-item.selected .tree-item-title>small{color:#7b571e}
 .teaching-flow-hero h1 em{display:inline-block;max-width:100%}
 .teaching-flow-hero h1 em>span{white-space:nowrap}
+
+/* Teaching agent: truthful request state and progressively disclosed work record. */
+.agent-working,.agent-work-summary{margin:20px 0;padding:22px 24px;border:1px solid #cdd9cf;border-radius:14px;background:#f7f8f1;color:#274a3b;font-size:16px;line-height:1.65}
+.agent-working header,.agent-work-summary header{display:flex;align-items:flex-start;gap:12px}
+.agent-working header>svg,.agent-work-summary header>svg{flex:none;margin-top:4px}
+.agent-working header>div,.agent-work-summary header>div{flex:1;min-width:0}
+.agent-working b,.agent-work-summary header b{font-size:18px}
+.agent-working p,.agent-work-summary p{margin:5px 0;color:#52685f}
+.agent-working time{white-space:nowrap;font-variant-numeric:tabular-nums;font-size:14px}
+.agent-working small,.agent-work-footnote{font-size:14px;color:#52685f}
+.agent-work-summary details{margin-top:14px;border-top:1px solid #d5dfd5;padding-top:12px}
+.agent-work-summary summary{cursor:pointer;font-weight:600;min-height:30px}
+.agent-work-summary ol{list-style:none;padding:0;margin:12px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 24px}
+.agent-work-summary li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #dbe2d8}
+.agent-work-summary li span{display:flex;align-items:center;gap:8px}
+.agent-work-summary li b{font-size:15px}
+.agent-work-summary li small{font-size:14px;white-space:nowrap}
+.agent-work-summary.needs-attention{background:#fff8ea;border-color:#ddc89b}
+.agent-work-summary li[data-status="needs_attention"]{color:#805116}
+.agent-work-summary summary:focus-visible{outline:2px solid #2e624b;outline-offset:4px}
+@media(max-width:600px){.agent-working,.agent-work-summary{padding:16px}.agent-work-summary ol{grid-template-columns:1fr}.agent-working header{flex-wrap:wrap}.agent-working b,.agent-work-summary header b{font-size:17px}}

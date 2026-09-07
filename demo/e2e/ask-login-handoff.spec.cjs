@@ -296,3 +296,35 @@ test('ambiguous new draft save never offers a duplicate POST retry', async ({ pa
   expect(writes).toBe(1);
   expect(calls).toHaveLength(1);
 });
+
+test('agent shows honest waiting state and collapsible server work record on narrow screens', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await seed(page, null);
+  let release;
+  const waiting = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/**/ask', async route => {
+    await waiting;
+    await route.fulfill({ json: { ...newResponse, agentRun: { events: [
+      { stage: 'grounding', status: 'completed' },
+      { stage: 'draft', status: 'completed' },
+      { stage: 'evidence_review', status: 'needs_attention' },
+      { stage: 'teacher_confirmation', status: 'pending' }
+    ] } } });
+  });
+  await page.goto('/ask/');
+  await ready(page);
+  await page.locator('form.ask-large textarea').fill('请增加朗读训练');
+  await page.locator('form.ask-large button[type=submit]').click();
+  await expect(page.getByRole('region', { name: '备课助手正在处理' })).toBeVisible();
+  await expect(page.locator('.agent-working')).toContainText('当前不显示逐步进度');
+  release();
+  const summary = page.getByRole('region', { name: '本轮协作记录' });
+  await expect(summary).toBeVisible();
+  await expect(summary.locator('ol')).toBeHidden();
+  await summary.getByText('查看本轮处理记录', { exact: true }).click();
+  await expect(summary.locator('li')).toHaveCount(4);
+  await expect(summary).toContainText('待确认');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await summary.screenshot({ path: 'node_modules/.cache/agent-work-summary.png' });
+});

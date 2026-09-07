@@ -20,6 +20,7 @@ import { checklistProgress, deriveWorkflowChecklist } from '../workflow-checklis
 import { EXAMPLES, askErrorMessage, canonicalDocumentId, citationLink, citationPage, citationText, cacheDraftForRecovery, docName, isIndexRecoveryCode, lessonRefFromUrl, normalizeFeedbackForm, planIdentity, rememberAuthReturn, request, requestCode, rootRequest, sameLessonRef, unitRefFromUrl, useAuthSession } from '../app-core.js';
 import { teachingDeliberationIsStale } from '../../shared/teaching-deliberation.js';
 import { normalizePreviousLessonCarryover } from '../../shared/classroom-carryover.js';
+import { agentPresentation } from '../agent-presentation.js';
 import { mergeFollowUpCitations } from '../citation-merge.js';
 
 export function CitationChips({ citations, refs, returnTo = 'ask', limit = 4 }) {
@@ -31,7 +32,7 @@ export function RouteTrace({ route }) {
   const docs = route?.documents || [];
   const ranges = route?.pageRanges || [];
   const reactSteps = Array.isArray(route?.reactTrace) ? route.reactTrace.filter(item => item?.action === 'search' && item.query) : [];
-  return <details className="route-trace" open><summary><Route size={15}/><b>资料定位</b><span>{route?.evidenceCount || 0} 个相关页面</span><ChevronDown size={14}/></summary><div className="route-trace-body"><div className="route-steps">{(route?.retrievalSteps || ['读取教材目录', '定位相关篇目与段落', '打开对应 教材原页']).map((step, index) => <span key={`${step}-${index}`}><i>{index + 1}</i>{step}{index < (route?.retrievalSteps || []).length - 1 && <ChevronRight/>}</span>)}</div>{reactSteps.length > 0 && <div className="route-agent-note"><Sparkles size={14}/><span>本轮根据当前问题补查了 {reactSteps.length} 次更具体的教材页面。</span></div>}<div className="route-docs">{docs.map(doc => { const range = ranges.find(item => item.documentId === doc.id); return <span key={doc.id}><b>{doc.title || docName(doc.id)}</b>{range && ` · 第 ${range.from}—${range.to}页`}</span>; })}</div></div></details>;
+  return <details className="route-trace"><summary><Route size={15}/><b>资料定位</b><span>{route?.evidenceCount || 0} 个相关页面</span><ChevronDown size={14}/></summary><div className="route-trace-body"><div className="route-steps">{(route?.retrievalSteps || []).map((step, index) => <span key={`${step}-${index}`}><i>{index + 1}</i>{step}{index < (route?.retrievalSteps || []).length - 1 && <ChevronRight/>}</span>)}</div>{reactSteps.length > 0 && <div className="route-agent-note"><Sparkles size={14}/><span>本轮根据当前问题补查了 {reactSteps.length} 次更具体的教材页面。</span></div>}<div className="route-docs">{docs.map(doc => { const range = ranges.find(item => item.documentId === doc.id); return <span key={doc.id}><b>{doc.title || docName(doc.id)}</b>{range && ` · 第 ${range.from}—${range.to}页`}</span>; })}</div></div></details>;
 }
 export function WorkflowStrip({ lessonTitle }) {
   const steps = [
@@ -66,24 +67,25 @@ export function ContextText({ label, value, onChange, hint, placeholder }) {
   return <label className="context-control context-text"><span className="context-control-label">{label}</span><span className="context-select"><input value={value} onChange={onChange} maxLength="40" placeholder={placeholder}/></span>{hint && <small>{hint}</small>}</label>;
 }
 export function AgentReviewNote({ response }) {
-  const events = Array.isArray(response?.agentRun?.events) ? response.agentRun.events : [];
-  const grounding = events.find(item => item.stage === 'grounding');
-  const review = events.find(item => item.stage === 'evidence_review');
-  const rounds = Number(response?.generationRounds) || 0;
-  if (!events.length && rounds <= 1) return null;
-  const needsEvidence = grounding?.status === 'needs_attention';
-  const needsReview = review?.status === 'needs_attention' || Boolean(response?.teachingPlanIssues?.length);
-  const title = needsEvidence
-    ? grounding.message
-    : needsReview ? '仍有课堂安排需要核对' : review?.status === 'completed'
-      ? review.message
-      : rounds >= 3 ? '已进行模型辅助修订，请教师确认' : '已进行模型辅助核对，请教师确认';
-  const detail = needsEvidence
-    ? '当前方案只使用已经找到的页面；缺少的材料不会被模型补写。'
-    : needsReview ? '下方列出了尚未消除的问题，请检查后再确认方案。' : rounds >= 3
-      ? '初稿仍有顺序或时间问题时，系统已增加一轮定向修订。'
-      : '先形成课堂初稿，再按教师用书、学生教材与真实页码逐项修订。';
-  return <div className={`agent-review-note ${needsEvidence || needsReview ? 'needs-attention' : ''}`}>{needsEvidence || needsReview ? <CircleAlert size={16}/> : <CheckCircle2 size={16}/>}<span><b>{title}</b><small>{detail}</small></span></div>;
+  const presentation = agentPresentation(response);
+  if (!presentation.steps.length) return null;
+  return <section className={`agent-work-summary ${presentation.attention ? 'needs-attention' : ''}`} aria-label="本轮协作记录">
+    <header><Sparkles size={20}/><div><b>{presentation.title}</b><p>{presentation.detail}</p></div></header>
+    <details><summary>查看本轮处理记录</summary><ol>{presentation.steps.map(step => <li key={step.stage} data-status={step.status}><span>{step.status === 'completed' ? <CheckCircle2 size={17}/> : step.status === 'needs_attention' ? <CircleAlert size={17}/> : <History size={17}/>}<b>{step.label}</b></span><small>{step.statusLabel}</small></li>)}</ol><p className="agent-work-footnote">记录来自本轮服务返回，不代表教学内容已由教师审核。</p></details>
+  </section>;
+}
+export function AgentWorkingState({ lessonTitle }) {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <section className="agent-working" aria-label="备课助手正在处理" aria-busy="true">
+    <header><Sparkles size={22}/><div><b>正在处理这一轮问题</b><p>{lessonTitle ? `当前篇目：${lessonTitle}` : '围绕已选择的教材与本轮要求整理回答'}</p></div><time aria-label={`已等待 ${elapsed} 秒`}>{elapsed} 秒</time></header>
+    <p role="status">{elapsed >= 45 ? '这次等待较久。请求仍在处理中，请勿重复发送。' : '请稍候，回答返回后会显示教材依据与可用的处理记录。'}</p>
+    <small>当前不显示逐步进度；你可以继续阅读上方历史回答。</small>
+  </section>;
 }
 export function ConversationTurn({ turn, draftId, onQuickAsk, onSaveEvidence }) {
   const response = turn.response;
@@ -956,7 +958,7 @@ export function AskPage() {
           {accountSaveFailed && <div className="ask-error ask-save-recovery" role="status"><CircleAlert/><span>{saveRetryError || ACCOUNT_SAVE_FAILURE}</span>{canRetryDraftSave(pendingSave.current, retrySaveContext()) && <button type="button" onClick={retrySave} disabled={busy || saveRetryBusy}>{saveRetryBusy ? '正在保存…' : '仅重试保存'}</button>}<button type="button" onClick={exportConversation}>导出记录</button></div>}
           {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
           {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button type="button" onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button type="button" onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button type="button" onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
-          {busy && <div className="answer-loading"><span/><span/><span/><p>{UI_COPY.ask.loading}</p></div>}
+          {busy && <AgentWorkingState lessonTitle={pairedLessonTitle}/>}
           {emptyState}
           {conversationState}
         </section>
