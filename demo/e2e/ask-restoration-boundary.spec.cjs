@@ -19,7 +19,7 @@ for (const target of ['saved', 'local']) {
         lesson_context: {},
         answer: { ...response, conversationTurns: [{ question: '《岳阳楼记》怎样备课？', response }] }, cards: [], citations: []
       } } });
-      return route.fulfill({ json: { keys: [], documents: [], drafts: [], profiles: [], results: [] } });
+      return route.fulfill({ json: { keys: [{ id: 'personal-test', isActive: true, keyHint: 'test' }], documents: [], drafts: [], profiles: [], results: [] } });
     });
     for (let attempt = 0; attempt < 2; attempt++) {
       if (!attempt) await page.goto(target === 'saved' ? '/ask/?draftId=saved' : '/ask/');

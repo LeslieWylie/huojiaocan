@@ -29,6 +29,18 @@ test('login recovery preserves the question through continuous Q&A, finalization
   await expect(page).toHaveURL(/\/ask\//);
   await expect(composer).toHaveValue('怎样围绕《岳阳楼记》的忧乐观组织课堂？');
   expect(asks).toHaveLength(0);
+  const personalKeyId = await page.evaluate(async () => {
+    const session = JSON.parse(localStorage.getItem('huojiaocan.supabase.session'));
+    const response = await fetch('/api/ai/keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+      body: JSON.stringify({ apiKey: 'sk-fixture-personal-e2e-not-a-real-credential' })
+    });
+    if (!response.ok) throw new Error('Could not prepare personal-key fixture');
+    return (await response.json()).key.id;
+  });
+  await page.reload();
+  await expect(composer).toHaveValue('怎样围绕《岳阳楼记》的忧乐观组织课堂？');
   await page.locator('form.ask-large').getByRole('button', { name: '开始提问', exact: true }).click();
   await expect(page.locator('.conversation-latest').getByText('怎样围绕《岳阳楼记》的忧乐观组织课堂？', { exact: true })).toBeVisible();
   await expect(page.getByText('先回答你的问题').last()).toBeVisible();
@@ -55,6 +67,7 @@ test('login recovery preserves the question through continuous Q&A, finalization
     expect(sent.history.at(-1).role).toBe('assistant');
     expect(sent.history.filter(item => item.role === 'user' && item.content === '请再举一个例子')).toHaveLength(round);
   }
+  expect(asks.every(request => request.keyId === personalKeyId)).toBe(true);
   expect(asks).toHaveLength(4);
   const savedUrl = page.url();
   await page.reload();

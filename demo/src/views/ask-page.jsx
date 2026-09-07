@@ -224,7 +224,7 @@ export function AskPage() {
     ? { ...activeAuthRecovery.draftSnapshot.draft, cards: activeAuthRecovery.draftSnapshot.cards || [] }
     : null;
   const requestedDraftId = isNewConversation ? '' : params.get('draftId') || activeAuthRecovery?.draftId || '';
-  const canResumeLocal = !isNewConversation && (!hasExplicitLessonTarget || Boolean(requestedDraftId)) && !params.get('q') && Boolean(localConversation) && (!requestedDraftId || String(localConversation.draftId || '') === String(requestedDraftId));
+  const canResumeLocal = !isNewConversation && (!hasExplicitLessonTarget || Boolean(requestedDraftId) || localConversation?.next === currentAskPath) && !params.get('q') && Boolean(localConversation) && (!requestedDraftId || String(localConversation.draftId || '') === String(requestedDraftId));
   // `adapt=1` means “open the newly copied plan for review”, not “run a
   // hidden prompt from the URL”. Older links may still contain q; ignore it
   // so the copied plan and cards are loaded before any new model turn.

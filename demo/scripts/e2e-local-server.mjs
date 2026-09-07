@@ -39,7 +39,9 @@ process.on('SIGHUP', () => shutdown(0));
 
 start('data', process.execPath, ['scripts/mock-supabase.mjs'], { MOCK_PORT: String(dataPort) });
 start('llm', process.execPath, ['scripts/mock-supabase.mjs'], { MOCK_PORT: String(llmPort) });
-start('app', process.execPath, ['server/index.js'], {
+start('app', process.execPath, ['--import', './scripts/e2e-deepseek-transport.mjs', 'server/index.js'], {
+  HJC_E2E_TRANSPORT: '1',
+  E2E_LLM_PORT: String(llmPort),
   PORT: String(appPort),
   DOCUMENT_INDEX_PROVIDER: 'local',
   SUPABASE_URL: `http://127.0.0.1:${dataPort}`,
