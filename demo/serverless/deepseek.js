@@ -8,6 +8,8 @@ export class DeepSeekError extends Error {
     this.code = code;
     this.status = status;
     this.retryable = ['deepseek_timeout', 'deepseek_unavailable', 'deepseek_rate_limited', 'deepseek_request_failed'].includes(code);
+    // @openmaic/generation uses this provider-neutral retry contract.
+    this.isRetryable = this.retryable;
   }
 }
 
