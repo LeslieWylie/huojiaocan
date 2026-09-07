@@ -3,6 +3,9 @@ const { test, expect } = require('./fixtures.cjs');
 test('production public entry, library and exact search are operational', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle(/活教参/);
+  if (process.env.E2E_EXPECT_MAIN_ASSET) {
+    await expect(page.locator(`script[src="/assets/${process.env.E2E_EXPECT_MAIN_ASSET}"]`)).toHaveCount(1);
+  }
   await page.goto('/library/');
   await expect(page.getByRole('heading', { name: /先选定要查的材料/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /学生教材/ }).first()).toBeVisible();
