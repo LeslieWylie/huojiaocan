@@ -213,3 +213,19 @@ test('recent lesson threads are isolated by account and bounded', async () => {
     globalThis.localStorage = originalLocalStorage;
   }
 });
+
+test('unsent follow-ups stay with their draft when another draft becomes active', async () => {
+  const source = await import('./conversation-recovery.js');
+  const before = globalThis.localStorage; const values = new Map();
+  globalThis.localStorage = { getItem: k => values.get(k) || null, setItem: (k,v) => values.set(k,v), removeItem: k => values.delete(k) };
+  try {
+    source.saveConversationSnapshot({draftId:'a',question:'original',composerText:'尚未发送的追问'},'teacher');
+    source.saveConversationSnapshot({draftId:'b',question:'other',composerText:'另一本教材'},'teacher');
+    assert.equal(source.readConversationSnapshot('teacher','','a').composerText,'尚未发送的追问');
+    assert.equal(source.readConversationSnapshot('teacher','','b').composerText,'另一本教材');
+    assert.equal(source.readConversationSnapshot('other-account','','a'),null);
+    assert.equal(source.readConversationSnapshot('teacher','','missing'),null);
+    source.saveConversationSnapshot({draftId:'a',composerText:''},'teacher');
+    assert.equal(source.readConversationSnapshot('teacher','','a').composerText,'');
+  } finally { globalThis.localStorage=before; }
+});

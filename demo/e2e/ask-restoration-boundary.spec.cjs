@@ -5,7 +5,7 @@ for (const target of ['saved', 'local']) {
     const calls = [];
     await page.addInitScript(() => {
       localStorage.setItem('huojiaocan.supabase.session', JSON.stringify({ user: { id: 'restore-user' }, access_token: 'fixture-only' }));
-      localStorage.setItem('huojiaocan.ask.session.restore-user', JSON.stringify({
+      if (!localStorage.getItem('huojiaocan.ask.session.restore-user')) localStorage.setItem('huojiaocan.ask.session.restore-user', JSON.stringify({
         question: '未发送的新课输入', draftId: '', savedAt: new Date().toISOString(), messages: [], conversationHistory: []
       }));
     });
@@ -35,6 +35,22 @@ for (const target of ['saved', 'local']) {
       } else await expect(composer).toHaveValue('未发送的新课输入');
       // Let readiness, restoration and debounced persistence effects settle.
       await page.waitForTimeout(1200);
+      expect(calls).toEqual([]);
+    }
+    if (target === 'saved') {
+      const composer = page.locator('form.ask-large textarea');
+      await composer.fill('请增加朗读训练，这句话还未发送');
+      await page.reload();
+      await expect(composer).toHaveValue('请增加朗读训练，这句话还未发送');
+      await expect(page.getByLabel('当前备课范围')).toContainText('岳阳楼记');
+      await page.waitForTimeout(1200);
+      expect(calls).toEqual([]);
+      await page.goto('/ask/?draftId=saved&doc=textbook&lesson=岳阳楼记');
+      await expect(composer).toHaveValue('请增加朗读训练，这句话还未发送');
+      expect(calls).toEqual([]);
+      await composer.fill('');
+      await page.reload();
+      await expect(composer).toHaveValue('');
       expect(calls).toEqual([]);
     }
   });

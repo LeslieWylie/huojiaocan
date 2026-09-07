@@ -47,6 +47,7 @@ function validSnapshot(value) {
     resumeId: snapshotResumeId(value),
     draftId: String(value.draftId || ''),
     question: String(value.question || ''),
+    composerText: typeof value.composerText === 'string' ? value.composerText : null,
     planQuestion: String(value.planQuestion || ''),
     scope: String(value.scope || 'both'),
     lessonContext: value.lessonContext && typeof value.lessonContext === 'object' ? value.lessonContext : {},
@@ -107,8 +108,13 @@ export function saveConversationSnapshot(snapshot, userId = '') {
   }
 }
 
-export function readConversationSnapshot(userId = '', resumeId = '') {
+export function readConversationSnapshot(userId = '', resumeId = '', draftId = '') {
   try {
+    if (draftId) {
+      const active = validSnapshot(JSON.parse(localStorage.getItem(storageKey(userId)) || 'null'));
+      return active?.draftId === String(draftId) ? active
+        : readRecentValues(userId).find(item => item.draftId === String(draftId)) || null;
+    }
     if (resumeId) {
       return readRecentValues(userId).find(item => item.resumeId === String(resumeId)) || null;
     }

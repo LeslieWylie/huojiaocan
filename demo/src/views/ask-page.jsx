@@ -209,12 +209,12 @@ export function AskPage() {
   const activeAuthRecovery = recoveryMatchesCurrentPath ? authRecovery : null;
   const initialUser = useMemo(() => getSession()?.user?.id || '', []);
   const requestedResumeId = isNewConversation ? '' : params.get('resume') || '';
-  const localConversation = useMemo(() => readConversationSnapshot(initialUser, requestedResumeId), [initialUser, requestedResumeId]);
+  const localConversation = useMemo(() => readConversationSnapshot(initialUser, requestedResumeId, isNewConversation ? '' : params.get('draftId') || ''), [initialUser, requestedResumeId]);
   const recoveredDraft = activeAuthRecovery?.draftSnapshot?.draft
     ? { ...activeAuthRecovery.draftSnapshot.draft, cards: activeAuthRecovery.draftSnapshot.cards || [] }
     : null;
   const requestedDraftId = isNewConversation ? '' : params.get('draftId') || activeAuthRecovery?.draftId || '';
-  const canResumeLocal = !isNewConversation && !hasExplicitLessonTarget && !params.get('q') && Boolean(localConversation) && (!requestedDraftId || String(localConversation.draftId || '') === String(requestedDraftId));
+  const canResumeLocal = !isNewConversation && (!hasExplicitLessonTarget || Boolean(requestedDraftId)) && !params.get('q') && Boolean(localConversation) && (!requestedDraftId || String(localConversation.draftId || '') === String(requestedDraftId));
   // `adapt=1` means “open the newly copied plan for review”, not “run a
   // hidden prompt from the URL”. Older links may still contain q; ignore it
   // so the copied plan and cards are loaded before any new model turn.
@@ -233,7 +233,9 @@ export function AskPage() {
   // The first question remains the durable lesson identity in `planQuestion`;
   // putting it back in the textarea makes a refresh look like the answer was
   // lost and makes an accidental duplicate submission far too easy.
-  const initialComposerQuestion = recoveredMessages.length && !params.get('q') && !activeAuthRecovery?.pendingAction
+  const initialComposerQuestion = canResumeLocal && typeof localConversation?.composerText === 'string'
+    ? localConversation.composerText
+    : recoveredMessages.length && !params.get('q') && !activeAuthRecovery?.pendingAction
     ? ''
     : initialQuestion;
   const requestedScope = params.get('scope');
@@ -462,7 +464,7 @@ export function AskPage() {
         return;
       }
 
-      const fallback = readConversationSnapshot(session?.user?.id || initialUser);
+      const fallback = readConversationSnapshot(session?.user?.id || initialUser, '', draftId);
       const sameDraft = !draftId || String(fallback?.draftId || '') === String(draftId);
       if (!fallback || !sameDraft) {
         setEvidenceShelfReady(true);
@@ -521,6 +523,7 @@ export function AskPage() {
     saveConversationSnapshot({
       draftId,
       question,
+      composerText: question,
       planQuestion,
       scope,
       lessonContext,
@@ -740,7 +743,7 @@ export function AskPage() {
     finally { setCarryoverWorking(''); }
   };
   const exportConversation = () => {
-    const title = lessonRef?.title || planIdentity(planQuestion || question, '备课记录');
+    const title = pairedLessonTitle || planIdentity(planQuestion || question, '备课记录');
     const lines = [`# ${title}`, '', `- 材料范围：${scopeLabel(scope)}`, `- 课时：${lessonContext.periods || 1} 课时`, ...(lessonContext.className ? [`- 任教班级：${lessonContext.className}`] : []), `- 班级水平：${lessonContext.classLevel || '普通'}`, '', '## 备课对话'];
     messages.forEach((turn, index) => {
       const response = turn.response || {};
