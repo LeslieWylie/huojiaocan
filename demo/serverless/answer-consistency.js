@@ -22,7 +22,23 @@ export function answerConsistencyIssues(value, lessonContext = {}, references = 
       issues.push('关键判断的核对记录缺少有效教材依据，请回到本轮材料核对。');
     }
   }
+  // A task demanding verbatim textbook wording cannot grade a paraphrase as
+  // an original sentence. Check only explicitly requested quotations against
+  // the available student-textbook excerpts; absence is a review warning,
+  // never proof that the complete document lacks the phrase.
+  const normalizeQuote = text => String(text || '').replace(/[\s\p{P}\p{S}]/gu, '');
+  const textbookPages = references.filter(item => ['textbook', 'student-textbook'].includes(item.documentType)).map(item => normalizeQuote(item.excerpt));
+  const cards = value?.threeCardSuggestions || value?.cardSuggestions || {};
+  for (const item of (Array.isArray(cards.assessment) ? cards.assessment : [])) {
+    if (!/原句|原文摘录|摘抄/u.test(String(item?.task || ''))) continue;
+    const response = String(item?.observablePerformance || '');
+    for (const match of response.matchAll(/[“「]([^”」]{5,120})[”」]/gu)) {
+      const quote = normalizeQuote(match[1]);
+      if (quote.length < 5 || !textbookPages.length || textbookPages.some(page => page.includes(quote))) continue;
+      issues.push(`评价任务要求原句，但预期回应中的“${match[1]}”未在当前学生教材片段中匹配；请回原页核对，换成真实摘句，或把任务和标准同步改为概括表述，不要冒充原文。`);
+    }
+  }
   return [...new Set(issues)];
 }
 
-export const SOURCE_REVIEW_RULE = '针对当前问题逐条核对关键引文的说话者或描写对象、所属段落、前后转折与比较关系。历史回答可能有错，不得当作教材依据。教师纠错后，必须同步修改 understanding、reply、summary、lessonPosition、课堂环节和三卡，不能只在开头说已纠正。课时以当前 lessonContext 为准，不沿用历史课时。教师用书的第几课时只作参考，不等于本次方案的课时编号。只有班级水平时，不得断言学生已经掌握或尚未掌握某项能力；学情设想须标注待教师确认。输出 sourceChecks 只记录可核验结论及其 E 编号，不输出思维过程；无法确认则删除断言或明确待确认。';
+export const SOURCE_REVIEW_RULE = '针对当前问题逐条核对关键引文的说话者或描写对象、所属段落、前后转折与比较关系。历史回答可能有错，不得当作教材依据。要求学生摘录原句时，预期回应必须能在学生教材逐字找到；概括、删改或反向推演得到的语句必须标明是概括，不能作为原句评分。教师纠错后，必须同步修改 understanding、reply、summary、lessonPosition、课堂环节和三卡，不能只在开头说已纠正。课时以当前 lessonContext 为准，不沿用历史课时。教师用书的第几课时只作参考，不等于本次方案的课时编号。只有班级水平时，不得断言学生已经掌握或尚未掌握某项能力；学情设想须标注待教师确认。输出 sourceChecks 只记录可核验结论及其 E 编号，不输出思维过程；无法确认则删除断言或明确待确认。';

@@ -336,7 +336,7 @@ export function wrapSvgText(value, max = 13) {
   return lines.slice(0, 3);
 }
 export function sourceTypeLabel(type) {
-  return ({ textbook: '学生教材支持', 'teacher-guide': '教师用书支持', teacher_guide: '教师用书支持', 'curriculum-standard': '课程标准支持', curriculum_standard: '课程标准支持', combined: '三类材料综合', suggestion: '系统教学建议', insufficient: '依据不足' }[type] || '教材依据');
+  return ({ textbook: '学生教材支持', 'teacher-guide': '教师用书支持', teacher_guide: '教师用书支持', 'curriculum-standard': '课程标准支持', curriculum_standard: '课程标准支持', combined: '基于材料综合', suggestion: '系统教学建议', insufficient: '依据不足' }[type] || '教材依据');
 }
 export function classroomRecoveryKey(userId, draftId) { return `huojiaocan:classroom:${userId}:${draftId}`; }
 export function readClassroomRecovery(userId, draftId) {

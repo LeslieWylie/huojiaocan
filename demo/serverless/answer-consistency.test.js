@@ -15,3 +15,14 @@ test('source audit cannot certify unsupported or unbound conclusions', () => {
 test('malformed model plan is left to structural validation, not a consistency crash', () => {
   assert.doesNotThrow(() => answerConsistencyIssues({ answer: { lessonPlan: {} } }));
 });
+
+
+test('verbatim assessment cannot pass off a reversed paraphrase as textbook wording', () => {
+  const references = [{ ref: 'E1', documentType: 'textbook', excerpt: '不以物喜，不以己悲。先天下之忧而忧，后天下之乐而乐。' }];
+  const value = { threeCardSuggestions: { assessment: [{ task: '用课文原句概括两者的态度', observablePerformance: '写出“以物喜，以己悲”和“不以物喜，不以己悲”。' }] } };
+  const issues = answerConsistencyIssues(value, {}, references);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0], /未在当前学生教材片段中匹配/u);
+  value.threeCardSuggestions.assessment[0].task = '用自己的话概括两者的态度';
+  assert.deepEqual(answerConsistencyIssues(value, {}, references), []);
+});
