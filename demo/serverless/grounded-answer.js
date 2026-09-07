@@ -1,3 +1,4 @@
+import { createTeachingSkillSession, selectTeachingSkills } from './teaching-skills.js';
 import { GatewayError } from './llm-gateway.js';
 import { createStructuredModel, runStructuredReviewLoop } from './ai-orchestrator.js';
 import { gatewayConfig } from './shared.js';
@@ -633,6 +634,7 @@ function reviewGroundedMessages({ parsed, references, fixedLessonIdentity, fixed
 export async function generateGroundedAnswer({ question, teachingFocus = '', scope, evidence, history = [], teacherReflectionContext = '', env = process.env, deepseek, lessonContext, lessonIdentity, followUpInstruction, operation, retrieveMore, readingContext, reactResult, expectedCardTypes = [], deadlineAt } = {}) {
   const config = gatewayConfig(env);
   const answerMode = ['auto', 'gateway', 'extractive'].includes(config.answerMode) ? config.answerMode : 'auto';
+  const executionStartedAt = Date.now();
   const model = createStructuredModel({ env, deepseek, deadlineAt });
   if (answerMode === 'extractive' || (!model.configured && answerMode === 'auto')) return null;
   if (!model.configured) throw new GatewayError('gateway_not_configured');
@@ -785,11 +787,15 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   // a dense single-screen summary.
   const cardInstruction = expectedCardTypes.length ? [...history].reverse().find(item => item?.role === 'user' && typeof item.content === 'string')?.content : '';
   const reviewInstruction = followUpInstruction || cardInstruction || question;
+  const skills = createTeachingSkillSession({ env, deadlineAt });
+  skills.require(selectTeachingSkills({ question, followUpInstruction: reviewInstruction, expectedCardTypes }));
+  if (skills.enabled) messages[0].content += '\n\n' + skills.prompt();
   const workflow = await runStructuredReviewLoop({
     model,
     initialMessages: messages,
     maxTokens: expectedCardTypes.length ? 3200 : 5600,
-    reviewMessages: ({ value, round, issues }) => reviewGroundedMessages({
+    reviewMessages: ({ value, round, issues }) => {
+      const review = reviewGroundedMessages({
       parsed: value,
       references,
       fixedLessonIdentity,
@@ -800,7 +806,10 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
       reviewInstruction,
       teachingIssues: issues,
       reviewRound: round
-    }),
+      });
+      if (skills.enabled) review[0].content += '\n\n' + skills.prompt();
+      return review;
+    },
     detectIssues: value => [
       ...teachingPlanCompletenessIssues(value, planningQuestion),
       ...teachingPlanIssues(value, lessonContext),
@@ -881,11 +890,19 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     evidenceCount: citations.length,
     matchedNodes: [...new Set(citations.map(item => item.nodeId).filter(Boolean))]
   };
+  const skillExecution = skills.enabled ? { retrieval: react.skillExecution, generation: skills.audit() } : undefined;
+  if (skillExecution) console.info(JSON.stringify({
+    event: 'teaching_skills_execution', ...skillExecution, elapsedMs: Date.now() - executionStartedAt,
+    searches: (react.trace || []).filter(step => step.action === 'search').length,
+    generationRounds: generationTrace.filter(step => step.status === 'completed').length,
+    stopReason: finalIssues.length ? 'review_required' : 'completed'
+  }));
   return {
     generation: model.source === 'personal-deepseek' ? 'grounded-deepseek' : 'grounded-gateway',
     model: completion.model,
     reactTrace: react.trace,
     generationTrace,
+    skillExecution,
     generationRounds: generationTrace.filter(item => item.status === 'completed').length,
     teachingPlanIssues: finalIssues,
     agentRun: createSafeAgentRun({

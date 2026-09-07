@@ -1,7 +1,7 @@
 // Static interaction contract for teacher-facing React views.
 // It catches controls that look usable but have no action, anchors that do not
 // navigate, and links to pages not present in the actual MPA route table.
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -75,6 +75,7 @@ function visibleButtonName(body) {
   return body.replace(/<[^>]+>/gsu, ' ').replace(/[{}]/gu, ' ').replace(/&\w+;/gu, ' ').replace(/\s+/gu, ' ').trim();
 }
 
+const inventory = [];
 const failures = [];
 let buttonCount = 0;
 let linkCount = 0;
@@ -86,6 +87,9 @@ for (const path of walk(srcRoot)) {
   for (const tag of openingTags(source, 'button')) {
     buttonCount += 1;
     const where = `${file}:${lineAt(source, tag.start)}`;
+    inventory.push({ kind: 'button', file, line: lineAt(source, tag.start),
+      label: visibleButtonName(tag.body), control: tag.opening,
+      verification: 'static-only; requires executable scenario mapping' });
     const actionable = /\bonClick\s*=/u.test(tag.opening)
       || /\bformAction\s*=/u.test(tag.opening)
       || /\btype\s*=\s*["'](?:submit|reset)["']/u.test(tag.opening);
@@ -105,6 +109,9 @@ for (const path of walk(srcRoot)) {
     const where = `${file}:${lineAt(source, tag.start)}`;
     if (!/\bhref\s*=/u.test(tag.opening)) { failures.push(`${where} anchor has no href`); continue; }
     const href = staticHref(tag.opening);
+    inventory.push({ kind: 'link', file, line: lineAt(source, tag.start),
+      label: visibleButtonName(tag.body), destination: href ?? 'state-derived', control: tag.opening,
+      verification: 'static-only; requires executable scenario mapping' });
     if (href == null) dynamicLinkCount += 1;
     if (href === '#' || /^javascript:/iu.test(href || '')) failures.push(`${where} anchor uses a non-navigation href (${href})`);
     const route = routeFor(href);
@@ -126,3 +133,10 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(`UI action contract passed: ${buttonCount} buttons, ${linkCount} links (${internalRouteCount} statically resolved internal routes, ${dynamicLinkCount} state-derived links), ${routes.size} declared pages.`);
+
+const inventoryArg = process.argv.indexOf('--inventory');
+if (inventoryArg !== -1) {
+  const output = process.argv[inventoryArg + 1];
+  if (!output) throw new Error('--inventory requires an output path');
+  writeFileSync(output, JSON.stringify({ routes: [...routes], controls: inventory }, null, 2));
+}

@@ -101,7 +101,8 @@ export function saveConversationSnapshot(snapshot, userId = '') {
       const compact = { ...value, messages: value.messages.slice(-4), conversationHistory: value.conversationHistory.slice(-8) };
       localStorage.setItem(storageKey(userId), JSON.stringify(compact));
       saveRecentValue(compact, userId);
-      return true;
+      // Partial recovery is useful, but must not be reported as a full save.
+      return false;
     } catch {
       return false;
     }

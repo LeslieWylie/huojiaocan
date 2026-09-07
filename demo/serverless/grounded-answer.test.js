@@ -508,3 +508,23 @@ test('whole-plan correction requires structured fields and never hides omissions
   assert.ok(result.teachingPlanIssues.some(issue => /教学目标不足/u.test(issue)));
   assert.equal(result.agentRun.status, 'needs_teacher_review');
 });
+
+test('enabled teaching methods reach generation and repair without becoming citation identity', async t => {
+  const prompts = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    prompts.push(JSON.parse(options.body).messages);
+    return Response.json({ model: 'test-model', choices: [{ message: { content: JSON.stringify({
+      understanding: '围绕课文备课', textbookBasis: '教材依据', teacherGuideBasis: '教学建议',
+      teachingExplanation: '结合材料开展朗读', citations: [{ documentId: 'skill', pdfPage: 999 }]
+    }) } }] });
+  });
+  const result = await generateGroundedAnswer({ question: '《我爱这土地》怎样备课？', evidence,
+    env: { TEACHING_SKILLS_ENABLED: 'true', LLM_GATEWAY_BASE_URL: 'https://gateway.test',
+      LLM_GATEWAY_API_KEY: 'fixture-only', LLM_GATEWAY_MODEL: 'test-model', LLM_ANSWER_MODE: 'gateway' } });
+  assert.ok(prompts.length >= 1);
+  assert.ok(prompts.every(messages => messages[0].content.includes('name: lesson-design')));
+  assert.deepEqual(result.skillExecution.generation.loaded.map(x => x.id), ['lesson-design']);
+  const citations = result.sections.flatMap(section => section.citations || []);
+  assert.ok(citations.length);
+  assert.ok(citations.every(c => ['textbook', 'teacher-guide'].includes(c.documentId) && c.pdfPage !== 999));
+});

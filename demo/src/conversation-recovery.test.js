@@ -229,3 +229,22 @@ test('unsent follow-ups stay with their draft when another draft becomes active'
     assert.equal(source.readConversationSnapshot('teacher','','a').composerText,'');
   } finally { globalThis.localStorage=before; }
 });
+
+test('quota fallback keeps a partial transcript but never reports a full successful save', async t => {
+  const source = await import('./conversation-recovery.js');
+  const original = globalThis.localStorage;
+  const values = new Map();
+  t.after(() => { globalThis.localStorage = original; });
+  globalThis.localStorage = {
+    getItem: key => values.get(key) || null,
+    removeItem: key => values.delete(key),
+    setItem(key, value) {
+      if (key.startsWith('huojiaocan.ask.session.') && JSON.parse(value).messages.length > 4) throw new Error('quota');
+      values.set(key, String(value));
+    }
+  };
+  assert.equal(source.saveConversationSnapshot({ composerText: '仍未发送', messages: Array.from({length: 6}, (_, i) => ({question: `q${i}`, response: {answer: i}})) }, 'quota-user'), false);
+  const restored = source.readConversationSnapshot('quota-user');
+  assert.equal(restored.messages.length, 4);
+  assert.equal(restored.composerText, '仍未发送');
+});

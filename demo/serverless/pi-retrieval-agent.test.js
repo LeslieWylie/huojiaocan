@@ -211,3 +211,26 @@ test('retrieval deadline includes deterministic searches and ignores late result
   await new Promise(done => setTimeout(done, 5));
   assert.deepEqual(result.evidence, startingEvidence);
 });
+
+test('Pi can load a whitelisted teaching skill without fabricating evidence', async () => {
+ const {runtime}=runtimeWithResponses([
+  fauxAssistantMessage(fauxToolCall('read_teaching_skill',{skillId:'source-verification'}),{stopReason:'toolUse'}),
+  fauxAssistantMessage(fauxText('READY'))
+ ]);
+ const result=await runPiRetrievalAgent({question:'阅读本篇',scope:['textbook'],evidence:startingEvidence,retrieveMore:async()=>[],runtime,env:{TEACHING_SKILLS_ENABLED:'true'}});
+ assert.deepEqual(result.skillExecution.loaded.map(x=>x.id),['material-location','source-verification']);
+ assert.deepEqual(result.evidence,startingEvidence);
+});
+
+test('repeated invalid skill calls stop without spending retrieval budget or changing evidence', async () => {
+  const { runtime } = runtimeWithResponses(Array.from({ length: 6 }, () => fauxAssistantMessage(
+    fauxToolCall('read_teaching_skill', { skillId: '../secret' }), { stopReason: 'toolUse' }
+  )));
+  let searches = 0;
+  const result = await runPiRetrievalAgent({ question: '岳阳楼记', scope: ['textbook'], evidence: startingEvidence,
+    env: { TEACHING_SKILLS_ENABLED: 'true' }, runtime, retrieveMore: async () => { searches++; return []; } });
+  assert.equal(searches, 0);
+  assert.deepEqual(result.evidence, startingEvidence);
+  assert.equal(result.skillExecution.optionalReads, 0);
+  assert.deepEqual(result.skillExecution.loaded.map(x => x.id), ['material-location']);
+});

@@ -1,3 +1,4 @@
+import { createTeachingSkillSession, selectTeachingSkills } from './teaching-skills.js';
 import { Agent } from '@earendil-works/pi-agent-core';
 import { Type, createModels, createProvider } from '@earendil-works/pi-ai';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
@@ -277,9 +278,24 @@ export async function runPiRetrievalAgent({
     nextMissing = missing.find(type => type !== missingSource) || null;
   }
 
+  const skills = createTeachingSkillSession({ env, deadlineAt: expiresAt });
+  skills.require(selectTeachingSkills({ question, followUpInstruction, stage: 'retrieval' }));
+  let skillToolCalls = 0;
+  const skillTool = {
+    name: 'read_teaching_skill', label: '读取教材核对方法',
+    description: '仅可读取内置技能目录中的方法，不是教材证据，不可读取任意文件。',
+    parameters: Type.Object({ skillId: Type.String() }),
+    execute: async (_id, params) => {
+      skillToolCalls++;
+      const value = skillToolCalls > 2 || expired() ? { ok: false, reason: 'skill_budget' } : skills.load(params.skillId);
+      return { content: [{ type: 'text', text: JSON.stringify(value) }], details: {} };
+    }
+  };
   const agent = new Agent({
     initialState: {
       systemPrompt: [
+        skills.prompt(),
+        skills.enabled ? `可按需读取的教学方法：${JSON.stringify(skills.catalog())}` : '',
         '你负责沿教材目录定位、阅读、核对，不回答教师问题，不编写教案。',
         '先判断已有页面是否覆盖当前篇目、教师用书处理或学生教材原文。',
         '先看 availableSections 的标题、摘要、范围，再按需调用 read_teaching_section 读原页；摘要不是原文。涉及引文主语、段落比较或纠错时应读正文上下文，材料不足才搜索补充。证据足够回复 READY；没有支持则回复 INSUFFICIENT，不能靠常识填补。',
@@ -287,13 +303,13 @@ export async function runPiRetrievalAgent({
         '不得生成或修改文档 ID、页码、引用文字和 PDF 地址。'
       ].join('\n'),
       model: activeRuntime.model,
-      tools: [...typeof retrieveMore === 'function' ? [searchTool] : [], ...sections.length ? [readTool] : []],
+      tools: [...skills.enabled ? [skillTool] : [], ...typeof retrieveMore === 'function' ? [searchTool] : [], ...sections.length ? [readTool] : []],
       messages: []
     },
     streamFn: activeRuntime.streamFn,
     getApiKey: activeRuntime.apiKey ? () => activeRuntime.apiKey : undefined,
     toolExecution: 'sequential',
-    shouldStopAfterTurn: () => expired() || toolCount >= 4 || (searchCount >= MAX_SEARCHES && (!sections.length || readCount >= 2)),
+    shouldStopAfterTurn: () => expired() || skillToolCalls > 2 || toolCount >= 4 || (searchCount >= MAX_SEARCHES && (!sections.length || readCount >= 2)),
     onPayload: payload => payload,
     maxRetryDelayMs: 1_500
   });
@@ -323,5 +339,5 @@ export async function runPiRetrievalAgent({
   if (!trace.length || ['search', 'read'].includes(trace.at(-1)?.action)) {
     trace.push({ step: searchCount + 1, action: 'answer', query: '', reason: '已有页面交由最终回答流程核对' });
   }
-  return { evidence: current, trace, contract, coverage: inspectEvidenceCoverage(contract, current) };
+  return { evidence: current, trace, contract, coverage: inspectEvidenceCoverage(contract, current), skillExecution: skills.audit() };
 }

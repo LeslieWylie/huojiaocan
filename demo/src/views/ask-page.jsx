@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Download, ExternalLink, History, MessageCircle, Network, Plus, Quote, Route, Send, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { Badge, SectionHead } from '../ui-kit.jsx';
 import { normalizeAskAction } from '../ask-actions.js';
+import { ACCOUNT_SAVE_FAILURE, LOCAL_SAVE_FAILURE, resolveAskHandoff, submissionHandoff, recoveredTurnsAreAhead } from '../ask-handoff.js';
 import { withAskRetry } from '../ask-retry.js';
 import { authOwnersConflict, canPersistAuthOwner, clearAuthRecovery, ensureSession, getSession, readAuthRecovery, saveAuthRecovery } from '../auth.js';
 import { buildAskContext, buildConversationHistory } from '../conversation-context.js';
@@ -148,6 +149,8 @@ export function ConversationSide({
   draftId,
   restoredAt,
   restoredFromLocal = false,
+  localSaveFailed = false,
+  accountSaveFailed = false,
   recentDrafts = [],
   localSessions = [],
   onContinue,
@@ -176,8 +179,8 @@ export function ConversationSide({
     : [{ label: '从当前篇目开始', prompt: `请围绕${title === '尚未定位篇目' ? '当前选定篇目' : title}，先说明教师用书中的教学主线。` }];
   return <aside className="panel ask-side conversation-side">
     <SectionHead icon={MessageCircle} eyebrow="当前备课" title={hasConversation ? '继续追问' : '等待你的第一问'} note={hasConversation ? '后续提问会沿用当前篇目、教材范围和已核验页面。' : '先确认当前篇目，再提出一个具体备课问题。'} />
-    <div className={`conversation-status ${hasConversation ? 'active' : ''}`}><i/><span>{hasConversation ? `已保存 ${messages.length} 轮对话` : '尚未开始对话'}</span></div>
-    {hasConversation && <div className="conversation-persistence"><CheckCircle2 size={15}/><span>{restoredFromLocal ? '已从本机恢复，建议继续提问后同步账号' : restoredAt ? `已恢复上次对话 · ${new Date(restoredAt).toLocaleString()}` : '本轮已自动保存，刷新后仍可继续'}</span></div>}
+    <div className={`conversation-status ${hasConversation ? 'active' : ''}`}><i/><span>{hasConversation ? `${messages.length} 轮对话` : '尚未开始对话'}</span></div>
+    {hasConversation && <div className="conversation-persistence">{localSaveFailed ? <CircleAlert size={15}/> : <CheckCircle2 size={15}/>}<span>{localSaveFailed ? LOCAL_SAVE_FAILURE : accountSaveFailed ? '回答尚未同步账号；本机副本已保存，建议先导出记录。' : restoredFromLocal ? '已从本机恢复，建议先导出记录' : restoredAt ? `已恢复上次对话 · ${new Date(restoredAt).toLocaleString()}` : '本轮已自动保存，刷新后仍可继续'}</span></div>}
     <section className="conversation-dossier"><small>当前篇目</small><strong>{title}</strong><div className="dossier-grid"><span><b>{messages?.length || 0}</b><small>轮对话</small></span><span><b>{lessonContext?.periods || 1}</b><small>课时</small></span><span><b>{scopeLabel(scope).includes('教师') ? '双源' : '单源'}</b><small>材料</small></span></div><p>当前问题只会调整本课方案，不会改写篇目与已核验页码。</p></section>
     <section className="conversation-next"><header><b>{hasConversation ? '接下来想解决什么' : '从当前篇目开始'}</b><small>点击后仍留在同一备课</small></header>{nextPrompts.map(item => <button type="button" key={item.label} onClick={() => onQuickAsk?.(item)}><span>{item.label}</span><ArrowRight size={14}/></button>)}</section>
     <div className="conversation-footer-actions"><button type="button" className="conversation-continue" onClick={onContinue}><MessageCircle size={16}/>{hasConversation ? '输入自己的追问' : '开始提问'}<ArrowRight size={15}/></button>{hasConversation && <button type="button" className="conversation-new" onClick={onNewConversation}>另起一课</button>}{hasConversation && <button type="button" className="conversation-export" onClick={onExportConversation}><Download size={15}/>导出记录</button>}</div>
@@ -188,6 +191,9 @@ export function ConversationSide({
   </aside>;
 }
 export function AskPage() {
+  // Bind the handoff to the entry URL, not the mutable address bar. Consuming
+  // q or attaching a saved draft id must not invalidate it on a later render.
+  const currentAskPath = useMemo(() => `${location.pathname}${location.search}`, []);
   const params = useMemo(() => new URLSearchParams(location.search), []);
   const isNewConversation = params.get('new') === '1';
   const isClassAdaptation = params.get('adapt') === '1';
@@ -196,15 +202,14 @@ export function AskPage() {
     if (!isNewConversation) return recovery;
     // A deliberately new lesson must not resume an old draft, but the
     // question just handed to login from this exact new page must survive.
-    return recovery?.next === `${location.pathname}${location.search}` && !recovery.draftId
-      && !recovery.messages?.length && !recovery.conversationHistory?.length ? recovery : null;
-  }, [isNewConversation]);
+    return recovery?.next === currentAskPath && !recovery.draftId
+      && (recovery.accountSaveFailed || (!recovery.messages?.length && !recovery.conversationHistory?.length)) ? recovery : null;
+  }, [isNewConversation, currentAskPath]);
   // A lesson target from the library is a deliberate request for a new
   // thread. Do not silently attach an older recovery payload to it. The
   // exception is the exact path that initiated a login: that hand-off is the
   // teacher's current question and must survive authentication.
   const hasExplicitLessonTarget = Boolean(params.get('doc') || params.get('page') || params.get('node') || params.get('lesson'));
-  const currentAskPath = `${location.pathname}${location.search}`;
   const recoveryMatchesCurrentPath = Boolean(authRecovery?.next && authRecovery.next === currentAskPath);
   const activeAuthRecovery = recoveryMatchesCurrentPath ? authRecovery : null;
   const initialUser = useMemo(() => getSession()?.user?.id || '', []);
@@ -220,24 +225,18 @@ export function AskPage() {
   // so the copied plan and cards are loaded before any new model turn.
   // Only an explicit URL action or the exact login hand-off may auto-send.
   // Ordinary local recovery restores text, never permission to spend a model call.
-  const autoSubmitQuestion = isClassAdaptation ? '' : (params.get('q') || (activeAuthRecovery?.resumeSubmittedQuestion ? activeAuthRecovery.pendingAction || activeAuthRecovery.question : '') || '');
   const initialQuestion = (isClassAdaptation ? '' : params.get('q')) || activeAuthRecovery?.question || (canResumeLocal ? localConversation?.question : '') || '';
   // Keep the already-rendered answer turns while a follow-up is waiting for
   // re-authentication. The turns contain the trusted citations, so returning
   // to /ask/ does not show an empty page or force the teacher to reconstruct
   // the material context from memory.
   const recoveredMessages = Array.isArray(activeAuthRecovery?.messages)
-    ? activeAuthRecovery.messages.filter(item => item && item.response).slice(-6)
+    ? activeAuthRecovery.messages.filter(item => item && item.response).slice(-12)
     : canResumeLocal && Array.isArray(localConversation?.messages) ? localConversation.messages.slice(-12) : [];
-  // Restoring an answered thread should reopen a blank follow-up composer.
-  // The first question remains the durable lesson identity in `planQuestion`;
-  // putting it back in the textarea makes a refresh look like the answer was
-  // lost and makes an accidental duplicate submission far too easy.
-  const initialComposerQuestion = canResumeLocal && typeof localConversation?.composerText === 'string'
-    ? localConversation.composerText
-    : recoveredMessages.length && !params.get('q') && !activeAuthRecovery?.pendingAction
-    ? ''
-    : initialQuestion;
+  const { composerText: initialComposerQuestion, autoSubmit: autoSubmitQuestion } = resolveAskHandoff({
+    recovery: activeAuthRecovery, urlQuestion: params.get('q') || '', isClassAdaptation,
+    localConversation, canResumeLocal, hasMessages: Boolean(recoveredMessages.length)
+  });
   const requestedScope = params.get('scope');
   // A new preparation starts with all three teaching sources. Teachers can
   // narrow the scope deliberately, but the default should not silently omit
@@ -260,6 +259,8 @@ export function AskPage() {
   const session = useAuthSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [localSaveFailed, setLocalSaveFailed] = useState(false);
+  const [accountSaveFailed, setAccountSaveFailed] = useState(Boolean(activeAuthRecovery?.accountSaveFailed));
   const [lastErrorCode, setLastErrorCode] = useState('');
   const [retryQuestion, setRetryQuestion] = useState(initialComposerQuestion);
   const [retryTarget, setRetryTarget] = useState(initialComposerQuestion);
@@ -294,6 +295,7 @@ export function AskPage() {
   const pairedLessonTitle = lessonRef?.title || (existingDraft ? planIdentity(existingDraft.answer?.lesson?.title || existingDraft.title, '') : '') || (messages.length && planQuestion ? planIdentity(planQuestion, '') : '');
   const composerRef = useRef(null);
   const autoAsked = useRef(false);
+  const preserveRecoveredTurns = useRef(Boolean(activeAuthRecovery && recoveredMessages.length));
   const ownerPersistenceAllowed = () => canPersistAuthOwner(conversationOwner.current, session?.user?.id, ownerTransitioning.current);
   useEffect(() => {
     const nextOwner = String(session?.user?.id || '');
@@ -415,6 +417,12 @@ export function AskPage() {
     // The recovery payload has already been copied into React state above.
     // Clear only after the target page mounts, never before the login redirect.
     if (authRecovery) clearAuthRecovery();
+    if (activeAuthRecovery && !autoSubmitQuestion) {
+      const url = new URL(location.href);
+      url.searchParams.delete('q');
+      if (recoveredMessages.length) url.searchParams.delete('new');
+      globalThis.history?.replaceState?.(null, '', url);
+    }
   }, [authRecovery]);
   useEffect(() => {
     if (!aiReady || !ownerPersistenceAllowed()) return;
@@ -448,11 +456,19 @@ export function AskPage() {
         else if (normalizedScope.includes('curriculum-standard') && normalizedScope.includes('textbook') && normalizedScope.includes('teacher-guide')) setScope('all');
         else if (normalizedScope.includes('textbook') && normalizedScope.includes('teacher-guide')) setScope('both');
       }
-      if (Array.isArray(draft.answer?.conversationHistory)) setConversationHistory(draft.answer.conversationHistory);
       const savedTurns = Array.isArray(draft.answer?.conversationTurns)
         ? draft.answer.conversationTurns.filter(item => item?.question && item?.response).slice(-12)
         : [];
-      if (savedTurns.length) {
+      // An account save may have failed after a locally recovered answer.
+      // Compare the tail as well as length because both stores cap at 12.
+      const localTurnsAhead = recoveredTurnsAreAhead(recoveredMessages, savedTurns);
+      const keepRecoveredTurns = preserveRecoveredTurns.current || localTurnsAhead;
+      if (localTurnsAhead) {
+        setAccountSaveFailed(true);
+        setRestoredFromLocal(true);
+      }
+      if (!keepRecoveredTurns && Array.isArray(draft.answer?.conversationHistory)) setConversationHistory(draft.answer.conversationHistory);
+      if (savedTurns.length && !keepRecoveredTurns) {
         setMessages(savedTurns);
         setRestoredAt(draft.updated_at || draft.updatedAt || new Date().toISOString());
       }
@@ -473,7 +489,7 @@ export function AskPage() {
         return;
       }
 
-      if (Array.isArray(fallback.conversationHistory)) setConversationHistory(fallback.conversationHistory);
+      if (!preserveRecoveredTurns.current && Array.isArray(fallback.conversationHistory)) setConversationHistory(fallback.conversationHistory);
       if (fallback.scope) setScope(fallback.scope);
       if (fallback.lessonContext) setLessonContext(value => ({ ...value, ...fallback.lessonContext }));
       if (fallback.lessonRef) setLessonRef(fallback.lessonRef);
@@ -483,7 +499,7 @@ export function AskPage() {
         ? fallback.messages.filter(item => item && item.response).slice(-12)
         : [];
       if (fallback.question && !fallbackTurns.length) setQuestion(value => value || fallback.question);
-      if (fallbackTurns.length) {
+      if (fallbackTurns.length && !preserveRecoveredTurns.current) {
         setMessages(fallbackTurns);
       }
       if (fallback.savedAt) {
@@ -520,7 +536,7 @@ export function AskPage() {
   }, [draftId, session?.user?.id, existingDraft?.id, existingDraft?.version, evidenceShelf]);
   useEffect(() => {
     if (!ownerPersistenceAllowed() || (!messages.length && !draftId && !question.trim())) return;
-    saveConversationSnapshot({
+    const savedLocally = saveConversationSnapshot({
       draftId,
       question,
       composerText: question,
@@ -532,6 +548,7 @@ export function AskPage() {
       conversationHistory,
       next: `${location.pathname}${location.search}`
     }, session?.user?.id || initialUser);
+    setLocalSaveFailed(!savedLocally);
     setLocalSessions(readRecentConversationSnapshots(session?.user?.id || initialUser));
   }, [draftId, question, planQuestion, scope, lessonContext, lessonRef, messages, conversationHistory, session?.user?.id, initialUser]);
   useEffect(() => {
@@ -568,6 +585,11 @@ export function AskPage() {
     const requestOptions = normalizedAction.options;
     const text = normalizedAction.text;
     if (!text || busy) return;
+    const consumedUrl = new URL(location.href);
+    if (consumedUrl.searchParams.has('q')) {
+      consumedUrl.searchParams.delete('q');
+      globalThis.history?.replaceState?.(null, '', consumedUrl);
+    }
     // A quick-action object is an instruction about the current plan. A new
     // sentence typed into the composer is a real follow-up question and must
     // not be silently replaced by the first question in the conversation.
@@ -590,7 +612,7 @@ export function AskPage() {
       const activeSession = await ensureSession();
       if (!activeSession) {
         const next = `${location.pathname}${location.search}`;
-        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, question: text, planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, resumeSubmittedQuestion: !pendingTurn, pendingAction: typeof directQuestion === 'object' ? directQuestion : null, messages: messages.slice(-12), conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
+        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, ...submissionHandoff(text, directQuestion, Boolean(pendingTurn)), planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, messages: messages.slice(-12), conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
         location.href = `/login/?next=${encodeURIComponent(next)}`;
         return;
       }
@@ -647,6 +669,11 @@ export function AskPage() {
         : buildConversationHistory([...messages, nextTurn]);
       pendingTurn = nextTurn;
       pendingHistory = nextHistory;
+      // This is now a real conversation, even if its account save fails.
+      // A refresh must be allowed to restore its browser snapshot.
+      const answeredUrl = new URL(location.href);
+      answeredUrl.searchParams.delete('new');
+      globalThis.history?.replaceState?.(null, '', answeredUrl);
       const nextConversationTurns = [...messages, nextTurn].map(persistedConversationTurn).filter(Boolean).slice(-12);
       const draftPayload = { title: lessonTitle, question: nextIdentityQuestion, scope: scopeDocumentIds(selectedScope), lessonContext: { ...nextLessonContext, ...(nextLessonRef ? { lessonRef: nextLessonRef } : {}) }, answer: { ...(normalizedResponse.answer || {}), ...(sameLesson && existingDraft?.answer?.planApproval ? { planApproval: { ...existingDraft.answer.planApproval, hasUnconfirmedChanges: true } } : {}), sourceCoverage: normalizedResponse.sourceCoverage || normalizedResponse.answer?.sourceCoverage, conversationHistory: nextHistory, conversationTurns: nextConversationTurns, evidenceShelf, ...(sameLesson && existingDraft?.answer?.previousLessonReflection ? { previousLessonReflection: existingDraft.answer.previousLessonReflection } : {}), ...(sameLesson && existingDraft?.answer?.lessonReflection ? { lessonReflection: existingDraft.answer.lessonReflection } : {}) }, citations: nextCitations, cards: sameLesson ? cardsForAskDraft(existingDraft) : [] };
       let savedDraftId = draftId;
@@ -683,11 +710,12 @@ export function AskPage() {
       setLessonContext(nextLessonContext); setLessonRef(nextLessonRef);
       setMessages(items => [...items, nextTurn]);
       setQuestion('');
+      setAccountSaveFailed(false);
     } catch (err) {
       const code = requestCode(err);
       if (code === 'auth_invalid' || code === 'auth_required') {
         const next = `${location.pathname}${location.search}`;
-        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, question: text, planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, resumeSubmittedQuestion: !pendingTurn, pendingAction: typeof directQuestion === 'object' ? directQuestion : null, messages: [...messages, ...(pendingTurn ? [pendingTurn] : [])].slice(-12), conversationHistory: pendingHistory || conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
+        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, ...submissionHandoff(text, directQuestion, Boolean(pendingTurn)), planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, messages: [...messages, ...(pendingTurn ? [pendingTurn] : [])].slice(-12), conversationHistory: pendingTurn ? pendingHistory : conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
         location.href = `/login/?next=${encodeURIComponent(next)}`;
         return;
       }
@@ -696,8 +724,13 @@ export function AskPage() {
         setMessages(recoveredMessages);
         setConversationHistory(pendingHistory);
         setRestoredAt(new Date().toISOString());
-        saveConversationSnapshot({ draftId, question: currentQuestion, planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, messages: recoveredMessages, conversationHistory: pendingHistory, next: `${location.pathname}${location.search}` }, session?.user?.id || initialUser);
-        setError('回答已经生成，但暂时没有保存到账号；内容已保留在本机，稍后可重新保存。');
+        setQuestion('');
+        setPlanQuestion(nextIdentityQuestion);
+        setLessonContext(nextLessonContext);
+        setLessonRef(nextLessonRef);
+        setAccountSaveFailed(true);
+        const savedLocally = saveConversationSnapshot({ draftId, question: currentQuestion, composerText: '', planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, messages: recoveredMessages, conversationHistory: pendingHistory, next: `${location.pathname}${location.search}` }, session?.user?.id || initialUser);
+        setLocalSaveFailed(!savedLocally);
         return;
       }
       setLastErrorCode(code); setError(askErrorMessage(err));
@@ -865,13 +898,15 @@ export function AskPage() {
           {!session && <div className="ask-auth-note"><ShieldCheck/><span>公共教材可以浏览；登录后才能发起连续问答、保存方案和生成三卡。</span><a href={loginHref} onClick={rememberCurrentAsk}>立即登录</a></div>}
           {session && !draftReady && <div className="ask-auth-note"><Activity/><span>正在读取上次保存的篇目、对话和版本，完成后即可继续追问。</span></div>}
           {session && draftReady && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
+          {localSaveFailed && <div className="ask-error" role="alert"><CircleAlert/><span>{LOCAL_SAVE_FAILURE}</span></div>}
+          {accountSaveFailed && <div className="ask-error" role="status"><CircleAlert/><span>{ACCOUNT_SAVE_FAILURE}</span></div>}
           {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
           {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button type="button" onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button type="button" onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button type="button" onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
           {busy && <div className="answer-loading"><span/><span/><span/><p>{UI_COPY.ask.loading}</p></div>}
           {emptyState}
           {conversationState}
         </section>
-        <ConversationSide messages={messages} history={conversationHistory} lessonTitle={pairedLessonTitle} scope={scope} lessonContext={lessonContext} existingDraft={existingDraft} draftId={draftId} restoredAt={restoredAt} restoredFromLocal={restoredFromLocal} recentDrafts={recentDrafts} localSessions={localSessions} onContinue={focusComposer} onQuickAsk={value => ask(null, value)} onNewConversation={startNewConversation} onExportConversation={exportConversation} shelf={evidenceShelf} onRemoveShelf={removeShelfItem} onClearShelf={() => setEvidenceShelf([])} readerReturnTo={askReaderReturn}/>
+        <ConversationSide messages={messages} history={conversationHistory} lessonTitle={pairedLessonTitle} scope={scope} lessonContext={lessonContext} existingDraft={existingDraft} draftId={draftId} restoredAt={restoredAt} restoredFromLocal={restoredFromLocal} localSaveFailed={localSaveFailed} accountSaveFailed={accountSaveFailed} recentDrafts={recentDrafts} localSessions={localSessions} onContinue={focusComposer} onQuickAsk={value => ask(null, value)} onNewConversation={startNewConversation} onExportConversation={exportConversation} shelf={evidenceShelf} onRemoveShelf={removeShelfItem} onClearShelf={() => setEvidenceShelf([])} readerReturnTo={askReaderReturn}/>
       </div>
       <section className="panel lesson-context" id="lesson-context-panel">
         <div className="lesson-context-heading">
