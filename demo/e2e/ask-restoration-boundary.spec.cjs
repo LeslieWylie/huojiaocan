@@ -15,8 +15,8 @@ for (const target of ['saved', 'local']) {
       if (/\/ask$/.test(path)) { calls.push(route.request().postData()); return route.fulfill({ json: response }); }
       if (path === '/api/config') return route.fulfill({ json: { gatewayConfigured: true, textModelConfigured: true } });
       if (path === '/api/drafts/saved') return route.fulfill({ json: { draft: {
-        id: 'saved', version: 1, title: '岳阳楼记', question: '《岳阳楼记》怎样备课？', scope: ['textbook'],
-        lesson_context: { lessonRef: { title: '岳阳楼记', documentId: 'textbook' } },
+        id: 'saved', version: 1, title: '岳阳楼记', question: '改成两课时', scope: ['textbook'],
+        lesson_context: {},
         answer: { ...response, conversationTurns: [{ question: '《岳阳楼记》怎样备课？', response }] }, cards: [], citations: []
       } } });
       return route.fulfill({ json: { keys: [], documents: [], drafts: [], profiles: [], results: [] } });
@@ -29,6 +29,8 @@ for (const target of ['saved', 'local']) {
       if (target === 'saved') {
         await expect(page.getByRole('region', { name: '最新一轮问答' })).toContainText('《岳阳楼记》怎样备课？');
         await expect(composer).toHaveValue('');
+        await expect(page.getByLabel('当前备课范围')).toContainText('岳阳楼记');
+        await expect(page.getByLabel('当前备课范围')).not.toContainText('改成两课时');
         await expect(page.locator('main')).not.toContainText('未发送的新课输入');
       } else await expect(composer).toHaveValue('未发送的新课输入');
       // Let readiness, restoration and debounced persistence effects settle.

@@ -289,7 +289,7 @@ export function AskPage() {
   const [planQuestion, setPlanQuestion] = useState(activeAuthRecovery?.planQuestion || initialQuestion);
   const conversationOwner = useRef(initialUser);
   const ownerTransitioning = useRef(false);
-  const pairedLessonTitle = lessonRef?.title || (messages.length && planQuestion ? planIdentity(planQuestion, '') : '');
+  const pairedLessonTitle = lessonRef?.title || (existingDraft ? planIdentity(existingDraft.answer?.lesson?.title || existingDraft.title, '') : '') || (messages.length && planQuestion ? planIdentity(planQuestion, '') : '');
   const composerRef = useRef(null);
   const autoAsked = useRef(false);
   const ownerPersistenceAllowed = () => canPersistAuthOwner(conversationOwner.current, session?.user?.id, ownerTransitioning.current);
@@ -868,7 +868,7 @@ export function AskPage() {
           {emptyState}
           {conversationState}
         </section>
-        <ConversationSide messages={messages} history={conversationHistory} lessonTitle={lessonRef?.title || (planQuestion ? planIdentity(planQuestion, '') : '')} scope={scope} lessonContext={lessonContext} existingDraft={existingDraft} draftId={draftId} restoredAt={restoredAt} restoredFromLocal={restoredFromLocal} recentDrafts={recentDrafts} localSessions={localSessions} onContinue={focusComposer} onQuickAsk={value => ask(null, value)} onNewConversation={startNewConversation} onExportConversation={exportConversation} shelf={evidenceShelf} onRemoveShelf={removeShelfItem} onClearShelf={() => setEvidenceShelf([])} readerReturnTo={askReaderReturn}/>
+        <ConversationSide messages={messages} history={conversationHistory} lessonTitle={pairedLessonTitle} scope={scope} lessonContext={lessonContext} existingDraft={existingDraft} draftId={draftId} restoredAt={restoredAt} restoredFromLocal={restoredFromLocal} recentDrafts={recentDrafts} localSessions={localSessions} onContinue={focusComposer} onQuickAsk={value => ask(null, value)} onNewConversation={startNewConversation} onExportConversation={exportConversation} shelf={evidenceShelf} onRemoveShelf={removeShelfItem} onClearShelf={() => setEvidenceShelf([])} readerReturnTo={askReaderReturn}/>
       </div>
       <section className="panel lesson-context" id="lesson-context-panel">
         <div className="lesson-context-heading">
