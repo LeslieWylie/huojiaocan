@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { generateGroundedAnswer, runReActRetrieval } from './grounded-answer.js';
 import { deriveSourceCoverage } from './source-coverage.js';
+import { createReadingContext } from './pageindex-reading-context.js';
 
 function readJsonOrFallback(url, fallback) {
   try { return JSON.parse(fs.readFileSync(url, 'utf8')); } catch { return fallback; }
@@ -255,7 +256,8 @@ export function normalizeSearchResult(raw = {}, provider = 'unknown') {
     nodeId: raw.nodeId || raw.node_id || sourcePage.nodeId || node?.id || null,
     quote: String(raw.quote || text),
     pdfUrl,
-    matchedTerms: raw.matchedTerms || []
+    matchedTerms: raw.matchedTerms || [],
+    ...(raw.readMode === 'full_page' ? { readMode: 'full_page' } : {})
   };
   return result;
 }
@@ -594,7 +596,7 @@ function mergeDistinctResults(primary = [], supplements = []) {
     return true;
   });
 }
-async function buildEvidenceAnswer({ provider, question, teachingFocus = '', scope, results, history = [], teacherReflectionContext = '', deepseek, lessonContext, lessonIdentity, followUpInstruction, operation, retrieveMore, retrievalMeta = {}, deadlineAt }) {
+async function buildEvidenceAnswer({ provider, question, teachingFocus = '', scope, results, history = [], teacherReflectionContext = '', deepseek, lessonContext, lessonIdentity, followUpInstruction, operation, retrieveMore, readingContext, retrievalMeta = {}, deadlineAt }) {
   // ReAct belongs to the answer boundary, not to the PageIndex request body.
   // It may ask the active provider for one or two narrower page searches when
   // the first retrieval is broad or empty. This is also what makes a follow-up
@@ -612,6 +614,7 @@ async function buildEvidenceAnswer({ provider, question, teachingFocus = '', sco
     env: process.env,
     deepseek,
     retrieveMore,
+    readingContext,
     deadlineAt
   });
   const safeResults = safeEvidence(react.evidence);
@@ -981,11 +984,13 @@ export class PageIndexProvider {
   get configured() { return Boolean(this.baseUrl); }
   async request(path, options = {}) {
     if (!this.configured) throw new Error('pageindex_unavailable');
-    const { retry = false, ...fetchOptions } = options;
+    const { retry = false, deadlineAt, ...fetchOptions } = options;
     const attempts = retry ? 2 : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      const remainingMs = deadlineAt == null ? this.timeoutMs : Math.min(this.timeoutMs, Number(deadlineAt) - Date.now());
+      if (remainingMs <= 0) throw pageIndexError('pageindex_timeout', { retryable: true });
+      const timer = setTimeout(() => controller.abort(), remainingMs);
       try {
         const response = await fetch(`${this.baseUrl}${path}`, {
           ...fetchOptions, signal: controller.signal,
@@ -996,9 +1001,9 @@ export class PageIndexProvider {
         if (!body || typeof body !== 'object') throw pageIndexError('pageindex_invalid_response');
         return body;
       } catch (error) {
-        const normalized = error?.code ? error : error?.name === 'AbortError'
+        const normalized = error?.name === 'AbortError'
           ? pageIndexError('pageindex_timeout', { retryable: true })
-          : pageIndexError('pageindex_request_failed', { retryable: true });
+          : error?.code ? error : pageIndexError('pageindex_request_failed', { retryable: true });
         if (normalized.retryable && attempt + 1 < attempts) {
           await new Promise(resolve => setTimeout(resolve, 180));
           continue;
@@ -1040,8 +1045,42 @@ export class PageIndexProvider {
       documentType: input.documentType || 'other'
     });
   }
-  getTree(documentId) { return this.request(`${this.apiPrefix}/indexes/${encodeURIComponent(documentId)}/tree`); }
-  getPage(documentId, pageNumber) { return this.request(`${this.apiPrefix}/indexes/${encodeURIComponent(documentId)}/pages/${Number(pageNumber)}`); }
+  getTree(documentId, options = {}) { return this.request(`${this.apiPrefix}/indexes/${encodeURIComponent(documentId)}/tree`, { deadlineAt: options.deadlineAt }); }
+  getPage(documentId, pageNumber, options = {}) { return this.request(`${this.apiPrefix}/indexes/${encodeURIComponent(documentId)}/pages/${Number(pageNumber)}`, { deadlineAt: options.deadlineAt }); }
+  createReadingContext({ scope, lessonIdentity, evidence, query, deadlineAt } = {}) {
+    // Unlike generic retrieval's public default, an absent/empty authenticated
+    // reading scope grants no documents. Never use response.scope to widen it.
+    const hasScope = typeof scope === 'string' ? Boolean(scope.trim()) : Array.isArray(scope) && scope.some(value => typeof value === 'string' && value.trim());
+    return createReadingContext({
+      provider: this,
+      scope: hasScope ? providerScopePayload(scope) : [],
+      lessonIdentity, evidence, query, deadlineAt,
+      normalizeResult: raw => ({
+        ...normalizeSearchResult(raw, this.id),
+        // The page text and catalogue path have already been verified against
+        // this provider. Do not replace them with bundled snapshot metadata.
+        title: raw.title, sectionPath: raw.sectionPath, nodeId: raw.nodeId,
+        printedPage: raw.printedPage, readMode: raw.readMode
+      })
+    });
+  }
+  async retrieveMore({ query, scope, sourceType, evidence = [], limit } = {}) {
+    let documentIds = Array.isArray(scope) && !scope.length ? [] : providerScopePayload(scope);
+    if (sourceType) {
+      const type = normalizeDocumentType(sourceType);
+      documentIds = documentIds.filter(documentId => {
+        const knownTypes = new Set(evidence.filter(item => item?.documentId === documentId)
+          .map(item => item.documentType).filter(Boolean).map(normalizeDocumentType));
+        const knownType = DOCUMENT_TYPE[documentId] || (knownTypes.size === 1 ? [...knownTypes][0] : null);
+        return knownType && normalizeDocumentType(knownType) === type;
+      });
+    }
+    // Passing [] to generic retrieval would select a public default. Return
+    // here instead: source-specific policy lookup must never add permissions.
+    if (!documentIds.length) return [];
+    const response = await this.retrieve({ query, scope: documentIds, limit });
+    return (response.results || []).filter(item => documentIds.includes(item.documentId));
+  }
   async search(input = {}) {
     const payload = pageIndexRetrievePayload(input, 'search');
     const remotePayload = { ...payload, documentIds: payload.documentIds.filter(documentId => documentId !== 'curriculum-standard') };
@@ -1134,9 +1173,15 @@ export class PageIndexProvider {
       followUpInstruction,
       operation,
       deadlineAt,
+      readingContext: retrievalMode === 'stable_snapshot' ? undefined : this.createReadingContext({
+        scope, lessonIdentity, evidence: retrieved.results, query: lookup, deadlineAt
+      }),
       retrieveMore: retrievalMode === 'stable_snapshot'
         ? undefined
-        : nextQuery => this.retrieve({ query: lessonAwareLookup(nextQuery, query, lessonIdentity), scope: retrieved.scope || scope, limit }).then(value => value.results),
+        : (nextQuery, { sourceType } = {}) => this.retrieveMore({
+          query: lessonAwareLookup(nextQuery, query, lessonIdentity), scope, limit,
+          sourceType, evidence: retrieved.results
+        }),
       retrievalMeta: retrieved.retrievalMode === 'stable_snapshot'
         ? { retrievalMode: retrieved.retrievalMode, fallbackLabel: retrieved.fallbackLabel, fallbackAt: retrieved.fallbackAt, fallbackReason: retrieved.fallbackReason }
         : {}

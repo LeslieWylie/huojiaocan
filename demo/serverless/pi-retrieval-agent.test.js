@@ -7,7 +7,7 @@ import {
   fauxText,
   fauxToolCall
 } from '@earendil-works/pi-ai';
-import { runPiRetrievalAgent } from './pi-retrieval-agent.js';
+import { runPiRetrievalAgent, selectTeachingEvidence } from './pi-retrieval-agent.js';
 
 function runtimeWithResponses(responses) {
   const faux = fauxProvider();
@@ -153,5 +153,61 @@ test('production Pi adapter keeps the gateway request server-side and tool-scope
   assert.equal(requests[0].body.stream, true);
   assert.deepEqual(requests[0].body.thinking, { type: 'disabled' });
   assert.deepEqual(requests[0].body.tools.map(tool => tool.function.name), ['search_teaching_material']);
-  assert.equal(result.evidence.at(-1).pdfPage, 224);
+  assert.equal(result.evidence.find(item => item.documentId === 'teacher-guide').pdfPage, 224);
+});
+
+test('late original-page reads replace snippets and survive a full evidence window', () => {
+  const old = Array.from({ length: 10 }, (_, i) => ({ documentId: 'guide', documentType: 'teacher_guide', pdfPage: i + 1, text: '摘要' }));
+  const read = { ...old[8], text: '原页包含主语、转折和上下文', readMode: 'full_page' };
+  const result = selectTeachingEvidence(old, [read, ...startingEvidence], 8);
+  assert.ok(result.includes(read));
+  assert.equal(result.filter(item => item.pdfPage === 9 && item.documentId === 'guide').length, 1);
+  assert.ok(result.some(item => item.documentType === 'textbook'));
+  assert.equal(result.length, 8);
+  assert.ok(selectTeachingEvidence(result, [{ ...read, text: '更短摘要', readMode: 'snippet' }], 8).includes(read));
+});
+
+test('Pi follows an opaque tree section handle and reads real pages, bounded to two calls', async () => {
+  const { runtime } = runtimeWithResponses([
+    fauxAssistantMessage(fauxToolCall('read_teaching_section', { sectionRef: 'section-text' }), { stopReason: 'toolUse' }),
+    fauxAssistantMessage(fauxToolCall('read_teaching_section', { sectionRef: 'section-text' }), { stopReason: 'toolUse' }),
+    fauxAssistantMessage(fauxToolCall('read_teaching_section', { sectionRef: 'section-text' }), { stopReason: 'toolUse' }),
+    fauxAssistantMessage(fauxText('READY'))
+  ]);
+  let reads = 0;
+  const result = await runPiRetrievalAgent({
+    question: '比较本篇人物心境', followUpInstruction: '先核对引文对象，保留一课时',
+    lessonIdentity: { title: '岳阳楼记' }, evidence: startingEvidence, runtime,
+    readingContext: {
+      listSections: async () => [{ sectionRef: 'section-text', title: '岳阳楼记', pageStart: 56, pageEnd: 58 }],
+      readSection: async ref => { assert.equal(ref, 'section-text'); reads += 1; return [{ ...startingEvidence[0], text: '原文上下文', readMode: 'full_page' }]; }
+    }
+  });
+  assert.equal(reads, 2);
+  assert.equal(result.evidence[0].readMode, 'full_page');
+  assert.equal(result.trace.filter(item => item.action === 'read').length, 2);
+});
+
+test('Pi rejects invented section refs without reading arbitrary pages', async () => {
+  const { runtime } = runtimeWithResponses([
+    fauxAssistantMessage(fauxToolCall('read_teaching_section', { sectionRef: 'other-user-page' }), { stopReason: 'toolUse' }),
+    fauxAssistantMessage(fauxText('INSUFFICIENT'))
+  ]);
+  let reads = 0;
+  await runPiRetrievalAgent({ question: '核对原文', evidence: startingEvidence, runtime, readingContext: {
+    listSections: async () => [{ sectionRef: 'allowed' }], readSection: async () => { reads++; return []; }
+  } });
+  assert.equal(reads, 0);
+});
+
+test('retrieval deadline includes deterministic searches and ignores late results', async () => {
+  const { runtime } = runtimeWithResponses([fauxAssistantMessage(fauxText('READY'))]);
+  let resolve;
+  const pending = new Promise(done => { resolve = done; });
+  const start = Date.now();
+  const result = await runPiRetrievalAgent({ question: '怎样备课岳阳楼记', scope: ['textbook', 'teacher-guide'], lessonIdentity: { title: '岳阳楼记' }, evidence: startingEvidence, runtime, deadlineAt: Date.now() + 40, retrieveMore: () => pending });
+  assert.ok(Date.now() - start < 500);
+  resolve([{ documentId: 'late', pdfPage: 999 }]);
+  await new Promise(done => setTimeout(done, 5));
+  assert.deepEqual(result.evidence, startingEvidence);
 });

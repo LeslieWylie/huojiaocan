@@ -442,3 +442,33 @@ test('grounded reply is deterministically repaired when every model round omits 
   assert.equal(result.answer.planCompletion.mode, 'grounded-structure-repair');
   assert.ok(result.answer.lessonPlan.every(step => step.evidenceRefs.includes('E1')));
 });
+
+test('correction review sees original context and repairs the entire one-period response', async t => {
+  const originalFetch = global.fetch;
+  t.after(() => { global.fetch = originalFetch; });
+  const requests = [];
+  global.fetch = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    const repaired = requests.length >= 2;
+    return new Response(JSON.stringify({ model: 'test-model', choices: [{ message: { content: JSON.stringify({
+      lesson: { title: '岳阳楼记', coreQuestion: '迁客骚人与古仁人的忧乐有何不同？' },
+      understanding: '问题理解：问题理解：区分引文对象与忧乐观。',
+      answer: { summary: repaired ? '宠辱偕忘写第四段登楼者的喜悦，不是古仁人的境界。' : '古仁人宠辱偕忘', lessonPosition: repaired ? '一课时比较阅读' : '第二课时比较阅读' },
+      sourceChecks: [{ claim: '宠辱偕忘的描写对象', subject: repaired ? '第四段登楼者' : '古仁人', evidenceRefs: ['E1'], status: repaired ? 'corrected' : 'contradicted' }]
+    }) } }] }), { status: 200 });
+  };
+  const result = await generateGroundedAnswer({
+    question: '这句话写的是谁？', followUpInstruction: '不要混淆引文对象，仍保留一课时。',
+    lessonIdentity: { title: '岳阳楼记' }, lessonContext: { periods: 1 },
+    evidence: [{ ...evidence[0], readMode: 'full_page', text: '第四段：登斯楼也，则有心旷神怡，宠辱偕忘。第五段：予尝求古仁人之心，或异二者之为。' }],
+    env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-secret', LLM_GATEWAY_MODEL: 'test-model', LLM_ANSWER_MODE: 'gateway' }
+  });
+  assert.equal(requests.length, 2);
+  assert.equal(result.answer.lessonPosition, '一课时比较阅读');
+  assert.equal(result.understanding, '区分引文对象与忧乐观。');
+  const review = JSON.parse(requests[1].messages.at(-1).content);
+  assert.match(review.checklist.join('\n'), /同步修改 understanding、reply、summary、lessonPosition/u);
+  assert.match(review.evidence[0].excerpt, /第四段.*第五段/u);
+  assert.ok(review.teachingIssues.some(issue => /课时定位/u.test(issue)));
+  assert.deepEqual(result.teachingPlanIssues, []);
+});

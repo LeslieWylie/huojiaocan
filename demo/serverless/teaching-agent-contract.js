@@ -117,6 +117,7 @@ export function createSafeAgentRun({ contract, evidence = [], retrievalTrace = [
   const coverage = inspectEvidenceCoverage(contract, evidence);
   const generatedRounds = (Array.isArray(generationTrace) ? generationTrace : []).filter(item => item?.status === 'completed').length;
   const searched = (Array.isArray(retrievalTrace) ? retrievalTrace : []).filter(item => item?.action === 'search').length;
+  const pagesRead = (Array.isArray(retrievalTrace) ? retrievalTrace : []).filter(item => item?.action === 'read').reduce((sum, item) => sum + (Number(item.pagesRead) || 0), 0);
   const qualityIssues = (Array.isArray(issues) ? issues : []).filter(Boolean).slice(0, 6);
   const ready = coverage.sufficient && generatedRounds > 0 && qualityIssues.length === 0;
   return {
@@ -126,9 +127,9 @@ export function createSafeAgentRun({ contract, evidence = [], retrievalTrace = [
     lessonTitle: contract?.lessonTitle || '',
     sourceCoverage: coverage,
     events: [
-      event('grounding', coverage.sufficient ? 'completed' : 'needs_attention', coverage.sufficient ? '已定位本轮所需教材依据' : '仍有教材依据需要补充', { searches: searched }),
+      event('grounding', coverage.sufficient ? 'completed' : 'needs_attention', coverage.sufficient ? '已定位本轮所需教材依据' : '仍有教材依据需要补充', { searches: searched, pagesRead }),
       event('draft', generatedRounds ? 'completed' : 'not_started', generatedRounds ? '已形成课堂方案初稿' : '尚未形成课堂方案'),
-      event('evidence_review', qualityIssues.length ? 'needs_attention' : generatedRounds > 1 ? 'completed' : 'pending', qualityIssues.length ? '仍有课堂安排需要教师判断' : generatedRounds > 1 ? '已完成教材依据与课堂可用性校核' : '等待教材依据校核', { issueCount: qualityIssues.length }),
+      event('evidence_review', qualityIssues.length ? 'needs_attention' : generatedRounds > 1 ? 'completed' : 'pending', qualityIssues.length ? '仍有课堂安排需要教师判断' : generatedRounds > 1 ? '已进行模型辅助核对，仍需教师确认' : '等待教材依据校核', { issueCount: qualityIssues.length }),
       event('teacher_confirmation', 'pending', '请教师核对后确认方案')
     ]
   };

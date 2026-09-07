@@ -648,3 +648,13 @@
 .cards-edit-dependent { border: 0; padding: 0; margin: 0; min-width: 0; }
 .cards-edit-dependent:disabled { opacity: .65; }
 .cards-edit-recovery { padding: 1rem; border: 1px solid currentColor; }
+
+/* In-app card lock confirmation; native HTML dialog keeps keyboard focus inside. */
+.card-lock-dialog{color:var(--ink);width:min(520px,calc(100% - 32px));max-height:calc(100dvh - 32px);margin:auto;padding:24px;border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:auto}
+.card-lock-dialog::backdrop{background:#12373180}
+.card-lock-dialog h2{margin:0;font-size:22px;line-height:1.45}
+.card-lock-dialog p{color:var(--muted);line-height:1.8;overflow-wrap:anywhere}
+.card-lock-dialog [role=alert]{color:#a75d26}
+.card-lock-dialog footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:12px;margin-top:24px}
+.card-lock-dialog button{border:1px solid var(--line);border-radius:8px;padding:10px 18px;background:var(--paper);color:var(--ink)}
+.card-lock-dialog button.primary{background:var(--green);color:#fff}

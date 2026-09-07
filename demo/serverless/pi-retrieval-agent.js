@@ -99,18 +99,27 @@ function evidenceForAgent(items = []) {
     documentType: compact(item.documentType, 40),
     page: Number(item.pdfPage) || undefined,
     sectionPath: Array.isArray(item.sectionPath) ? item.sectionPath.slice(-3) : [],
-    excerpt: compact(item.text || item.quote, 420)
+    excerpt: compact(item.text || item.quote, item.readMode === 'full_page' ? 3000 : 600),
+    readMode: item.readMode || 'snippet'
   }));
 }
 
-function distinctEvidence(current, next) {
-  const seen = new Set(current.map(item => `${item?.documentId || ''}:${Number(item?.pdfPage) || 0}`));
-  return (Array.isArray(next) ? next : []).filter(item => {
-    const key = `${item?.documentId || ''}:${Number(item?.pdfPage) || 0}`;
-    if (!item?.documentId || !Number(item?.pdfPage) || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+// Reserve space for each material type before filling the remaining context.
+// New full-page reads replace snippets of the same physical page, not vice versa.
+export function selectTeachingEvidence(current = [], additions = [], limit = 10) {
+  const pages = new Map();
+  for (const item of [...additions, ...current]) {
+    if (!item?.documentId || !Number.isSafeInteger(Number(item.pdfPage)) || Number(item.pdfPage) < 1) continue;
+    const key = `${item.documentId}:${Number(item.pdfPage)}`;
+    const previous = pages.get(key);
+    if (!previous || (item.readMode === 'full_page' && previous.readMode !== 'full_page')) pages.set(key, item);
+  }
+  const list = [...pages.values()];
+  const type = item => String(item.documentType || 'other').replaceAll('-', '_');
+  const groups = [...new Set(list.map(type))].map(key => list.filter(item => type(item) === key));
+  const chosen = groups.flatMap(group => group.slice(0, 2)).slice(0, limit);
+  for (const item of list) if (chosen.length < limit && !chosen.includes(item)) chosen.push(item);
+  return chosen;
 }
 
 /**
@@ -129,6 +138,7 @@ export async function runPiRetrievalAgent({
   operation,
   expectedCardTypes = [],
   retrieveMore,
+  readingContext,
   env = process.env,
   deepseek,
   deadlineAt,
@@ -136,7 +146,7 @@ export async function runPiRetrievalAgent({
 } = {}) {
   let current = Array.isArray(evidence) ? [...evidence] : [];
   const trace = [];
-  if (typeof retrieveMore !== 'function') return { evidence: current, trace };
+  if (typeof retrieveMore !== 'function' && !readingContext) return { evidence: current, trace };
 
   const activeRuntime = runtime || createPiRetrievalRuntime({ env, deepseek, deadlineAt });
   if (!activeRuntime?.configured || !activeRuntime.model || typeof activeRuntime.streamFn !== 'function') {
@@ -152,6 +162,26 @@ export async function runPiRetrievalAgent({
     operation,
     expectedCardTypes
   });
+  const expiresAt = Math.min(Date.now() + (activeRuntime.timeoutMs || DEFAULT_TIMEOUT_MS), Number(deadlineAt) || Infinity);
+  let stopped = false;
+  const expired = () => stopped || Date.now() >= expiresAt;
+  async function withinBudget(operation) {
+    if (expired()) throw new Error('retrieval_deadline');
+    let timer;
+    try {
+      return await Promise.race([
+        Promise.resolve().then(operation),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('retrieval_deadline')), Math.max(0, expiresAt - Date.now())); })
+      ]);
+    } finally { clearTimeout(timer); }
+  }
+  let sections = [];
+  if (readingContext?.listSections) {
+    try { sections = (await withinBudget(() => readingContext.listSections())).slice(0, 24); } catch { /* Keep verified initial hits. */ }
+  }
+  const sectionRefs = new Set(sections.map(section => section.sectionRef));
+  let readCount = 0;
+  let toolCount = 0;
   let searchCount = 0;
   const seenQueries = new Set();
   const searchTool = {
@@ -163,11 +193,12 @@ export async function runPiRetrievalAgent({
     }),
     executionMode: 'sequential',
     execute: async (_toolCallId, params) => {
-      if (searchCount >= MAX_SEARCHES) {
+      toolCount += 1;
+      if (expired() || searchCount >= MAX_SEARCHES || typeof retrieveMore !== 'function') {
         return {
           content: [{ type: 'text', text: '已达到本轮教材搜索上限，请使用已有页面完成判断。' }],
           details: { status: 'limit_reached' },
-          terminate: true
+          ...(sections.length ? {} : { terminate: true })
         };
       }
       const query = compact(params?.query, 120);
@@ -176,14 +207,13 @@ export async function runPiRetrievalAgent({
         return {
           content: [{ type: 'text', text: '该教材搜索已经执行，请依据已有页面继续。' }],
           details: { status: 'duplicate_search' },
-          terminate: true
+          ...(sections.length ? {} : { terminate: true })
         };
       }
       seenQueries.add(queryKey);
       searchCount += 1;
-      const next = await retrieveMore(query);
-      const additions = distinctEvidence(current, next);
-      current = [...current, ...additions].slice(0, 10);
+      const additions = await withinBudget(() => retrieveMore(query));
+      if (!expired()) current = selectTeachingEvidence(current, additions);
       trace.push({ step: searchCount, action: 'search', query, reason: '补充当前篇目的教材依据' });
       return {
         content: [{
@@ -191,8 +221,27 @@ export async function runPiRetrievalAgent({
           text: JSON.stringify({ added: additions.length, evidence: evidenceForAgent(additions) })
         }],
         details: { added: additions.length },
-        ...(additions.length ? {} : { terminate: true })
+        ...(additions.length || sections.length ? {} : { terminate: true })
       };
+    }
+  };
+
+  const readTool = {
+    name: 'read_teaching_section',
+    label: '阅读篇目原页',
+    description: '从本轮提供的目录节点中选择 sectionRef，读取命中原页及同节相邻页，核对人物、词句和上下文；不得自行提交文档或页码。',
+    parameters: Type.Object({ sectionRef: Type.String({ minLength: 1, maxLength: 100 }) }),
+    executionMode: 'sequential',
+    execute: async (_id, params) => {
+      toolCount += 1;
+      if (expired() || readCount >= 2 || !sectionRefs.has(params?.sectionRef)) {
+        return { content: [{ type: 'text', text: '节点不可用或阅读额度已用完，请依据已读材料判断，不要猜测。' }], details: { status: 'unavailable' } };
+      }
+      readCount += 1;
+      const pages = await withinBudget(() => readingContext.readSection(params.sectionRef));
+      if (!expired()) current = selectTeachingEvidence(current, pages);
+      trace.push({ step: trace.length + 1, action: 'read', reason: '核对篇目原页与同节上下文', pagesRead: pages.length });
+      return { content: [{ type: 'text', text: JSON.stringify({ evidence: evidenceForAgent(pages), remainingReads: 2 - readCount }) }], details: { pagesRead: pages.length } };
     }
   };
 
@@ -200,15 +249,14 @@ export async function runPiRetrievalAgent({
   // waive the product's source requirements. Planning and card turns fetch the
   // first missing source deterministically before free tool use.
   let nextMissing = inspectEvidenceCoverage(contract, current).missing[0];
-  while (nextMissing && searchCount < contract.maxRetrievalIterations) {
+  while (!expired() && typeof retrieveMore === 'function' && nextMissing && searchCount < Math.min(MAX_SEARCHES, contract.maxRetrievalIterations)) {
     const missingSource = nextMissing;
     const query = groundingQueryFor(contract, question, missingSource);
     try {
       seenQueries.add(query.toLowerCase());
       searchCount += 1;
-      const next = await retrieveMore(query);
-      const additions = distinctEvidence(current, next);
-      current = [...current, ...additions].slice(0, 10);
+      const additions = await withinBudget(() => retrieveMore(query, { sourceType: missingSource }));
+      if (!expired()) current = selectTeachingEvidence(current, additions);
       trace.push({
         step: searchCount,
         action: 'search',
@@ -232,47 +280,47 @@ export async function runPiRetrievalAgent({
   const agent = new Agent({
     initialState: {
       systemPrompt: [
-        '你只负责教材搜索编排，不回答教师问题，不编写教案。',
+        '你负责沿教材目录定位、阅读、核对，不回答教师问题，不编写教案。',
         '先判断已有页面是否覆盖当前篇目、教师用书处理或学生教材原文。',
-        '证据足够时直接回复 READY；只有明确缺页时才调用 search_teaching_material。',
+        '先看 availableSections 的标题、摘要、范围，再按需调用 read_teaching_section 读原页；摘要不是原文。涉及引文主语、段落比较或纠错时应读正文上下文，材料不足才搜索补充。证据足够回复 READY；没有支持则回复 INSUFFICIENT，不能靠常识填补。',
         `最多搜索 ${MAX_SEARCHES} 次，禁止重复查找。`,
         '不得生成或修改文档 ID、页码、引用文字和 PDF 地址。'
       ].join('\n'),
       model: activeRuntime.model,
-      tools: [searchTool],
+      tools: [...typeof retrieveMore === 'function' ? [searchTool] : [], ...sections.length ? [readTool] : []],
       messages: []
     },
     streamFn: activeRuntime.streamFn,
     getApiKey: activeRuntime.apiKey ? () => activeRuntime.apiKey : undefined,
     toolExecution: 'sequential',
-    shouldStopAfterTurn: () => searchCount >= MAX_SEARCHES,
+    shouldStopAfterTurn: () => expired() || toolCount >= 4 || (searchCount >= MAX_SEARCHES && (!sections.length || readCount >= 2)),
     onPayload: payload => payload,
     maxRetryDelayMs: 1_500
   });
 
-  const abortAfter = Math.max(1_000, Math.min(
-    activeRuntime.timeoutMs || DEFAULT_TIMEOUT_MS,
-    Number(deadlineAt) > Date.now() ? Number(deadlineAt) - Date.now() : DEFAULT_TIMEOUT_MS
-  ));
-  const timer = setTimeout(() => agent.abort(), abortAfter);
+  const timer = setTimeout(() => agent.abort(), Math.max(0, expiresAt - Date.now()));
   try {
-    await agent.prompt(JSON.stringify({
+    if (!expired()) await withinBudget(() => agent.prompt(JSON.stringify({
       currentQuestion: compact(question, 900),
+      followUpInstruction: compact(followUpInstruction, 1400),
+      availableSections: sections,
       fixedLessonIdentity: lessonIdentity || {},
       turnContract: contract,
       scope: Array.isArray(scope) ? scope : [scope].filter(Boolean),
       recentConversation: Array.isArray(history) ? history.slice(-6) : [],
       teacherReflectionContext: compact(teacherReflectionContext, 900),
       currentEvidence: evidenceForAgent(current)
-    }));
+    })));
   } catch {
     // Retrieval expansion is optional. The already verified evidence remains
     // usable even if the planning model or one tool turn fails.
   } finally {
+    stopped = true;
+    agent.abort();
     clearTimeout(timer);
   }
 
-  if (!trace.length || trace.at(-1)?.action === 'search') {
+  if (!trace.length || ['search', 'read'].includes(trace.at(-1)?.action)) {
     trace.push({ step: searchCount + 1, action: 'answer', query: '', reason: '已有页面交由最终回答流程核对' });
   }
   return { evidence: current, trace, contract, coverage: inspectEvidenceCoverage(contract, current) };

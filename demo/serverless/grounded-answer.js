@@ -2,7 +2,8 @@ import { GatewayError } from './llm-gateway.js';
 import { createStructuredModel, runStructuredReviewLoop } from './ai-orchestrator.js';
 import { gatewayConfig } from './shared.js';
 import { resolveLessonIdentity } from '../shared/lesson-identity.js';
-import { runPiRetrievalAgent } from './pi-retrieval-agent.js';
+import { answerConsistencyIssues, SOURCE_REVIEW_RULE } from './answer-consistency.js';
+import { runPiRetrievalAgent, selectTeachingEvidence } from './pi-retrieval-agent.js';
 import {
   buildAgentPromptContext,
   createSafeAgentRun,
@@ -26,17 +27,12 @@ function compact(value, max = 900) {
 }
 
 function prioritizeTeachingEvidence(items = []) {
-  const list = Array.isArray(items) ? items : [];
-  // For a combined search, the guide is the teaching reference and the
-  // textbook is the primary text. Keep the provider's ranking inside each
-  // source, but put the guide first so both the prompt and the generated
-  // citation chips consistently reflect that product rule.
-  return [
-    ...list.filter(item => item?.documentType === 'curriculum_standard' || item?.documentType === 'curriculum-standard'),
-    ...list.filter(item => item?.documentType === 'teacher_guide' || item?.documentType === 'teacher-guide'),
-    ...list.filter(item => item?.documentType === 'textbook'),
-    ...list.filter(item => !['curriculum_standard', 'curriculum-standard', 'teacher_guide', 'teacher-guide', 'textbook'].includes(item?.documentType))
-  ];
+  const ranked = [...items].sort((a, b) => {
+    const order = ['curriculum_standard', 'teacher_guide', 'textbook'];
+    const rank = item => { const index = order.indexOf(normalizeDocumentType(item.documentType)); return index < 0 ? 3 : index; };
+    return rank(a) - rank(b);
+  });
+  return selectTeachingEvidence(ranked, [], 8);
 }
 
 function citation(item, id) {
@@ -320,7 +316,7 @@ function legacySections({ question, answer, citations, standard, textbook, guide
   ];
 }
 
-export async function runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext = '', lessonIdentity, followUpInstruction = '', operation, expectedCardTypes = [], env, deepseek, retrieveMore, deadlineAt }) {
+export async function runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext = '', lessonIdentity, followUpInstruction = '', operation, expectedCardTypes = [], env, deepseek, retrieveMore, readingContext, deadlineAt }) {
   return runPiRetrievalAgent({
     question,
     scope,
@@ -334,6 +330,7 @@ export async function runReActRetrieval({ question, scope, evidence, history, te
     env,
     deepseek,
     retrieveMore,
+    readingContext,
     deadlineAt
   });
 }
@@ -599,7 +596,9 @@ function reviewGroundedMessages({ parsed, references, fixedLessonIdentity, fixed
         evidence: references,
         draft: parsed,
         teachingIssues,
+        sourceChecksSchema: [{ claim: '最终稿中的可核验判断', subject: '引文对象或说话者', evidenceRefs: ['E1'], status: 'verified | corrected | insufficient', resolution: '依据原文修正后的简短结论；不足则明确待确认' }],
         checklist: [
+          SOURCE_REVIEW_RULE,
           'lesson.title 必须与 fixedLessonIdentity.title 完全一致。',
           '重要判断只能引用 evidence 中存在的 E 编号；材料不足时明确写待教师确认。',
           '教师用书处理与学生教材原文不得混写成同一种依据。',
@@ -623,7 +622,7 @@ function reviewGroundedMessages({ parsed, references, fixedLessonIdentity, fixed
  * Generate actionable prose only. Page identity is always rebound from the
  * server-side retrieved evidence; the model never controls citations or URLs.
  */
-export async function generateGroundedAnswer({ question, teachingFocus = '', scope, evidence, history = [], teacherReflectionContext = '', env = process.env, deepseek, lessonContext, lessonIdentity, followUpInstruction, operation, retrieveMore, reactResult, expectedCardTypes = [], deadlineAt } = {}) {
+export async function generateGroundedAnswer({ question, teachingFocus = '', scope, evidence, history = [], teacherReflectionContext = '', env = process.env, deepseek, lessonContext, lessonIdentity, followUpInstruction, operation, retrieveMore, readingContext, reactResult, expectedCardTypes = [], deadlineAt } = {}) {
   const config = gatewayConfig(env);
   const answerMode = ['auto', 'gateway', 'extractive'].includes(config.answerMode) ? config.answerMode : 'auto';
   const model = createStructuredModel({ env, deepseek, deadlineAt });
@@ -634,7 +633,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   // still tells the model to treat the teacher guide as the priority for
   // teaching decisions; reordering here would silently remap existing cards.
   const turnContract = createTeachingTurnContract({ question, scope, history, lessonIdentity, followUpInstruction, operation, expectedCardTypes });
-  const react = reactResult || await runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext, lessonIdentity, followUpInstruction, operation, expectedCardTypes, env, deepseek, retrieveMore, deadlineAt });
+  const react = reactResult || await runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext, lessonIdentity, followUpInstruction, operation, expectedCardTypes, env, deepseek, retrieveMore, readingContext, deadlineAt });
   const orderedEvidence = prioritizeTeachingEvidence(react.evidence).slice(0, 8);
   const evidenceCoverage = inspectEvidenceCoverage(turnContract, orderedEvidence);
   const references = orderedEvidence.map((item, index) => ({
@@ -644,7 +643,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     pdfPage: item.pdfPage,
     printedPage: item.printedPage || null,
     sectionPath: item.sectionPath,
-    excerpt: compact(item.text)
+    excerpt: compact(item.text, item.readMode === 'full_page' ? 3000 : 1400)
   }));
   const rawLessonIdentityTitle = String(lessonIdentity?.title || '').trim();
   const fixedLessonIdentity = resolveLessonIdentity({
@@ -684,7 +683,8 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
         outputSchema: {
           lesson: { title: '仅写篇目名称，例如《岳阳楼记》；不得写“怎么备课”“换成两课时”等操作指令', coreQuestion: '本课始终追问的核心问题' },
           answerType: 'lesson-plan 或 direct',
-          understanding: '一句话说明问题理解',
+          understanding: '用一句话准确说明当前教学问题；不要添加问题理解前缀，不复述已经纠正的错误判断',
+          sourceChecks: [{ claim: '关键文本判断', subject: '描写对象或说话者', evidenceRefs: ['E1'], status: 'verified | corrected | insufficient', resolution: '可核验的简短结论；不是推理过程' }],
           answer: {
             reply: '直接回答教师当前这一轮问题：先指出本课最值得教的内容，再给出学生怎样学、教师怎样推进；不要重复整套流程',
             summary: '围绕固定篇目与 teachingFocus 的课堂主张，必须包含文本重点、学习任务和推进方式，不能复述用户的“怎么备课”',
@@ -707,6 +707,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
       })
     }
   ];
+  messages[0].content += '\n' + SOURCE_REVIEW_RULE;
   messages[0].content += '\n\n补充的三源材料使用规则：课程标准说明“这个学段要发展什么能力、达到什么学业质量”；教师用书帮助理解编写意图和可供取舍的教学建议；学生教材说明“学生实际读什么、依据什么作答”。先引用直接命中的课程标准原文确认学段要求，再核对教师用书中的课时定位、教学目标、重点难点、活动建议、问题链、作业与评价，结合班情取舍，最后回到学生教材核对课文、段落、助学任务和可引用词句。不得把某篇课文与某个学习任务群的关系写成课标原话；除非有教师确认，必须标注“待教师确认”。所有较长的课堂安排必须说明依据来自哪类材料、教师如何操作、学生需要回到哪一处文本、预期出现什么具体回答，以及这一环节怎样推进到下一环节。不要用“引导学生理解”“培养语文能力”代替完整设计，也不要为了凑满字段重复同一条依据。每个重要判断都应能返回对应原页，或被明确标注为“基于三类材料的课堂转化”；若材料没有支持，宁可写“待教师结合班情确认”，不要自行补充材料外知识。';
   try {
     const request = JSON.parse(messages.at(-1).content);
@@ -787,7 +788,8 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     detectIssues: value => [
       ...teachingPlanCompletenessIssues(value, planningQuestion),
       ...teachingPlanIssues(value, lessonContext),
-      ...cardGenerationIssues(value, expectedCardTypes)
+      ...cardGenerationIssues(value, expectedCardTypes),
+      ...answerConsistencyIssues(value, lessonContext, references)
     ]
   });
   const completion = workflow.completion;
@@ -842,7 +844,9 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   const finalIssues = [
     ...teachingPlanCompletenessIssues({ answer }, planningQuestion),
     ...teachingPlanIssues({ answer }, lessonContext),
-    ...cardGenerationIssues(parsed, expectedCardTypes)
+    ...cardGenerationIssues(parsed, expectedCardTypes),
+    ...answerConsistencyIssues(parsed, lessonContext, references),
+    ...(workflow.unresolvedIssues || [])
   ].slice(0, 10);
   const route = {
     scopes: scope,
@@ -868,7 +872,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
       issues: finalIssues
     }),
     evidenceSufficient: citations.length > 0,
-    understanding: textField(parsed.understanding, `围绕“${question}”定位教材结构与教学用书建议。`),
+    understanding: textField(String(parsed.understanding || '').replace(/^(?:\s*问题理解\s*[:：]\s*)+/u, ''), `围绕“${question}”定位教材结构与教学用书建议。`),
     answer,
     route,
     citations,

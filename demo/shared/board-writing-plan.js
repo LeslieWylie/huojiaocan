@@ -1,10 +1,12 @@
+import { buildBoardPresentation } from './board-presentation.js';
+
 const MAX_ITEM_CHARS = 16;
 const MAX_TOTAL_CHARS = 84;
 
 // Three rows fit between the branch labels and the conclusion/teacher blanks.
 // Keep each leaf within its own column rather than overlapping sibling boxes.
 export function boardLeafLayout(branch, index) {
-  return { x: branch.x, y: 430 + index * 78, width: 320, height: 58 };
+  return { x: branch.x, y: (branch.y ?? 330) + 100 + index * 78, width: 320, height: 58 };
 }
 
 function text(value, limit = 120) {
@@ -19,9 +21,12 @@ function secondsFor(value, fixed = 0) {
   return Math.max(0, Math.round(chalkCharacterCount(value) * 1.35 + fixed));
 }
 
-export function buildBoardWritingPlan({ title = '', coreQuestion = '', items = [], blankZones = [] } = {}) {
+export function buildBoardWritingPlan({ title = '', coreQuestion = '', items = [], blankZones = [], boardPlan = null } = {}) {
   const safeTitle = text(title, 32) || '本课课题';
-  const safeQuestion = text(coreQuestion, 80) || '本课核心问题';
+  const presentation = buildBoardPresentation({ items, boardPlan, coreQuestion });
+  const safeQuestion = text(presentation.coreQuestion, 120);
+  const conclusion = text(presentation.conclusion, 80);
+  const branchTitles = presentation.branches.map(branch => branch.title);
   const safeItems = (Array.isArray(items) ? items : [])
     .map((item, index) => ({ id: String(item?.id || `board-item-${index + 1}`), text: text(item?.text, 80), index }))
     .filter(item => item.text)
@@ -37,11 +42,11 @@ export function buildBoardWritingPlan({ title = '', coreQuestion = '', items = [
   // 核心问题超过 24 字时，课堂上建议口头完整提出，只在黑板上写“核心问题：____”。
   const writtenQuestion = questionChars > 24 ? '核心问题：________' : safeQuestion;
   const writtenItems = safeItems.map((item, index) => ({ ...item, order: index + 1, chars: itemChars[index] }));
-  const totalChars = titleChars + chalkCharacterCount(writtenQuestion) + itemChars.reduce((sum, value) => sum + value, 0) + 18;
+  const totalChars = titleChars + chalkCharacterCount(writtenQuestion) + itemChars.reduce((sum, value) => sum + value, 0) + branchTitles.reduce((sum, value) => sum + chalkCharacterCount(value), 0) + chalkCharacterCount(conclusion);
   const estimatedSeconds = secondsFor(safeTitle, 4)
     + secondsFor(writtenQuestion, 4)
     + itemChars.reduce((sum, value) => sum + Math.round(value * 1.35 + 2), 0)
-    + 20;
+    + branchTitles.reduce((sum, value) => sum + secondsFor(value, 2), 0) + secondsFor(conclusion, 6) + 12;
   const issues = [];
   if (safeItems.length < 3) issues.push('板书主线不足 3 条，课堂上可能难以形成清晰结构。');
   if (safeItems.length > 6) issues.push('板书要点超过 6 条，建议删去解释句，只保留结构词。');
@@ -60,10 +65,10 @@ export function buildBoardWritingPlan({ title = '', coreQuestion = '', items = [
     },
     {
       stage: 2,
-      when: '学生形成三条理解路径后',
-      write: ['文本结构', '语言依据', '情感主旨'],
-      leave: '三个分支下方不要提前写答案。',
-      seconds: 18
+      when: '师生确认板书分组或落笔顺序后',
+      write: branchTitles,
+      leave: '按已有分组展开；没有可靠类别时，只标注落笔顺序。',
+      seconds: branchTitles.reduce((sum, value) => sum + secondsFor(value, 2), 0)
     },
     {
       stage: 3,
@@ -75,9 +80,9 @@ export function buildBoardWritingPlan({ title = '', coreQuestion = '', items = [
     {
       stage: 4,
       when: '全班完成比较与归纳后',
-      write: [writtenItems.at(-1)?.text ? `归纳：${writtenItems.at(-1).text}` : '归纳：________'],
+      write: [conclusion ? `归纳：${conclusion}` : '归纳：________'],
       leave: '结论先画框，等学生表述完整后再落笔。',
-      seconds: writtenItems.at(-1) ? secondsFor(writtenItems.at(-1).text, 6) : 6
+      seconds: conclusion ? secondsFor(conclusion, 6) : 6
     },
     {
       stage: 5,

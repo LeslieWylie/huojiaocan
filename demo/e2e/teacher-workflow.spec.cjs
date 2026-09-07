@@ -91,8 +91,8 @@ test('login recovery preserves the question through continuous Q&A, finalization
 
   for (const cardName of ['板书卡', '提问卡', '评价卡']) {
     await page.getByRole('button', { name: new RegExp(cardName) }).first().click();
-    page.once('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: '锁定本卡' }).click();
+    await page.getByRole('dialog', { name: `锁定“${cardName}”？` }).getByRole('button', { name: '确认锁定', exact: true }).click();
     await expect(page.getByText('当前卡已锁定')).toBeVisible();
   }
 

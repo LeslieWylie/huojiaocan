@@ -76,7 +76,9 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
   // All calls in one retrieval -> draft -> review workflow share one deadline.
   // This prevents a retry or optional review round from outliving the request
   // after earlier provider calls have already consumed most of its budget.
-  const deadline = Number(deadlineAt) > Date.now() ? Number(deadlineAt) : Date.now() + workflowTimeoutMs(env);
+  const deadline = Number.isFinite(Number(deadlineAt)) && deadlineAt != null
+    ? Number(deadlineAt)
+    : Date.now() + workflowTimeoutMs(env);
   const remainingMs = () => Math.max(0, deadline - Date.now());
 
   return {
@@ -146,6 +148,7 @@ export async function runStructuredReviewLoop({
   let completion = first.completion;
   let value = first.value;
   let issues = [...new Set(detectIssues(value) || [])].slice(0, 10);
+  let pendingReviewIssues = [];
   const trace = [{ round: 1, stage: stageNames[0] || 'draft', status: 'completed', issues: issues.length }];
 
   for (let round = 2; round <= Math.min(Math.max(1, maxRounds), 3); round += 1) {
@@ -153,8 +156,8 @@ export async function runStructuredReviewLoop({
       trace.push({ round, stage: stageNames[round - 1] || `review_${round}`, status: 'skipped_deadline' });
       break;
     }
-    if (round >= 3 && !issues.length) break;
-    const messages = reviewMessages?.({ value, round, issues });
+    if (round >= 3 && !issues.length && !pendingReviewIssues.length) break;
+    const messages = reviewMessages?.({ value, round, issues: [...new Set([...issues, ...pendingReviewIssues])].slice(0, 10) });
     if (!Array.isArray(messages) || !messages.length) break;
     const stage = stageNames[round - 1] || `review_${round}`;
     try {
@@ -165,8 +168,10 @@ export async function runStructuredReviewLoop({
       // candidate seen so far and expose only bounded quality metadata.
       if (nextIssues.length > issues.length) {
         trace.push({ round, stage, status: 'rejected_regression', issuesBefore: issues.length, issuesAfter: nextIssues.length });
+        pendingReviewIssues = [...new Set([...pendingReviewIssues, ...nextIssues])].slice(0, 10);
         continue;
       }
+      pendingReviewIssues = [];
       completion = next.completion;
       value = next.value;
       trace.push({ round, stage, status: 'completed', issuesBefore: issues.length, issuesAfter: nextIssues.length });
@@ -177,5 +182,5 @@ export async function runStructuredReviewLoop({
     }
   }
 
-  return { completion, value, trace };
+  return { completion, value, trace, unresolvedIssues: pendingReviewIssues };
 }

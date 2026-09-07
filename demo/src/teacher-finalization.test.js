@@ -126,7 +126,13 @@ test('generated cards focus the main classroom work and keep supporting tools pr
   assert.match(source, /id="board-preview"/u);
   assert.match(source, /supportToolsOpen/u);
   assert.match(source, /修改已确认方案/u);
-  assert.match(source, /锁定“\$\{card\.title\}”后将不能继续编辑或重新生成/u);
+  assert.doesNotMatch(source, /window\.confirm\(/u);
+  assert.match(source, /<dialog[^>]+aria-labelledby="card-lock-title"[^>]+aria-describedby="card-lock-description"/u);
+  assert.match(source, /dialog\.showModal\(\)/u);
+  assert.match(source, /锁定后不能编辑或重新生成本卡/u);
+  assert.match(source, /disabled=\{pending\} onClick=\{onCancel\}>取消/u);
+  assert.match(source, /disabled=\{pending\} onClick=\{onConfirm\}/u);
+  assert.match(source, /确认锁定/u);
 });
 
 test('library search does not show an empty result while a request is running', () => {

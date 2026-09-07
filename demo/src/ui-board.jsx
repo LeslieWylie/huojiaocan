@@ -2,42 +2,38 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, CircleAlert, ClipboardCheck, Download, ExternalLink, FileSearch, Network, Play, Plus, Quote, Route, ShieldCheck } from 'lucide-react';
 import { Badge, SectionHead } from './ui-kit.jsx';
-import { askErrorMessage, boardLabelFromText, boardQuestion, citationLink, citationPage, classroomRecoveryKey, clearClassroomRecovery, docName, readClassroomRecovery, rootRequest, sourceTypeLabel, statusLabel, uniqueCitations, wrapSvgText, writeClassroomRecovery } from './app-core.js';
+import { askErrorMessage, boardLabelFromText, citationLink, citationPage, classroomRecoveryKey, clearClassroomRecovery, docName, readClassroomRecovery, rootRequest, sourceTypeLabel, statusLabel, uniqueCitations, wrapSvgText, writeClassroomRecovery } from './app-core.js';
 import { CLASSROOM_STAGE_LABELS, normalizeClassroomRun } from '../shared/classroom-run.js';
 import { buildPeriodPlan, reorderPeriodActivity, repairPeriodSequence, serializePeriodPlan, updatePeriodActivity } from '../shared/period-planner.js';
+import { buildBoardPresentation } from '../shared/board-presentation.js';
 import { boardLeafLayout } from '../shared/board-writing-plan.js';
 
 export function SvgLabel({ x, y, text, className = 'board-svg-label', max = 13, anchor = 'middle' }) {
   return <text x={x} y={y} textAnchor={anchor} className={className}>{wrapSvgText(text, max).map((line, index) => <tspan x={x} dy={index ? 21 : 0} key={`${line}-${index}`}>{line}</tspan>)}</text>;
 }
-export function MindMapBoard({ title, items = [], stage = 1, filterId = 'chalkGlow', coreQuestion = '', classroomRun = null, showWriteOrder = false }) {
-  const cleanItems = items.filter(item => String(item?.text || '').trim()).slice(0, 9).map((item, index) => ({ ...item, writeOrder: index + 1, label: item.label || boardLabelFromText(item.text, '待补写') }));
-  const branches = [
-    { title: '文本结构', x: 260, y: 330, color: 'gold', anchor: 'middle', side: 'left' },
-    { title: '语言证据', x: 700, y: 330, color: 'mint', anchor: 'middle', side: 'middle' },
-    { title: '情感主旨', x: 1140, y: 330, color: 'lavender', anchor: 'middle', side: 'right' }
-  ];
-  const grouped = branches.map((branch, index) => ({ ...branch, items: cleanItems.filter((_, itemIndex) => itemIndex % branches.length === index) }));
-  const visibleBranches = grouped.filter(branch => branch.items.length > 0);
+export function MindMapBoard({ title, items = [], stage = 1, filterId = 'chalkGlow', coreQuestion = '', boardPlan = null, classroomRun = null, showWriteOrder = false }) {
+  const presentation = buildBoardPresentation({ items, boardPlan, coreQuestion });
+  const visibleBranches = presentation.branches;
   const leafPosition = boardLeafLayout;
   const safeTitle = boardLabelFromText(title, '课堂板书');
-  const safeQuestion = boardQuestion(coreQuestion, safeTitle);
-  const conclusion = cleanItems.length ? boardLabelFromText(cleanItems[cleanItems.length - 1].text, '课堂归纳') : '课堂归纳：________';
+  const safeQuestion = presentation.coreQuestion;
+  const conclusion = presentation.conclusion || '________';
+  const extraHeight = presentation.extraHeight;
   const liveRun = classroomRun ? normalizeClassroomRun(classroomRun) : null;
   const liveKeywords = liveRun?.keywords?.map(item => item.text).filter(Boolean) || [];
   const followupStages = liveRun?.stages?.filter(item => item.outcome === 'needs_followup').map(item => CLASSROOM_STAGE_LABELS[item.stage - 1]) || [];
-  return <svg className="board-map" viewBox="0 0 1400 820" role="img" aria-label="可逐步书写的课堂板书">
+  return <svg className="board-map" viewBox={`0 0 1400 ${820 + extraHeight}`} role="img" aria-label="可逐步书写的课堂板书">
     <defs><filter id={filterId}><feGaussianBlur stdDeviation="1.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-    <rect width="1400" height="820" rx="4" className="board-map-surface"/>
+    <rect width="1400" height={820 + extraHeight} rx="4" className="board-map-surface"/>
     <path d="M56 78 C360 38 520 92 700 60 S1060 40 1344 78" className="board-map-wipe"/>
-    {stage >= 2 && visibleBranches.map(branch => <path key={`center-${branch.title}`} d={`M700 220 Q${branch.x} 260 ${branch.x} ${branch.y - 30}`} className={`board-map-connector ${branch.color}`} filter={`url(#${filterId})`}/>) }
-    {stage >= 3 && visibleBranches.map(branch => branch.items.map((item, index) => { const pos = leafPosition(branch, index); return <path key={`line-${item.id}`} d={`M${branch.x} ${branch.y + 25} Q${pos.x} ${pos.y - 60} ${pos.x} ${pos.y - 20}`} className={`board-map-connector leaf ${branch.color}`} filter={`url(#${filterId})`}/>; }))}
-    {stage >= 1 && <g className="board-map-core" filter={`url(#${filterId})`}><rect x="470" y="105" width="460" height="120" rx="18"/><SvgLabel x={700} y={152} text={safeTitle} className="board-map-core-title" max={18}/><SvgLabel x={700} y={194} text={safeQuestion} className="board-map-core-prompt" max={28}/></g>}
-    {stage >= 2 && visibleBranches.map(branch => <g className={`board-map-branch ${branch.color}`} key={branch.title}><rect x={branch.x - 100} y={branch.y - 28} width="200" height="56" rx="16"/><SvgLabel x={branch.x} y={branch.y + 7} text={branch.title} className="board-map-branch-label" max={8}/></g>)}
+    {stage >= 2 && visibleBranches.map(branch => <path key={`center-${branch.id}`} d={`M700 253 Q${branch.x} 260 ${branch.x} ${branch.y - 30}`} className={`board-map-connector ${branch.color}`} filter={`url(#${filterId})`}/>) }
+    {stage >= 3 && visibleBranches.map(branch => branch.items.map((item, index) => { const pos = leafPosition(branch, index); return <path key={`line-${item.writeOrder}`} d={`M${branch.x} ${branch.y + 25} Q${pos.x} ${pos.y - 60} ${pos.x} ${pos.y - 20}`} className={`board-map-connector leaf ${branch.color}`} filter={`url(#${filterId})`}/>; }))}
+    {stage >= 1 && <g className="board-map-core" filter={`url(#${filterId})`}><rect x="470" y="105" width="460" height="148" rx="18"/><SvgLabel x={700} y={152} text={safeTitle} className="board-map-core-title" max={18}/><title>{safeQuestion}</title><SvgLabel x={700} y={194} text={safeQuestion} className="board-map-core-prompt" max={28}/></g>}
+    {stage >= 2 && visibleBranches.map(branch => <g className={`board-map-branch ${branch.color}`} key={branch.id}><rect x={branch.x - 100} y={branch.y - 28} width="200" height="56" rx="16"/><SvgLabel x={branch.x} y={branch.y + 7} text={branch.title} className="board-map-branch-label" max={8}/></g>)}
     {stage >= 2 && !visibleBranches.length && <text x="700" y="360" textAnchor="middle" className="board-map-empty-hint">板书卡暂无要点，请先在课堂设计中整理关键词。</text>}
-    {stage >= 3 && visibleBranches.map(branch => branch.items.map((item, index) => { const pos = leafPosition(branch, index); return <g className={`board-map-leaf ${branch.color}`} key={`leaf-${item.id}`}><rect x={pos.x - pos.width / 2} y={pos.y - 25} width={pos.width} height={pos.height} rx="12"/><SvgLabel x={pos.x} y={pos.y + 4} text={item.label} className="board-map-leaf-label" max={18}/>{showWriteOrder && <g className="board-write-order"><circle cx={pos.x - pos.width / 2 + 14} cy={pos.y - 15} r="15"/><text x={pos.x - pos.width / 2 + 14} y={pos.y - 10} textAnchor="middle">{item.writeOrder}</text></g>}</g>; }))}
-    {stage >= 4 && <g className="board-map-conclusion"><rect x="480" y="635" width="440" height="64" rx="14"/><SvgLabel x={700} y="674" text={`课堂归纳：${conclusion}`} className="board-map-conclusion-label" max={24}/></g>}
-    {stage >= 5 && <g className="board-map-blanks"><rect x="80" y="700" width="330" height="82" rx="12"/><SvgLabel x={245} y="733" text="学生关键词" className="board-map-blank-label" max={12}/><SvgLabel x={245} y="765" text={liveKeywords.length ? liveKeywords.join(' · ') : '________________'} className="board-map-blank-line" max={18}/><rect x="990" y="700" width="330" height="82" rx="12"/><SvgLabel x={1155} y="733" text="仍需追问" className="board-map-blank-label" max={12}/><SvgLabel x={1155} y="765" text={followupStages.length ? followupStages.join(' · ') : '________________'} className="board-map-blank-line" max={18}/></g>}
+    {stage >= 3 && visibleBranches.map(branch => branch.items.map((item, index) => { const pos = leafPosition(branch, index); return <g className={`board-map-leaf ${branch.color}`} key={`leaf-${item.writeOrder}`} data-item-id={item.id} data-write-order={item.writeOrder}><rect x={pos.x - pos.width / 2} y={pos.y - 25} width={pos.width} height={pos.height} rx="12"/><SvgLabel x={pos.x} y={pos.y + 4} text={boardLabelFromText(item.text, '待补写')} className="board-map-leaf-label" max={18}/>{showWriteOrder && <g className="board-write-order"><circle cx={pos.x - pos.width / 2 + 14} cy={pos.y - 15} r="15"/><text x={pos.x - pos.width / 2 + 14} y={pos.y - 10} textAnchor="middle">{item.writeOrder}</text></g>}</g>; }))}
+    {stage >= 4 && <g className="board-map-conclusion"><rect x="480" y={635 + extraHeight} width="440" height="64" rx="14"/><SvgLabel x={700} y={674 + extraHeight} text={`课堂归纳：${conclusion}`} className="board-map-conclusion-label" max={24}/></g>}
+    {stage >= 5 && <g className="board-map-blanks"><rect x="80" y={700 + extraHeight} width="330" height="82" rx="12"/><SvgLabel x={245} y={733 + extraHeight} text="学生关键词" className="board-map-blank-label" max={12}/><SvgLabel x={245} y={765 + extraHeight} text={liveKeywords.length ? liveKeywords.join(' · ') : '________________'} className="board-map-blank-line" max={18}/><rect x="990" y={700 + extraHeight} width="330" height="82" rx="12"/><SvgLabel x={1155} y={733 + extraHeight} text="仍需追问" className="board-map-blank-label" max={12}/><SvgLabel x={1155} y={765 + extraHeight} text={followupStages.length ? followupStages.join(' · ') : '________________'} className="board-map-blank-line" max={18}/></g>}
   </svg>;
 }
 export function CardSourceList({ citations = [], refs = [], returnTo = 'cards' }) {

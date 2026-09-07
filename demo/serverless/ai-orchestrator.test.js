@@ -126,8 +126,9 @@ test('review loop keeps the best candidate when a reviewer introduces new struct
     },
     detectIssues
   });
-  assert.equal(calls, 2);
-  assert.deepEqual(issueLists, [[]]);
+  assert.equal(calls, 3);
+  assert.deepEqual(issueLists, [[], ['方案结构不完整']]);
+  assert.deepEqual(result.unresolvedIssues, []);
   assert.equal(result.trace[1].status, 'rejected_regression');
   assert.deepEqual(result.value, values[0]);
 });
@@ -155,4 +156,26 @@ test('review loop supplies current deterministic issues to the evidence review r
   assert.deepEqual(received, ['缺少课堂收束']);
   assert.equal(result.trace[0].issues, 1);
   assert.equal(result.trace[1].issuesAfter, 0);
+});
+
+test('a rejected review finding is not silently lost at the deadline', async () => {
+  let calls = 0;
+  const result = await runStructuredReviewLoop({
+    model: { configured: true, remainingMs: () => calls < 2 ? 10000 : 1, completeJson: async () => ({ completion: {}, value: { unresolved: ++calls === 2 } }) },
+    initialMessages: [{ role: 'user', content: 'draft' }],
+    reviewMessages: () => [{ role: 'user', content: 'review' }],
+    detectIssues: value => value.unresolved ? ['引文对象仍需核对'] : []
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(result.unresolvedIssues, ['引文对象仍需核对']);
+  assert.equal(result.trace.at(-1).status, 'skipped_deadline');
+});
+
+test('expired shared workflow deadline never starts a fresh model budget', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; throw new Error('must not run'); });
+  const model = createStructuredModel({ env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test' }, deadlineAt: Date.now() - 1 });
+  assert.equal(model.remainingMs(), 0);
+  await assert.rejects(model.completeJson({ messages: [{ role: 'user', content: 'test' }] }), /gateway_timeout/);
+  assert.equal(calls, 0);
 });

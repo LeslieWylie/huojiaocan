@@ -12,8 +12,8 @@ function draftFixture() {
     }))
   };
 }
-async function openCards(page) {
-  let draft = draftFixture();
+async function openCards(page, fixture = draftFixture()) {
+  let draft = fixture;
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
@@ -91,16 +91,21 @@ test('lock has pending feedback, prevents concurrent actions and recovers after 
     await gate;
     await route.fulfill({ status: 503, json: { error: 'service_unavailable' } });
   });
-  page.once('dialog', dialog => dialog.accept());
+  await editor(page).fill('锁定失败仍保留的修改');
   await page.getByRole('button', { name: '锁定本卡', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '锁定“板书卡”？' });
+  await dialog.getByRole('button', { name: '确认锁定', exact: true }).dblclick();
   try {
     await expect(page.getByRole('button', { name: '锁定中…', exact: true })).toBeDisabled();
     await page.locator('.card-editor').screenshot({ path: testInfo.outputPath('lock-pending.png') });
     await expect(editor(page)).toBeDisabled();
     await expect(page.getByRole('button', { name: /补全本卡|重新生成本卡/ })).toBeDisabled();
   } finally { release(); }
+  await expect(dialog.getByRole('alert')).toContainText('编辑内容仍保留');
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
   await expect(page.getByRole('button', { name: '锁定本卡', exact: true })).toBeEnabled();
   await expect(editor(page)).toBeEnabled();
+  await expect(editor(page)).toHaveValue('锁定失败仍保留的修改');
   expect(requests).toBe(1);
   expect(state.errors).toEqual([]);
 });
@@ -271,4 +276,122 @@ test('mobile editor shows failed-save recovery in place without horizontal overf
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath('mobile-save-failed-viewport.png'), fullPage: false });
   await page.locator('.card-editor').screenshot({ path: testInfo.outputPath('mobile-save-failed.png') });
+});
+
+test('lock cancel and Escape write nothing, preserve edits and restore keyboard focus', async ({ page }, testInfo) => {
+  await openCards(page);
+  let writes = 0;
+  page.on('request', request => { if (request.url().includes('/api/') && request.method() !== 'GET') writes++; });
+  page.on('dialog', dialog => { throw new Error(`Unexpected native dialog: ${dialog.type()}`); });
+  await editor(page).fill('取消锁定不应写入');
+  const trigger = page.getByRole('button', { name: '锁定本卡', exact: true });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: '锁定“板书卡”？' });
+  const cancel = dialog.getByRole('button', { name: '取消', exact: true });
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: '确认锁定', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(cancel).toBeFocused();
+  await dialog.screenshot({ path: testInfo.outputPath('lock-confirmation.png') });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await cancel.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await expect(editor(page)).toHaveValue('取消锁定不应写入');
+  await trigger.click();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  expect(writes).toBe(0);
+  await expect(page.locator('.card-actions')).toContainText('有未保存修改');
+});
+
+test('lock prerequisite failure keeps edits; retry locks once with saved version and protects the card', async ({ page }) => {
+  const state = await openCards(page);
+  let locks = 0;
+  await page.route('**/cards/board/lock', async route => {
+    locks++;
+    expect(route.request().postDataJSON().version).toBe(2);
+    const draft = { ...state.getDraft(), version: 3, cards: state.getDraft().cards.map(card => card.id === 'board' ? { ...card, status: 'locked' } : card) };
+    state.setDraft(draft);
+    await route.fulfill({ json: { draft } });
+  });
+  await page.route('**/api/drafts/cards-editing/cards', route => route.fulfill({ status: 503, json: { error: 'service_unavailable' } }), { times: 1 });
+  await editor(page).fill('确认锁定的教师修改');
+  await page.getByRole('button', { name: '锁定本卡', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '锁定“板书卡”？' });
+  await dialog.getByRole('button', { name: '确认锁定', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('编辑内容仍保留');
+  expect(locks).toBe(0);
+  await expect(editor(page)).toHaveValue('确认锁定的教师修改');
+  await expect(page.locator('.card-actions')).toContainText('有未保存修改');
+  await dialog.getByRole('button', { name: '确认锁定', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByText('当前卡已锁定')).toBeVisible();
+  await expect(editor(page)).toBeDisabled();
+  await expect(editor(page)).toHaveValue('确认锁定的教师修改');
+  await expect(page.getByRole('button', { name: /补全本卡|重新生成本卡/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '复制为新版本', exact: true })).toBeEnabled();
+  expect(locks).toBe(1);
+  expect(state.errors).toEqual([]);
+});
+
+test('neutral board preserves order, five stages and 320-wide nonoverlapping leaves', async ({ page }, testInfo) => {
+  const fixture = draftFixture();
+  fixture.answer.lesson = { coreQuestion: '阴晴两景如何衬托古仁人之心？' };
+  fixture.cards[0].items = Array.from({ length: 9 }, (_, index) => ({ id: `b${index}`, text: ['阴景与悲情', '晴景与喜情', '古仁人之心', '进亦忧', '退亦忧', '不以物喜', '不以己悲', '先忧后乐', '讨论尚待完成'][index], citationIds: [`E${index}`] }));
+  await openCards(page, fixture);
+  const board = page.locator('.board-preview-canvas .board-map');
+  await expect(board.locator('.board-map-core-prompt')).toHaveText('阴晴两景如何衬托古仁人之心？');
+  await expect(board.locator('.board-map-leaf')).toHaveCount(0);
+  const stages = page.locator('.board-step-tabs button');
+  await expect(stages).toHaveCount(5);
+  await stages.nth(1).click();
+  await expect(board.locator('.board-map-branch-label')).toHaveText(['落笔 1、2、3', '落笔 4、5、6', '落笔 7、8、9']);
+  await expect(board.locator('.board-map-leaf')).toHaveCount(0);
+  await stages.nth(2).click();
+  await expect(board.locator('.board-map-leaf')).toHaveCount(9);
+  await expect(board.locator('.board-map-conclusion')).toHaveCount(0);
+  await stages.nth(3).click();
+  await expect(board.locator('.board-map-conclusion')).toHaveText('课堂归纳：________');
+  await stages.nth(4).click();
+  await expect(board.locator('.board-map-blanks')).toBeVisible();
+  const boxes = await board.locator('.board-map-leaf > rect').evaluateAll(nodes => nodes.map(node => ({ x: +node.getAttribute('x'), y: +node.getAttribute('y'), w: +node.getAttribute('width'), h: +node.getAttribute('height') })));
+  for (const [i, box] of boxes.entries()) {
+    expect(box.w).toBe(320);
+    expect(box.y + box.h).toBeLessThan(635);
+    for (const other of boxes.slice(i + 1)) expect(Math.abs(box.x - other.x) >= 336 || Math.abs(box.y - other.y) >= 74).toBe(true);
+  }
+  await page.getByRole('button', { name: '查看落笔排练', exact: true }).click();
+  await expect(page.locator('.board-writing-steps article').nth(1)).toContainText('落笔 1、2、3');
+  await expect(page.locator('.board-writing-steps article').nth(3)).toContainText('归纳：________');
+  await board.screenshot({ path: testInfo.outputPath('neutral-board-five-stages.png') });
+});
+
+test('saved boardPlan survives edits; preview and classroom use the same groups and question', async ({ page }, testInfo) => {
+  const fixture = draftFixture();
+  const items = [{ id: 'scene', text: '阴晴两景', citationIds: ['E1'] }, { id: 'heart', text: '古仁人之心', citationIds: ['E2'] }];
+  const boardPlan = { coreQuestion: '作者如何从阴晴两景转入古仁人之心？', branches: [{ title: '价值判断', nodes: [items[1]] }, { title: '景情对照', nodes: [items[0]] }], conclusion: '超越个人悲喜' };
+  fixture.cards[0] = { ...fixture.cards[0], items, boardPlan };
+  const state = await openCards(page, fixture);
+  await editor(page).fill('阴晴两景与悲喜');
+  await nextButton(page).click();
+  expect(state.getDraft().cards[0].boardPlan).toEqual(boardPlan);
+  expect(state.getDraft().cards[0].items[0].citationIds).toEqual(['E1']);
+  const board = page.locator('.board-preview-canvas .board-map');
+  await page.locator('.board-step-tabs button').nth(4).click();
+  await expect(board.locator('.board-map-branch-label')).toHaveText(['价值判断', '景情对照']);
+  await expect(board.locator('.board-map-leaf-label')).toHaveText(['古仁人之心', '阴晴两景与悲喜']);
+  expect(await board.locator('.board-map-leaf').evaluateAll(nodes => nodes.map(node => node.dataset.itemId))).toEqual(['heart', 'scene']);
+  await expect(board.locator('.board-map-conclusion')).toHaveText('课堂归纳：超越个人悲喜');
+  state.setDraft({ ...state.getDraft(), cards: state.getDraft().cards.map(card => ({ ...card, status: 'locked' })) });
+  await page.reload();
+  await page.getByRole('button', { name: '开始上课并记录', exact: true }).first().click();
+  const classroom = page.getByRole('dialog', { name: '课堂共创记录' });
+  await expect(classroom.locator('.board-map-core-prompt')).toHaveText(boardPlan.coreQuestion);
+  await classroom.getByRole('button', { name: '下一步', exact: true }).click();
+  await expect(classroom.locator('.board-map-branch-label')).toHaveText(['价值判断', '景情对照']);
+  await classroom.locator('.board-map').screenshot({ path: testInfo.outputPath('planned-board-classroom.png') });
+  expect(state.errors).toEqual([]);
 });
