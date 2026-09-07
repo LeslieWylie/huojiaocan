@@ -55,3 +55,9 @@ SITE_URL=https://app.huojiaocan.workers.dev npm run verify:production:browser
 生产套件现有5项只读用例：公开主入口与搜索、失效登录不阻断公共目录、两篇课文的搜索/PDF定位/核验往返、390px导航与溢出。不会拦截或伪造线上PDF响应。iframe地址一致不等同于实际PDF画布原文已核验。
 
 分层执行、专用账号与清理方案见 [生产环境测试方案](../../docs/生产环境测试方案-20260907.md)。当前生产套件仍不执行写入或付费生成；不能用它代替账号隔离和模型质量验收。
+
+### 可访问性检查
+
+`npm run test:a11y` 使用独立配置启动本地服务，检查首页、教材库、登录页、匿名问答页在1280px和390px下的WCAG A/AA自动化规则。也可用 `E2E_TARGET=production npm run test:a11y` 只读检查线上公共页面。
+
+检测等待入场动画结束，目录需实际加载；保留对比度规则，不添加违规白名单。报告在 `node_modules/.cache/accessibility-results`，`incomplete` 是待人工核对项，不是已通过。此命令独立于普通E2E；发布时须显式运行。PDF画布、登录后三卡、屏幕阅读器与200%浏览器缩放仍需专项检查。

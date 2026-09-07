@@ -664,3 +664,28 @@
 .ask-save-recovery>span{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
 .ask-save-recovery>button{flex:0 0 auto;min-height:44px;padding:8px 12px;border:1px solid #d8beb4;border-radius:8px;background:#fff;color:#713f33;font-size:15px;white-space:nowrap}
 .ask-save-recovery>button:focus-visible{outline:3px solid #78b9ad;outline-offset:2px}
+
+/* Public teacher flow: readable secondary text on paper, without changing
+   the green/gold hierarchy. Verified with axe after entry animations settle. */
+.book-card small{color:#acc6be}
+.mode{color:#48665d}
+.teaching-flow-login p,.teaching-task-panel>header p,
+.teaching-material-rail section>header p,.teaching-task-empty p,
+.teaching-material-loading,.teaching-material-list small,
+.teaching-material-rail section>footer,.teaching-task-loading small,
+.conversation-status,.dossier-grid small,.conversation-dossier>p,
+.auth-tabs button,.auth-form label>small,.auth-panel .muted,
+.source-choice-copy small,.source-prepare-disabled,
+.search-scope>span,.index-outline>header>small,.tree-loading>small,
+.library-reader-head small,.section-title>div>p{color:#52685f}
+.teaching-task-panel>header span,.teaching-material-rail section>header span,
+.conversation-dossier>small,.section-title>div>small,
+.source-choice-copy em,.library-reader-start li>b{color:#7b571e}
+.source-cover.blue{color:#3b5d7c}
+.auth-panel>.muted{color:#52685f!important}
+.index-reader>header small{color:#52685f}
+.badge.orange{color:#8f4d1b}
+.index-tree .tree-item-title>small{color:#52685f;font-size:12px;line-height:1.5}
+.index-tree .tree-item.selected .tree-item-title>small{color:#7b571e}
+.teaching-flow-hero h1 em{display:inline-block;max-width:100%}
+.teaching-flow-hero h1 em>span{white-space:nowrap}
