@@ -4,7 +4,7 @@ const oldTurn = { question: '《岳阳楼记》怎样备课？', response: { ans
 const newResponse = { answer: { summary: '新的朗读训练回答', lesson: { title: '岳阳楼记' } }, citations: [], evidenceSufficient: true };
 const session = { user: { id: 'handoff-user' }, access_token: 'fixture-only' };
 
-async function mockApi(page, { failSave = 0, savedTurns = [oldTurn] } = {}) {
+async function mockApi(page, { failSave = 0, savedTurns = [oldTurn], onSave } = {}) {
   const calls = [];
   // The account read must reflect successful writes, just like the real API.
   // AskPage hydrates the new draft id immediately after the POST completes.
@@ -21,6 +21,7 @@ async function mockApi(page, { failSave = 0, savedTurns = [oldTurn] } = {}) {
     }
     if (path === '/api/config') return route.fulfill({ json: { gatewayConfigured: true, textModelConfigured: true } });
     if (/^\/api\/drafts(?:\/saved)?$/.test(path) && req.method() !== 'GET') {
+      if (onSave && await onSave(route, req.postDataJSON())) return;
       if (failSave) return route.fulfill({ status: failSave, json: { error: failSave === 401 ? 'auth_required' : 'save_failed' } });
       const body = req.postDataJSON();
       savedDraft = { ...savedDraft, ...body, id: 'saved', version: savedDraft.version + 1, lesson_context: body.lessonContext || savedDraft.lesson_context };
@@ -207,6 +208,91 @@ test('failed account PATCH preserves the generated local answer through reload',
   await expect(page.getByRole('region', { name: '最新一轮问答' })).toContainText('新的朗读训练回答');
   await expect(page.locator('form.ask-large textarea')).toHaveValue('');
   await expect(page.getByRole('status')).toContainText('没有保存到账号');
+  await expect(page.getByRole('button', { name: '仅重试保存', exact: true })).toHaveCount(0);
   await page.waitForTimeout(600);
+  expect(calls).toHaveLength(1);
+});
+
+for (const entry of ['/ask/?draftId=saved']) {
+  test(`save-only retry keeps the answer and never calls the model again: ${entry}`, async ({ page }) => {
+    await page.setViewportSize({width:390,height:844});
+    const writes = [];
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    const calls = await mockApi(page, { onSave: async (route, body) => {
+      writes.push(body);
+      if (writes.length === 1) {
+        await route.fulfill({ status: 500, json: { error: 'save_failed' } });
+        return true;
+      }
+      if (writes.length === 2) await held;
+      return false;
+    } });
+    await seed(page, null);
+    await page.goto(entry);
+    await ready(page);
+    await page.locator('form.ask-large textarea').fill('请增加朗读训练');
+    await page.locator('form.ask-large button[type=submit]').click();
+    const retry = page.getByRole('button', { name: '仅重试保存', exact: true });
+    await expect(retry).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
+    await expect(page.getByRole('region', { name: '最新一轮问答' })).toContainText('新的朗读训练回答');
+    await retry.click();
+    try {
+      await expect(page.getByRole('button', { name: '正在保存…', exact: true })).toBeDisabled();
+      await expect.poll(() => writes.length).toBe(2);
+      // The handler must also block quick follow-ups, not just form submit.
+      await page.getByRole('button', { name: '换成两课时', exact: true }).click();
+      expect(calls).toHaveLength(1);
+      expect(writes[1]).toEqual(writes[0]);
+      if (entry.includes('draftId')) expect(writes[1].version).toBe(1);
+    } finally { release(); }
+    await expect(retry).toHaveCount(0);
+    await expect(page.locator('.ask-error[role=status]')).toHaveCount(0);
+    await expect(page).toHaveURL(/draftId=saved/);
+    await expect(page.getByRole('region', { name: '最新一轮问答' })).toContainText('新的朗读训练回答');
+    expect(calls).toHaveLength(1);
+    expect(writes).toHaveLength(2);
+  });
+}
+
+test('save retry failure retains answer; conflict removes retry and offers export', async ({ page }) => {
+  let writes = 0;
+  const calls = await mockApi(page, { onSave: async route => {
+    writes++;
+    await route.fulfill({ status: writes < 3 ? 500 : 409, json: { error: writes < 3 ? 'save_failed' : 'edit_conflict' } });
+    return true;
+  } });
+  await seed(page, null);
+  await page.goto('/ask/?draftId=saved');
+  await ready(page);
+  await page.locator('form.ask-large textarea').fill('请增加朗读训练');
+  await page.locator('form.ask-large button[type=submit]').click();
+  const retry = page.getByRole('button', { name: '仅重试保存', exact: true });
+  await retry.click();
+  await expect(page.locator('.ask-error[role=status]')).toContainText('保存仍未成功');
+  await expect(page.getByRole('region', { name: '最新一轮问答' })).toContainText('新的朗读训练回答');
+  await retry.click();
+  await expect(retry).toHaveCount(0);
+  await expect(page.locator('.ask-error[role=status]')).toContainText('无法安全重试保存');
+  await expect(page.locator('.ask-error[role=status]').getByRole('button', { name: '导出记录' })).toBeVisible();
+  expect(writes).toBe(3);
+  expect(calls).toHaveLength(1);
+});
+
+
+test('ambiguous new draft save never offers a duplicate POST retry', async ({ page }) => {
+  let writes = 0;
+  const calls = await mockApi(page, { onSave: async route => {
+    writes++;
+    await route.fulfill({ status: 500, json: { error: 'save_failed' } });
+    return true;
+  } });
+  await seed(page, null);
+  await page.goto('/ask/?new=1&q=请增加朗读训练');
+  await expect(page.locator('.ask-error[role=status]')).toBeVisible();
+  await expect(page.getByRole('button', { name: '仅重试保存', exact: true })).toHaveCount(0);
+  await expect(page.locator('.ask-error[role=status]').getByRole('button', { name: '导出记录' })).toBeVisible();
+  expect(writes).toBe(1);
   expect(calls).toHaveLength(1);
 });

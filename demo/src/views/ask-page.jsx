@@ -5,6 +5,7 @@ import { Activity, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, Chev
 import { Badge, SectionHead } from '../ui-kit.jsx';
 import { normalizeAskAction } from '../ask-actions.js';
 import { ACCOUNT_SAVE_FAILURE, LOCAL_SAVE_FAILURE, resolveAskHandoff, submissionHandoff, recoveredTurnsAreAhead } from '../ask-handoff.js';
+import { pendingDraftSave, canRetryDraftSave, unsafeSaveRetry, writePendingDraft } from '../ask-save-retry.js';
 import { withAskRetry } from '../ask-retry.js';
 import { authOwnersConflict, canPersistAuthOwner, clearAuthRecovery, ensureSession, getSession, readAuthRecovery, saveAuthRecovery } from '../auth.js';
 import { buildAskContext, buildConversationHistory } from '../conversation-context.js';
@@ -261,6 +262,10 @@ export function AskPage() {
   const [error, setError] = useState('');
   const [localSaveFailed, setLocalSaveFailed] = useState(false);
   const [accountSaveFailed, setAccountSaveFailed] = useState(Boolean(activeAuthRecovery?.accountSaveFailed));
+  const pendingSave = useRef(null);
+  const saveRetryInFlight = useRef(false);
+  const [saveRetryBusy, setSaveRetryBusy] = useState(false);
+  const [saveRetryError, setSaveRetryError] = useState('');
   const [lastErrorCode, setLastErrorCode] = useState('');
   const [retryQuestion, setRetryQuestion] = useState(initialComposerQuestion);
   const [retryTarget, setRetryTarget] = useState(initialComposerQuestion);
@@ -305,6 +310,7 @@ export function AskPage() {
       // persistence effect below can observe the new session. Keep the guard
       // raised until the clean page replaces this component.
       ownerTransitioning.current = true;
+      pendingSave.current = null;
       if (shelfSyncTimer.current) clearTimeout(shelfSyncTimer.current);
       setEvidenceShelfReady(false);
       setEvidenceShelf([]);
@@ -515,7 +521,7 @@ export function AskPage() {
     });
   }, [draftId, session?.user?.id]);
   useEffect(() => {
-    if (!draftId || !session || !existingDraft || !ownerPersistenceAllowed() || shelfReadyForDraft.current !== String(draftId)) return undefined;
+    if (busy || accountSaveFailed || saveRetryBusy || !draftId || !session || !existingDraft || !ownerPersistenceAllowed() || shelfReadyForDraft.current !== String(draftId)) return undefined;
     const serialized = JSON.stringify(evidenceShelf);
     if (serialized === shelfSyncHash.current) return undefined;
     if (shelfSyncTimer.current) clearTimeout(shelfSyncTimer.current);
@@ -533,7 +539,7 @@ export function AskPage() {
       }
     }, 450);
     return () => { if (shelfSyncTimer.current) clearTimeout(shelfSyncTimer.current); };
-  }, [draftId, session?.user?.id, existingDraft?.id, existingDraft?.version, evidenceShelf]);
+  }, [draftId, session?.user?.id, existingDraft?.id, existingDraft?.version, evidenceShelf, busy, accountSaveFailed, saveRetryBusy]);
   useEffect(() => {
     if (!ownerPersistenceAllowed() || (!messages.length && !draftId && !question.trim())) return;
     const savedLocally = saveConversationSnapshot({
@@ -584,7 +590,9 @@ export function AskPage() {
     const normalizedAction = normalizeAskAction(directQuestion, options, question);
     const requestOptions = normalizedAction.options;
     const text = normalizedAction.text;
-    if (!text || busy) return;
+    if (!text || busy || saveRetryInFlight.current) return;
+    pendingSave.current = null;
+    setSaveRetryError('');
     const consumedUrl = new URL(location.href);
     if (consumedUrl.searchParams.has('q')) {
       consumedUrl.searchParams.delete('q');
@@ -676,9 +684,14 @@ export function AskPage() {
       globalThis.history?.replaceState?.(null, '', answeredUrl);
       const nextConversationTurns = [...messages, nextTurn].map(persistedConversationTurn).filter(Boolean).slice(-12);
       const draftPayload = { title: lessonTitle, question: nextIdentityQuestion, scope: scopeDocumentIds(selectedScope), lessonContext: { ...nextLessonContext, ...(nextLessonRef ? { lessonRef: nextLessonRef } : {}) }, answer: { ...(normalizedResponse.answer || {}), ...(sameLesson && existingDraft?.answer?.planApproval ? { planApproval: { ...existingDraft.answer.planApproval, hasUnconfirmedChanges: true } } : {}), sourceCoverage: normalizedResponse.sourceCoverage || normalizedResponse.answer?.sourceCoverage, conversationHistory: nextHistory, conversationTurns: nextConversationTurns, evidenceShelf, ...(sameLesson && existingDraft?.answer?.previousLessonReflection ? { previousLessonReflection: existingDraft.answer.previousLessonReflection } : {}), ...(sameLesson && existingDraft?.answer?.lessonReflection ? { lessonReflection: existingDraft.answer.lessonReflection } : {}) }, citations: nextCitations, cards: sameLesson ? cardsForAskDraft(existingDraft) : [] };
-      let savedDraftId = draftId;
-      let savedDraft = null;
-      if (!draftId) { const created = await rootRequest('/api/drafts', { method: 'POST', body: draftPayload }); savedDraft = created?.draft || null; savedDraftId = savedDraft?.id || ''; setDraftId(savedDraftId); } else { const updated = await rootRequest(`/api/drafts/${draftId}`, { method: 'PATCH', body: { ...draftPayload, version: existingDraft?.version } }); savedDraft = updated?.draft || null; }
+      pendingSave.current = pendingDraftSave({ ownerUserId: activeSession.user?.id, draftId, version: existingDraft?.version, payload: draftPayload });
+      if (!pendingSave.current || !canRetryDraftSave(pendingSave.current, { ownerUserId: getSession()?.user?.id, draftId, version: existingDraft?.version, transitioning: ownerTransitioning.current })) {
+        throw Object.assign(new Error('auth_owner_changed'), { code: 'auth_owner_changed' });
+      }
+      const savedDraft = await writePendingDraft(pendingSave.current, rootRequest);
+      pendingSave.current = null;
+      const savedDraftId = savedDraft.id;
+      if (!draftId) setDraftId(savedDraftId);
       if (savedDraftId) {
         const url = new URL(location.href);
         url.searchParams.set('draftId', savedDraftId);
@@ -713,6 +726,8 @@ export function AskPage() {
       setAccountSaveFailed(false);
     } catch (err) {
       const code = requestCode(err);
+      if (unsafeSaveRetry(err)) pendingSave.current = null;
+      if (ownerTransitioning.current || authOwnersConflict(conversationOwner.current, getSession()?.user?.id)) return;
       if (code === 'auth_invalid' || code === 'auth_required') {
         const next = `${location.pathname}${location.search}`;
         saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, ...submissionHandoff(text, directQuestion, Boolean(pendingTurn)), planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, messages: [...messages, ...(pendingTurn ? [pendingTurn] : [])].slice(-12), conversationHistory: pendingTurn ? pendingHistory : conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
@@ -736,6 +751,43 @@ export function AskPage() {
       setLastErrorCode(code); setError(askErrorMessage(err));
     }
     finally { setBusy(false); }
+  };
+  const retrySaveContext = () => ({ ownerUserId: getSession()?.user?.id, draftId, version: existingDraft?.version, transitioning: ownerTransitioning.current });
+  const retrySave = async () => {
+    if (busy || saveRetryInFlight.current || !canRetryDraftSave(pendingSave.current, retrySaveContext())) return;
+    saveRetryInFlight.current = true;
+    setSaveRetryBusy(true);
+    setSaveRetryError('');
+    const pending = pendingSave.current;
+    try {
+      const activeSession = await ensureSession();
+      if (!activeSession || !canRetryDraftSave(pending, retrySaveContext())) {
+        throw Object.assign(new Error('auth_required'), { code: 'auth_required' });
+      }
+      const savedDraft = await writePendingDraft(pending, rootRequest);
+      if (!canRetryDraftSave(pending, retrySaveContext()) || pendingSave.current !== pending) return;
+      pendingSave.current = null;
+      setDraftId(savedDraft.id);
+      setExistingDraft(savedDraft);
+      shelfReadyForDraft.current = String(savedDraft.id);
+      shelfSyncHash.current = JSON.stringify(pending.body.answer.evidenceShelf || []);
+      setRecentDrafts(items => [{ id: savedDraft.id, title: savedDraft.title || pending.body.title, question: savedDraft.question || pending.body.question, updated_at: savedDraft.updated_at || new Date().toISOString() }, ...items.filter(item => String(item.id) !== String(savedDraft.id))].slice(0, 6));
+      setMessages(items => items.map((turn, index) => index === items.length - 1 ? { ...turn, response: { ...turn.response, draftId: savedDraft.id } } : turn));
+      setAccountSaveFailed(false);
+      setRestoredAt('');
+      setRestoredFromLocal(false);
+      clearAuthRecovery();
+      const url = new URL(location.href);
+      url.searchParams.set('draftId', savedDraft.id);
+      url.searchParams.delete('new');
+      globalThis.history?.replaceState?.(null, '', url);
+    } catch (err) {
+      if (unsafeSaveRetry(err) || !canRetryDraftSave(pending, retrySaveContext())) pendingSave.current = null;
+      setSaveRetryError(pendingSave.current ? '保存仍未成功，回答已保留。可以再次仅重试保存，或先导出记录。' : '当前无法安全重试保存，请先导出记录；不会覆盖账号中的新版本或锁定卡片。');
+    } finally {
+      saveRetryInFlight.current = false;
+      setSaveRetryBusy(false);
+    }
   };
   useEffect(() => {
     if (!autoSubmitQuestion || !aiReady || autoAsked.current || isClassAdaptation || (requestedDraftId && !existingDraft)) return;
@@ -796,6 +848,8 @@ export function AskPage() {
     URL.revokeObjectURL(url);
   };
   const confirmStartNewConversation = () => {
+    if (saveRetryInFlight.current) return;
+    pendingSave.current = null;
     setNewConversationPromptOpen(false);
     clearAuthRecovery();
     clearConversationSnapshot(session?.user?.id || initialUser);
@@ -893,13 +947,13 @@ export function AskPage() {
           <form className="ask-large" onSubmit={ask}>
             <MessageCircle/>
             <textarea ref={composerRef} value={question} onChange={event => setQuestion(event.target.value)} placeholder={messages.length ? '继续追问，例如：教师用书建议对应学生教材哪一段？' : '例如：怎样备课《沁园春·雪》？'}/>
-            <button type="submit" className="primary" disabled={busy || !question.trim() || askBlocked}><Send/>{askButtonLabel}</button>
+            <button type="submit" className="primary" disabled={busy || saveRetryBusy || !question.trim() || askBlocked}><Send/>{askButtonLabel}</button>
           </form>
           {!session && <div className="ask-auth-note"><ShieldCheck/><span>公共教材可以浏览；登录后才能发起连续问答、保存方案和生成三卡。</span><a href={loginHref} onClick={rememberCurrentAsk}>立即登录</a></div>}
           {session && !draftReady && <div className="ask-auth-note"><Activity/><span>正在读取上次保存的篇目、对话和版本，完成后即可继续追问。</span></div>}
           {session && draftReady && !canAsk && aiReady && <div className="ask-auth-note"><CircleAlert/><span>当前没有可用的 AI 连接。可以先在 AI 设置中添加或测试连接。</span><a href="/settings/">打开 AI 设置</a></div>}
           {localSaveFailed && <div className="ask-error" role="alert"><CircleAlert/><span>{LOCAL_SAVE_FAILURE}</span></div>}
-          {accountSaveFailed && <div className="ask-error" role="status"><CircleAlert/><span>{ACCOUNT_SAVE_FAILURE}</span></div>}
+          {accountSaveFailed && <div className="ask-error ask-save-recovery" role="status"><CircleAlert/><span>{saveRetryError || ACCOUNT_SAVE_FAILURE}</span>{canRetryDraftSave(pendingSave.current, retrySaveContext()) && <button type="button" onClick={retrySave} disabled={busy || saveRetryBusy}>{saveRetryBusy ? '正在保存…' : '仅重试保存'}</button>}<button type="button" onClick={exportConversation}>导出记录</button></div>}
           {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
           {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button type="button" onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button type="button" onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button type="button" onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
           {busy && <div className="answer-loading"><span/><span/><span/><p>{UI_COPY.ask.loading}</p></div>}

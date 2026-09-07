@@ -49,3 +49,9 @@ SITE_URL=https://app.huojiaocan.workers.dev npm run verify:production:browser
 - 每个测试自动拦截 `console.error` 和未捕获页面异常
 
 失败时保留 trace 和截图，位于 `demo/node_modules/.cache/playwright-results`；HTML 报告位于 `demo/node_modules/.cache/playwright-report`。
+
+### 生产冒烟扩展（2026-09-07）
+
+生产套件现有5项只读用例：公开主入口与搜索、失效登录不阻断公共目录、两篇课文的搜索/PDF定位/核验往返、390px导航与溢出。不会拦截或伪造线上PDF响应。iframe地址一致不等同于实际PDF画布原文已核验。
+
+分层执行、专用账号与清理方案见 [生产环境测试方案](../../docs/生产环境测试方案-20260907.md)。当前生产套件仍不执行写入或付费生成；不能用它代替账号隔离和模型质量验收。

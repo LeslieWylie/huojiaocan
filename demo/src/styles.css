@@ -658,3 +658,9 @@
 .card-lock-dialog footer{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:12px;margin-top:24px}
 .card-lock-dialog button{border:1px solid var(--line);border-radius:8px;padding:10px 18px;background:var(--paper);color:var(--ink)}
 .card-lock-dialog button.primary{background:var(--green);color:#fff}
+
+/* Keep recovery actions readable instead of squeezing them beside long text. */
+.ask-save-recovery{flex-wrap:wrap}
+.ask-save-recovery>span{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
+.ask-save-recovery>button{flex:0 0 auto;min-height:44px;padding:8px 12px;border:1px solid #d8beb4;border-radius:8px;background:#fff;color:#713f33;font-size:15px;white-space:nowrap}
+.ask-save-recovery>button:focus-visible{outline:3px solid #78b9ad;outline-offset:2px}
