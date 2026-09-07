@@ -121,6 +121,8 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
             ));
         const value = parseStructuredJson(completion.content);
         if (!value || completion.finishReason === 'length') {
+          // Diagnostic shape only: never log the prompt, raw answer or credential.
+          console.warn('ai_structured_output_incomplete', { source: usePersonalDeepSeek ? 'personal' : 'system', finishReason: completion.finishReason || 'unknown', contentChars: String(completion.content || '').length, repairAttempt: repairFormat });
           repairFormat = true;
           const error = usePersonalDeepSeek ? new DeepSeekError('deepseek_invalid_response') : new GatewayError('gateway_invalid_response');
           error.retryable = true;

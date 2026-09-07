@@ -705,6 +705,7 @@ async function buildEvidenceAnswer({ provider, question, teachingFocus = '', sco
     generationTrace: grounded?.generationTrace || [],
     generationRounds: grounded?.generationRounds || 0,
     agentRun: grounded?.agentRun || null,
+    teachingPlanIssues: grounded?.teachingPlanIssues || [],
     answer: grounded?.answer || {
       type: 'extractive',
       reply: '先回到教材原页定位关键语句，再组织课堂解释。',

@@ -69,17 +69,18 @@ export function AgentReviewNote({ response }) {
   const rounds = Number(response?.generationRounds) || 0;
   if (!events.length && rounds <= 1) return null;
   const needsEvidence = grounding?.status === 'needs_attention';
+  const needsReview = review?.status === 'needs_attention' || Boolean(response?.teachingPlanIssues?.length);
   const title = needsEvidence
     ? grounding.message
-    : review?.status === 'completed'
+    : needsReview ? '仍有课堂安排需要核对' : review?.status === 'completed'
       ? review.message
-      : rounds >= 3 ? '已完成教材校核与课堂可用性修订' : '已完成两轮教材校核';
+      : rounds >= 3 ? '已进行模型辅助修订，请教师确认' : '已进行模型辅助核对，请教师确认';
   const detail = needsEvidence
     ? '当前方案只使用已经找到的页面；缺少的材料不会被模型补写。'
-    : rounds >= 3
+    : needsReview ? '下方列出了尚未消除的问题，请检查后再确认方案。' : rounds >= 3
       ? '初稿仍有顺序或时间问题时，系统已增加一轮定向修订。'
       : '先形成课堂初稿，再按教师用书、学生教材与真实页码逐项修订。';
-  return <div className={`agent-review-note ${needsEvidence ? 'needs-attention' : ''}`}>{needsEvidence ? <CircleAlert size={16}/> : <CheckCircle2 size={16}/>}<span><b>{title}</b><small>{detail}</small></span></div>;
+  return <div className={`agent-review-note ${needsEvidence || needsReview ? 'needs-attention' : ''}`}>{needsEvidence || needsReview ? <CircleAlert size={16}/> : <CheckCircle2 size={16}/>}<span><b>{title}</b><small>{detail}</small></span></div>;
 }
 export function ConversationTurn({ turn, draftId, onQuickAsk, onSaveEvidence }) {
   const response = turn.response;

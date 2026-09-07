@@ -593,6 +593,7 @@ function reviewGroundedMessages({ parsed, references, fixedLessonIdentity, fixed
         reviewInstruction: compact(reviewInstruction, 1400),
         lessonContext: lessonContext || {},
         expectedCardTypes,
+        outputBoundary: expectedCardTypes.length ? '只修订指定卡片，保持简短说明。' : '本轮只修订备课方案，不生成 threeCardSuggestions。三卡在教师确认后单独生成。',
         evidence: references,
         draft: parsed,
         teachingIssues,
@@ -612,7 +613,7 @@ function reviewGroundedMessages({ parsed, references, fixedLessonIdentity, fixed
           '评价卡每条都写成“任务｜可观察表现｜判断标准”，标准应能让教师当堂判断达成、部分达成或需要支架。',
           '三卡每条都必须绑定 evidence 中真实存在的 E 编号；不得用页码、文档名或来源说明代替 E 编号。',
           '返回完整 JSON；不得只返回修改意见或局部字段。'
-        ]
+        ].filter(check => expectedCardTypes.length || !/^(板书卡|提问卡|评价卡|三卡)/u.test(check))
       })
     }
   ];
@@ -736,6 +737,11 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
       '三卡条目要能直接拿去上课：板书只写 3—6 个黑板可写的短词、短句或结构关系，单条尽量不超过 16 个汉字；不得写教师动作、页码、教材说明、完整教学句子或“请引导学生”等指令。提问写回文路径，评价写可观察的完成标准。',
       '“换成两课时”只能改变时间与环节分配，不能改篇目、核心问题、板书主题或引用。'
     ];
+    if (!expectedCardTypes.length) {
+      delete request.outputSchema.threeCardSuggestions;
+      request.outputRequirements = request.outputRequirements.filter(rule => !rule.startsWith('三卡条目'));
+      request.outputRequirements.push('本轮只输出备课方案，不输出三卡。三卡在教师确认后单独生成，避免一次回复承担两种产物。', '完整方案以3—5个有依据的环节呈现，每个环节只写必要的动作、回应与收束，避免在不同字段逐字重复。同一课的普通追问只修订相关部分，但需返回完整合法JSON。');
+    }
     if (expectedCardTypes.length) {
       const requested = expectedCardTypes.filter(type => CARD_KEYS.includes(type));
       request.task = '只根据教师已经确认的方案与教材依据生成指定课堂卡。不要重写整份教案。';
@@ -841,13 +847,18 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   const rawCardSuggestions = parsed.threeCardSuggestions || parsed.cardSuggestions;
   const cardData = cardSuggestions(rawCardSuggestions, answer);
   const cardItemData = Object.fromEntries(Object.entries(cardSuggestionItems(rawCardSuggestions, answer, citations)).map(([key, items]) => [key, sanitizeCardRefs(items, citations)]));
+  const normalizedConsistency = answerConsistencyIssues({ answer }, lessonContext, references);
   const finalIssues = [
     ...teachingPlanCompletenessIssues({ answer }, planningQuestion),
     ...teachingPlanIssues({ answer }, lessonContext),
     ...cardGenerationIssues(parsed, expectedCardTypes),
     ...answerConsistencyIssues(parsed, lessonContext, references),
+    ...normalizedConsistency,
     ...(workflow.unresolvedIssues || [])
   ].slice(0, 10);
+  if (normalizedConsistency.some(issue => issue.includes('课时定位'))) {
+    answer.lessonPosition = `本次按${Math.max(1, Math.min(4, Number(lessonContext?.periods) || 1))}课时安排；模型原课时定位与当前条件不一致，请教师核对前置学习和课堂节奏。`;
+  }
   const route = {
     scopes: scope,
     documents: [...new Map(citations.map(item => [item.documentId, { id: item.documentId, title: item.documentTitle, type: item.documentType }])).values()],

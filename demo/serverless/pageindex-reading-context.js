@@ -150,7 +150,7 @@ export function createReadingContext({ provider, scope = [], lessonIdentity, evi
       const title = first(page, ['pageTitle', 'page_title', 'title']) || node.title;
       const sectionPath = first(page, ['sectionPath', 'section_path']);
       const raw = {
-        documentId: node.documentId, documentTitle: payload.documentTitle || payload.document_title || node.documentId,
+        documentId: node.documentId, documentTitle: payload.documentTitle || payload.document_title || evidence.find(item => item?.documentId === node.documentId)?.documentTitle || ({ textbook: '学生教材', teacher_guide: '教师用书', curriculum_standard: '课程标准' }[node.documentType] || '当前教材'),
         documentType: node.documentType,
         pdfPage: requestedPage, pageNumber: requestedPage, id: `${node.documentId}-p${requestedPage}`,
         printedPage: first(page, ['printedPage', 'printed_page']), title,

@@ -169,6 +169,8 @@ test('prompt keeps three material roles distinct and asks for a complete evidenc
   assert.match(systemPrompt, /学习任务群.*待教师确认/u);
   assert.match(systemPrompt, /教师如何操作、学生需要回到哪一处文本/u);
   assert.match(userPayload.teacherReflectionContext, /不能说明意象之间的关系/u);
+  assert.equal(Object.hasOwn(userPayload.outputSchema, 'threeCardSuggestions'), false);
+  assert.ok(userPayload.outputRequirements.some(rule => /三卡在教师确认后单独生成/u.test(rule)));
   assert.equal(requestBody.messages.some(item => item.content === '普通对话 1'), false);
   assert.deepEqual(userPayload.workflow.slice(0, 4), ['定位篇目与相关页段', '按需读取课程标准，确认学段要求、任务群与学业质量原文', '核对教师用书，理解编写意图与可供取舍的教学建议', '回到学生教材核对原文证据']);
   assert.equal(result.answer.sourceLayers.curriculumStandard.available, false);
@@ -471,4 +473,13 @@ test('correction review sees original context and repairs the entire one-period 
   assert.match(review.evidence[0].excerpt, /第四段.*第五段/u);
   assert.ok(review.teachingIssues.some(issue => /课时定位/u.test(issue)));
   assert.deepEqual(result.teachingPlanIssues, []);
+});
+
+test('unresolved model period conflicts are flagged and not presented as the selected timetable', async t => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ model: 'test', choices: [{ message: { content: JSON.stringify({ answer: { summary: '比较文本', position: '第二课时，在疏通文意的基础上比较阅读' } }) } }] }));
+  const result = await generateGroundedAnswer({ question: '这句话是什么意思', lessonContext: { periods: 1 }, evidence, env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test' } });
+  assert.match(result.answer.lessonPosition, /本次按1课时安排/u);
+  assert.doesNotMatch(result.answer.lessonPosition, /第二课时/u);
+  assert.ok(result.teachingPlanIssues.some(issue => /课时定位/u.test(issue)));
+  assert.equal(result.agentRun.status, 'needs_teacher_review');
 });

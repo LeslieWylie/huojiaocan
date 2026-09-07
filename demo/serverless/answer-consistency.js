@@ -4,7 +4,7 @@ export function answerConsistencyIssues(value, lessonContext = {}, references = 
   const periods = Math.max(1, Math.min(4, Number(lessonContext.periods) || 1));
   const issues = [];
   const digits = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
-  const position = String(answer.lessonPosition || '');
+  const position = String(answer.lessonPosition || answer.position || '');
   for (const match of position.matchAll(/第\s*([一二三四五六七八九十\d]+)\s*课时/gu)) {
     if ((Number(match[1]) || digits[match[1]]) > periods) {
       issues.push(`当前仅${periods}课时，但课时定位出现${match[0]}；同步核对摘要、课堂环节和三卡，不要只修改回复。`);
@@ -25,4 +25,4 @@ export function answerConsistencyIssues(value, lessonContext = {}, references = 
   return [...new Set(issues)];
 }
 
-export const SOURCE_REVIEW_RULE = '针对当前问题逐条核对关键引文的说话者或描写对象、所属段落、前后转折与比较关系。历史回答可能有错，不得当作教材依据。教师纠错后，必须同步修改 understanding、reply、summary、lessonPosition、课堂环节和三卡，不能只在开头说已纠正。课时以当前 lessonContext 为准，不沿用历史课时。输出 sourceChecks 只记录可核验结论及其 E 编号，不输出思维过程；无法确认则删除断言或明确待确认。';
+export const SOURCE_REVIEW_RULE = '针对当前问题逐条核对关键引文的说话者或描写对象、所属段落、前后转折与比较关系。历史回答可能有错，不得当作教材依据。教师纠错后，必须同步修改 understanding、reply、summary、lessonPosition、课堂环节和三卡，不能只在开头说已纠正。课时以当前 lessonContext 为准，不沿用历史课时。教师用书的第几课时只作参考，不等于本次方案的课时编号。只有班级水平时，不得断言学生已经掌握或尚未掌握某项能力；学情设想须标注待教师确认。输出 sourceChecks 只记录可核验结论及其 E 编号，不输出思维过程；无法确认则删除断言或明确待确认。';
