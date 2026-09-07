@@ -341,6 +341,7 @@ test('two-period plan enters a bounded third revision when order and time are no
         objectives: ['能够疏通文意并把握结构', '能够说明先忧后乐的价值判断'],
         keyPoints: ['重点：由写景进入价值判断'],
         lessonPlan,
+        questionChain: [{ question: '两幅景象的用词有何不同？' }, { question: '古仁人的忧乐与迁客骚人有何不同？' }],
         assessment: ['能够引用关键句说明古仁人之心'],
         evidenceRefs: ['E1']
       }
@@ -490,4 +491,20 @@ test('full-page display selects relevant original text rather than unrelated lea
   assert.match(excerpt, /忧乐观|宠辱偕忘/u);
   assert.ok(raw.includes(excerpt.replace(/^…|…$/gu, '')));
   assert.ok(excerpt.length <= 122);
+});
+
+
+test('whole-plan correction requires structured fields and never hides omissions behind fallback templates', async t => {
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return Response.json({ model: 'test', choices: [{ message: { content: JSON.stringify({ answer: { reply: '宠辱偕忘写的是迁客骚人。', summary: '需与古仁人区分。' } }) } }] });
+  });
+  const result = await generateGroundedAnswer({ question: '这句话是谁说的？', followUpInstruction: '同步修订整份方案', lessonContext: { periods: 1 }, evidence, env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test' } });
+  assert.equal(requests.length, 3);
+  const prompt = JSON.parse(requests[0].messages.at(-1).content);
+  assert.equal(prompt.requiresCompletePlan, true);
+  assert.match(prompt.completionRule, /完整 answer/u);
+  assert.ok(result.teachingPlanIssues.some(issue => /教学目标不足/u.test(issue)));
+  assert.equal(result.agentRun.status, 'needs_teacher_review');
 });

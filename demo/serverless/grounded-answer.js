@@ -173,16 +173,6 @@ function sanitizeCardRefs(items, citations) {
   }));
 }
 
-function evidenceLayer(items, label, emptyText) {
-  const list = Array.isArray(items) ? items : [];
-  return {
-    label,
-    available: list.length > 0,
-    summary: list.length ? list.slice(0, 2).map(item => focusedEvidenceExcerpt(item.text || item.quote, `${teachingFocus || question} ${followUpInstruction || ''}`, 220)).filter(Boolean).join('；') : emptyText,
-    citationIds: list.slice(0, 3).map((_, index) => `E${index + 1}`)
-  };
-}
-
 function normalizeStep(value) {
   if (!value || typeof value !== 'object') return null;
   const title = textField(value.title || value.stage || value.name);
@@ -419,7 +409,7 @@ export function teachingPlanIssues(value, lessonContext = {}) {
 }
 
 function requestsCompleteLessonPlan(question = '') {
-  return /(?:备课|教学设计|课堂(?:流程|环节|方案)|问题链|一课时|两课时|课时教学|评价(?:观察点|标准)|怎样教|怎么教|如何教)/u.test(String(question || ''));
+  return /(?:备课|教学设计|课堂(?:流程|环节|方案)|(?:同步修订|重新整理|完善|重写|调整|修订)(?:整份|整套|当前|本课)?(?:教学)?方案|问题链|一课时|两课时|课时教学|评价(?:观察点|标准)|怎样教|怎么教|如何教)/u.test(String(question || ''));
 }
 
 /** A planning request must create a draft that can actually enter the Cards
@@ -672,6 +662,8 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     citations: orderedEvidence
   }).title || lessonTitle(lessonIdentity?.title || question, lessonTitle(question));
   const fixedCoreQuestion = textField(lessonIdentity?.coreQuestion, String(question || '').trim());
+  const planningQuestion = expectedCardTypes.length ? '' : [question, /(?:同步|整份|整套|方案)/u.test(followUpInstruction || '') ? followUpInstruction : ''].filter(Boolean).join('\n');
+  const requiresCompletePlan = requestsCompleteLessonPlan(planningQuestion);
   const messages = [
     {
       role: 'system',
@@ -682,6 +674,8 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
       role: 'user',
       content: JSON.stringify({
         task: '回答教师问题，并把判断组织成可以直接用于备课的内容。',
+        requiresCompletePlan,
+        completionRule: requiresCompletePlan ? '本轮须返回修订后的完整 answer：objectives、keyPoints、lessonPlan、questionChain、assessment 均必填。只给 reply 或修订说明不算完成；所有字段同步纠错，不以通用模板代替本篇的具体活动。' : '优先回答本轮问题，不要求重复整套方案。',
         question: String(question || '').trim(),
         teachingFocus: String(teachingFocus || question || '').trim().slice(0, 500),
         lessonIdentity: {
@@ -791,7 +785,6 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   // a dense single-screen summary.
   const cardInstruction = expectedCardTypes.length ? [...history].reverse().find(item => item?.role === 'user' && typeof item.content === 'string')?.content : '';
   const reviewInstruction = followUpInstruction || cardInstruction || question;
-  const planningQuestion = expectedCardTypes.length ? '' : question;
   const workflow = await runStructuredReviewLoop({
     model,
     initialMessages: messages,
@@ -866,6 +859,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   const cardItemData = Object.fromEntries(Object.entries(cardSuggestionItems(rawCardSuggestions, answer, citations)).map(([key, items]) => [key, sanitizeCardRefs(items, citations)]));
   const normalizedConsistency = answerConsistencyIssues({ answer }, lessonContext, references);
   const finalIssues = [
+    ...teachingPlanCompletenessIssues(parsed, planningQuestion),
     ...teachingPlanCompletenessIssues({ answer }, planningQuestion),
     ...teachingPlanIssues({ answer }, lessonContext),
     ...cardGenerationIssues(parsed, expectedCardTypes),
