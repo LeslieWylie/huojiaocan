@@ -328,3 +328,43 @@ test('agent shows honest waiting state and collapsible server work record on nar
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   await summary.screenshot({ path: 'node_modules/.cache/agent-work-summary.png' });
 });
+
+test('refresh restores in-flight question without automatically paying for a new request', async ({ page }) => {
+  const calls = await mockApi(page);
+  await seed(page, null);
+  await page.addInitScript(() => {
+    const owner = 'handoff-user', draft = 'saved';
+    sessionStorage.setItem('huojiaocan.ask.inflight.' + JSON.stringify([owner, draft]),
+      JSON.stringify({ owner, draft, question: '请核对原文主语，这是上次提交的问题', startedAt: Date.now(), id: 'interrupted-fixture' }));
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/ask/?draftId=saved');
+  await ready(page);
+  await expect(page.getByText('上次提交的问题已找回', { exact: true })).toBeVisible();
+  await expect(page.locator('form.ask-large textarea')).toHaveValue('请核对原文主语，这是上次提交的问题');
+  await page.reload();
+  await ready(page);
+  expect(calls).toHaveLength(0);
+  await page.getByRole('button', { name: '检查问题后发送' }).click();
+  await expect(page.locator('form.ask-large textarea')).toBeFocused();
+  expect(calls).toHaveLength(0);
+  await page.locator('.agent-work-summary.needs-attention').screenshot({ path: 'node_modules/.cache/agent-interrupted.png' });
+});
+
+test('insufficient original evidence never overwrites an existing saved plan', async ({ page }) => {
+  let saves = 0;
+  await mockApi(page, { onSave: () => { saves++; return false; } });
+  await seed(page, null);
+  await page.route('**/api/**/ask', route => route.fulfill({ json: {
+    generation: 'blocked-no-evidence', evidenceSufficient: false, answer: null, citations: [],
+    agentRun: { execution: { retrieval: { sourceReadRequired: true, status: 'needs_evidence' } }, events: [] }
+  } }));
+  await page.goto('/ask/?draftId=saved');
+  await ready(page);
+  await page.locator('form.ask-large textarea').fill('请核对原文主语');
+  await page.locator('form.ask-large button[type=submit]').click();
+  await expect(page.getByText('本轮尚未读到可用于核对的教材原页，未生成结论。请先打开教材核对篇目与原文。', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '核对当前教材', exact: true })).toBeVisible();
+  expect(saves).toBe(0);
+  await expect(page.locator('form.ask-large textarea')).toHaveValue('请核对原文主语');
+});

@@ -478,7 +478,7 @@ test('correction review sees original context and repairs the entire one-period 
 
 test('unresolved model period conflicts are flagged and not presented as the selected timetable', async t => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ model: 'test', choices: [{ message: { content: JSON.stringify({ answer: { summary: '比较文本', position: '第二课时，在疏通文意的基础上比较阅读' } }) } }] }));
-  const result = await generateGroundedAnswer({ question: '这句话是什么意思', lessonContext: { periods: 1 }, evidence, env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test' } });
+  const result = await generateGroundedAnswer({ question: '这句话是什么意思', lessonContext: { periods: 1 }, evidence: evidence.map(item => ({ ...item, readMode: 'full_page' })), env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test' } });
   assert.match(result.answer.lessonPosition, /本次按1课时安排/u);
   assert.doesNotMatch(result.answer.lessonPosition, /第二课时/u);
   assert.ok(result.teachingPlanIssues.some(issue => /课时定位/u.test(issue)));
@@ -500,7 +500,7 @@ test('whole-plan correction requires structured fields and never hides omissions
     requests.push(JSON.parse(options.body));
     return Response.json({ model: 'test', choices: [{ message: { content: JSON.stringify({ answer: { reply: '宠辱偕忘写的是迁客骚人。', summary: '需与古仁人区分。' } }) } }] });
   });
-  const result = await generateGroundedAnswer({ question: '这句话是谁说的？', followUpInstruction: '同步修订整份方案', lessonContext: { periods: 1 }, evidence, env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test' } });
+  const result = await generateGroundedAnswer({ question: '这句话是谁说的？', followUpInstruction: '同步修订整份方案', lessonContext: { periods: 1 }, evidence: evidence.map(item => ({ ...item, readMode: 'full_page' })), env: { LLM_GATEWAY_BASE_URL: 'https://gateway.test', LLM_GATEWAY_API_KEY: 'test-key', LLM_GATEWAY_MODEL: 'test' } });
   assert.equal(requests.length, 3);
   const prompt = JSON.parse(requests[0].messages.at(-1).content);
   assert.equal(prompt.requiresCompletePlan, true);

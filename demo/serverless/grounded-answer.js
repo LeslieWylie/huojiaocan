@@ -1,3 +1,4 @@
+import { requiresSourceRead, hasSourceRead, reviewExecution } from './agent-execution.js';
 import { createTeachingSkillSession, selectTeachingSkills } from './teaching-skills.js';
 import { GatewayError } from './llm-gateway.js';
 import { createStructuredModel, runStructuredReviewLoop } from './ai-orchestrator.js';
@@ -645,6 +646,7 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
   const turnContract = createTeachingTurnContract({ question, scope, history, lessonIdentity, followUpInstruction, operation, expectedCardTypes });
   const react = reactResult || await runReActRetrieval({ question, scope, evidence, history, teacherReflectionContext, lessonIdentity, followUpInstruction, operation, expectedCardTypes, env, deepseek, retrieveMore, readingContext, deadlineAt });
   const orderedEvidence = prioritizeTeachingEvidence(react.evidence).slice(0, 8);
+  if (requiresSourceRead(question, followUpInstruction) && !hasSourceRead(orderedEvidence)) throw new GatewayError('source_read_required', { retryable: false });
   const evidenceCoverage = inspectEvidenceCoverage(turnContract, orderedEvidence);
   const references = orderedEvidence.map((item, index) => ({
     ref: `E${index + 1}`,
@@ -910,7 +912,8 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
       evidence: orderedEvidence,
       retrievalTrace: react.trace,
       generationTrace,
-      issues: finalIssues
+      issues: finalIssues,
+      execution: { retrieval: react.execution, review: reviewExecution(generationTrace, finalIssues) }
     }),
     evidenceSufficient: citations.length > 0,
     understanding: textField(String(parsed.understanding || '').replace(/^(?:\s*问题理解\s*[:：]\s*)+/u, ''), `围绕“${question}”定位教材结构与教学用书建议。`),

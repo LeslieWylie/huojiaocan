@@ -1,3 +1,4 @@
+import { readInterruptedAsk, markAskInFlight, clearAskInFlight } from '../ask-interruption.js';
 import { readAiConnectionSelection, writeAiConnectionSelection } from '../ai-connection-selection.js';
 // 备课问答页（CitationChips/RouteTrace/ConversationSide/AskPage 等，从 App.jsx 迁出）
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -71,10 +72,10 @@ export function AgentReviewNote({ response }) {
   if (!presentation.steps.length) return null;
   return <section className={`agent-work-summary ${presentation.attention ? 'needs-attention' : ''}`} aria-label="本轮协作记录">
     <header><Sparkles size={20}/><div><b>{presentation.title}</b><p>{presentation.detail}</p></div></header>
-    <details><summary>查看本轮处理记录</summary><ol>{presentation.steps.map(step => <li key={step.stage} data-status={step.status}><span>{step.status === 'completed' ? <CheckCircle2 size={17}/> : step.status === 'needs_attention' ? <CircleAlert size={17}/> : <History size={17}/>}<b>{step.label}</b></span><small>{step.statusLabel}</small></li>)}</ol><p className="agent-work-footnote">记录来自本轮服务返回，不代表教学内容已由教师审核。</p></details>
+    <details><summary>查看本轮处理记录</summary>{presentation.notices.map(notice => <p key={notice}>{notice}</p>)}<ol>{presentation.steps.map(step => <li key={step.stage} data-status={step.status}><span>{step.status === 'completed' ? <CheckCircle2 size={17}/> : step.status === 'needs_attention' ? <CircleAlert size={17}/> : <History size={17}/>}<b>{step.label}</b></span><small>{step.statusLabel}</small></li>)}</ol><p className="agent-work-footnote">记录来自本轮服务返回，不代表教学内容已由教师审核。</p></details>
   </section>;
 }
-export function AgentWorkingState({ lessonTitle }) {
+export function AgentWorkingState({ lessonTitle, question }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const started = Date.now();
@@ -83,6 +84,7 @@ export function AgentWorkingState({ lessonTitle }) {
   }, []);
   return <section className="agent-working" aria-label="备课助手正在处理" aria-busy="true">
     <header><Sparkles size={22}/><div><b>正在处理这一轮问题</b><p>{lessonTitle ? `当前篇目：${lessonTitle}` : '围绕已选择的教材与本轮要求整理回答'}</p></div><time aria-label={`已等待 ${elapsed} 秒`}>{elapsed} 秒</time></header>
+    <p className="agent-current-question"><b>本轮问题：</b>{question}</p>
     <p role="status">{elapsed >= 45 ? '这次等待较久。请求仍在处理中，请勿重复发送。' : '请稍候，回答返回后会显示教材依据与可用的处理记录。'}</p>
     <small>当前不显示逐步进度；你可以继续阅读上方历史回答。</small>
   </section>;
@@ -94,7 +96,7 @@ export function ConversationTurn({ turn, draftId, onQuickAsk, onSaveEvidence }) 
   const cardsDraftId = draftId || response.draftId || '';
   const cardsHref = cardsDraftId ? `/cards/?draftId=${encodeURIComponent(cardsDraftId)}` : '';
   const askReturnTo = cardsDraftId ? `/ask/?draftId=${encodeURIComponent(cardsDraftId)}` : 'ask';
-  return <article className="conversation-turn"><div className="turn-question"><small>你的问题</small><p>{turn.question}</p>{turn.operationLabel && <span className="turn-operation">本轮调整：{turn.operationLabel.replace(/请保持当前篇目与核心问题，/u, '').replace(/。$/u, '')}</span>}{response.conversation?.historyUsed && <span className="turn-context-used"><CheckCircle2 size={13}/>已沿用本场对话上下文</span>}</div>{response.retrievalMode === 'stable_snapshot' && <div className="snapshot-banner"><CheckCircle2/><div><b>{UI_COPY.recovery.snapshotBanner}</b><small>{UI_COPY.recovery.snapshotBody}{response.fallbackAt ? ` 快照时间：${new Date(response.fallbackAt).toLocaleString()}` : ''}</small></div></div>}{blocked ? <div className="answer-blocked compact-blocked"><div className="answer-blocked-head"><CircleAlert/><div><Badge tone="orange">依据不足，已停止生成</Badge><h2>{UI_COPY.ask.blockedTitle}</h2><p>{UI_COPY.ask.blockedBody}</p></div></div></div> : <><AgentReviewNote response={response}/>{Array.isArray(response.teachingPlanIssues) && response.teachingPlanIssues.length > 0 && <div className="agent-teaching-warning"><CircleAlert/><div><b>当前流程仍需教师确认</b><ul>{response.teachingPlanIssues.slice(0, 3).map(item => <li key={item}>{item}</li>)}</ul></div></div>}<div className="understanding-card"><small>问题理解</small><p>{response.understanding || response.question}</p></div><RouteTrace route={response.route}/><PlanAnswer answer={response.answer} citations={response.citations || []} cardSuggestions={response.cardSuggestionItems || response.cardSuggestions || response.threeCardSuggestions} draftId={cardsDraftId} returnTo={askReturnTo}/><div className="turn-followups"><button type="button" onClick={() => onQuickAsk({ prompt: '请优先展开教师用书中的教学建议，并保留当前篇目。' })}>展开教师用书依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请只呈现最直接的原始教材依据，并保留当前篇目。' })}>只看原始依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请调整为两课时课堂节奏。', operation: { type: 'change_periods', periods: 2 }, lessonContextPatch: { periods: 2 } })}>换成两课时</button>{cardsHref ? <a className="turn-followup-primary" href={cardsHref}>查看并定稿方案 <ArrowRight size={14}/></a> : <button type="button" onClick={() => onQuickAsk({ prompt: '请先保存当前备课方案，再进入教师定稿。' })}>保存方案后定稿</button>}</div><div className="turn-evidence-actions"><button type="button" onClick={() => onSaveEvidence?.(response.citations || [])}><Plus size={14}/>加入本课依据夹</button><small>把本轮已核验页面收好，之后可从右侧直接回看。</small></div><details className="raw-evidence"><summary>查看原文片段与页码</summary><div>{(response.citations || []).slice(0, 6).map(item => { const href = citationLink(item, askReturnTo); return href ? <a href={href} key={item.id}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}</small><p>{citationText(item)}</p></a> : <span className="citation-unavailable" key={item.id || `${item.documentId}-${item.pdfPage}`}>该依据的教材页码待确认</span>; })}</div></details></>}</article>;
+  return <article className="conversation-turn"><div className="turn-question"><small>你的问题</small><p>{turn.question}</p>{turn.operationLabel && <span className="turn-operation">本轮调整：{turn.operationLabel.replace(/请保持当前篇目与核心问题，/u, '').replace(/。$/u, '')}</span>}{response.conversation?.historyUsed && <span className="turn-context-used"><CheckCircle2 size={13}/>已沿用本场对话上下文</span>}</div>{response.retrievalMode === 'stable_snapshot' && <div className="snapshot-banner"><CheckCircle2/><div><b>{UI_COPY.recovery.snapshotBanner}</b><small>{UI_COPY.recovery.snapshotBody}{response.fallbackAt ? ` 快照时间：${new Date(response.fallbackAt).toLocaleString()}` : ''}</small></div></div>}{blocked ? <div className="answer-blocked compact-blocked"><div className="answer-blocked-head"><CircleAlert/><div><Badge tone="orange">依据不足，已停止生成</Badge><h2>{UI_COPY.ask.blockedTitle}</h2><p>{response.agentRun?.execution?.retrieval?.sourceReadRequired ? '本轮尚未读到可用于核对的教材原页，未生成结论。请先打开教材核对篇目与原文。' : UI_COPY.ask.blockedBody}</p><a href={`/library/?return=${encodeURIComponent(askReturnTo)}`}>核对当前教材</a></div></div></div> : <><AgentReviewNote response={response}/>{Array.isArray(response.teachingPlanIssues) && response.teachingPlanIssues.length > 0 && <div className="agent-teaching-warning"><CircleAlert/><div><b>当前流程仍需教师确认</b><ul>{response.teachingPlanIssues.slice(0, 3).map(item => <li key={item}>{item}</li>)}</ul></div></div>}<div className="understanding-card"><small>问题理解</small><p>{response.understanding || response.question}</p></div><RouteTrace route={response.route}/><PlanAnswer answer={response.answer} citations={response.citations || []} cardSuggestions={response.cardSuggestionItems || response.cardSuggestions || response.threeCardSuggestions} draftId={cardsDraftId} returnTo={askReturnTo}/><div className="turn-followups"><button type="button" onClick={() => onQuickAsk({ prompt: '请优先展开教师用书中的教学建议，并保留当前篇目。' })}>展开教师用书依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请只呈现最直接的原始教材依据，并保留当前篇目。' })}>只看原始依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请调整为两课时课堂节奏。', operation: { type: 'change_periods', periods: 2 }, lessonContextPatch: { periods: 2 } })}>换成两课时</button>{cardsHref ? <a className="turn-followup-primary" href={cardsHref}>查看并定稿方案 <ArrowRight size={14}/></a> : <button type="button" onClick={() => onQuickAsk({ prompt: '请先保存当前备课方案，再进入教师定稿。' })}>保存方案后定稿</button>}</div><div className="turn-evidence-actions"><button type="button" onClick={() => onSaveEvidence?.(response.citations || [])}><Plus size={14}/>加入本课依据夹</button><small>把本轮已核验页面收好，之后可从右侧直接回看。</small></div><details className="raw-evidence"><summary>查看原文片段与页码</summary><div>{(response.citations || []).slice(0, 6).map(item => { const href = citationLink(item, askReturnTo); return href ? <a href={href} key={item.id}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}</small><p>{citationText(item)}</p></a> : <span className="citation-unavailable" key={item.id || `${item.documentId}-${item.pdfPage}`}>该依据的教材页码待确认</span>; })}</div></details></>}</article>;
 }
 export function EvidenceShelf({ items, onRemove, onClear, returnTo = 'ask' }) {
   return <section className="evidence-shelf"><header><div><b>本课依据夹</b><small>{items.length ? `${items.length} 个已核验页面` : '把重要页面收在这里'}</small></div>{items.length ? <button type="button" onClick={onClear}>清空</button> : null}</header>{items.length ? <div className="evidence-shelf-list">{items.map(item => { const href = citationLink(item, returnTo); return <div className="evidence-shelf-item" key={`${item.documentId}:${item.pdfPage}`}>{href ? <a href={href}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}{item.printedPage ? ` · 书页 ${item.printedPage}` : ''}</small></a> : <span className="citation-unavailable"><b>教材页码待确认</b><small>这条依据暂时不能打开原页</small></span>}<button type="button" aria-label="移除依据" onClick={() => onRemove(item)}><X size={13}/></button></div>; })}</div> : <p>在回答下方点击“加入本课依据夹”，把需要反复核对的教师用书和教材页面集中起来。</p>}</section>;
@@ -236,7 +238,7 @@ export function AskPage() {
   const recoveredMessages = Array.isArray(activeAuthRecovery?.messages)
     ? activeAuthRecovery.messages.filter(item => item && item.response).slice(-12)
     : canResumeLocal && Array.isArray(localConversation?.messages) ? localConversation.messages.slice(-12) : [];
-  const { composerText: initialComposerQuestion, autoSubmit: autoSubmitQuestion } = resolveAskHandoff({
+  const { composerText: initialComposerQuestion, autoSubmit: handoffAutoSubmitQuestion } = resolveAskHandoff({
     recovery: activeAuthRecovery, urlQuestion: params.get('q') || '', isClassAdaptation,
     localConversation, canResumeLocal, hasMessages: Boolean(recoveredMessages.length)
   });
@@ -257,7 +259,10 @@ export function AskPage() {
   }, [params]);
   const initialUnitRef = unitRefFromUrl(params);
   const requestedClassName = String(params.get('className') || '').trim().slice(0, 40);
-  const [question, setQuestion] = useState(initialComposerQuestion);
+  const [interrupted, setInterrupted] = useState(() => !isNewConversation && !params.get('q') ? readInterruptedAsk(initialUser, requestedDraftId) : null);
+  const autoSubmitQuestion = interrupted ? '' : handoffAutoSubmitQuestion;
+  const [question, setQuestion] = useState(interrupted?.question || initialComposerQuestion);
+  const activeRequest = useRef(null);
   const [messages, setMessages] = useState(recoveredMessages);
   const session = useAuthSession();
   const [busy, setBusy] = useState(false);
@@ -316,6 +321,7 @@ export function AskPage() {
       if (shelfSyncTimer.current) clearTimeout(shelfSyncTimer.current);
       setEvidenceShelfReady(false);
       setEvidenceShelf([]);
+      setInterrupted(null);
       setMessages([]);
       setQuestion('');
       setPlanQuestion('');
@@ -592,7 +598,7 @@ export function AskPage() {
     const normalizedAction = normalizeAskAction(directQuestion, options, question);
     const requestOptions = normalizedAction.options;
     const text = normalizedAction.text;
-    if (!text || busy || saveRetryInFlight.current) return;
+    if (!text || busy || activeRequest.current || saveRetryInFlight.current) return;
     pendingSave.current = null;
     setSaveRetryError('');
     const consumedUrl = new URL(location.href);
@@ -615,6 +621,7 @@ export function AskPage() {
     const nextLessonRef = requestOptions.lessonRef || lessonRef;
     const resolvedIdentityTitle = nextLessonRef?.title || identityTitle || planIdentity(nextIdentityQuestion, '当前篇目');
     const operation = requestOptions.operation && typeof requestOptions.operation === 'object' ? requestOptions.operation : undefined;
+    activeRequest.current = {}; // Synchronous duplicate-submit guard before awaiting auth.
     setBusy(true); setError(''); setLastErrorCode(''); setRetryQuestion(currentQuestion); setRetryTarget(typeof directQuestion === 'object' ? directQuestion : currentQuestion);
     let pendingTurn = null;
     let pendingHistory = [];
@@ -653,6 +660,13 @@ export function AskPage() {
         // instead of a new unrelated search.
         history: groundedHistory.slice(-10)
       };
+      clearAskInFlight(interrupted);
+      setInterrupted(null);
+      activeRequest.current = markAskInFlight(activeSession.user.id, askBody.draftId, currentQuestion);
+      if (!activeRequest.current) {
+        setLocalSaveFailed(true);
+        activeRequest.current = { owner: activeSession.user.id };
+      }
       // PageIndex and the model gateway are external read services. Retry one
       // transient failure before showing recovery controls, but never retry a
       // malformed request, auth failure, or an evidence insufficiency result.
@@ -660,6 +674,13 @@ export function AskPage() {
         () => request('/ask', { method: 'POST', body: askBody }),
         { maxRetries: 1 }
       );
+      if (ownerTransitioning.current || authOwnersConflict(activeSession.user.id, getSession()?.user?.id)) return;
+      clearAskInFlight(activeRequest.current);
+      if (response?.generation === 'blocked-no-evidence' || response?.evidenceSufficient === false) {
+        setMessages(items => [...items, { question: currentQuestion, response }]);
+        setQuestion(currentQuestion);
+        return; // Never overwrite an existing valid plan with a blocked answer.
+      }
       // The server rebinds identity to the owned lessonRef and retrieved
       // catalogue pages. Prefer that corrected title over an old browser
       // draft that may still contain conversational text such as “我岳阳楼记”.
@@ -752,7 +773,7 @@ export function AskPage() {
       }
       setLastErrorCode(code); setError(askErrorMessage(err));
     }
-    finally { setBusy(false); }
+    finally { clearAskInFlight(activeRequest.current); activeRequest.current = null; setBusy(false); }
   };
   const retrySaveContext = () => ({ ownerUserId: getSession()?.user?.id, draftId, version: existingDraft?.version, transitioning: ownerTransitioning.current });
   const retrySave = async () => {
@@ -958,7 +979,8 @@ export function AskPage() {
           {accountSaveFailed && <div className="ask-error ask-save-recovery" role="status"><CircleAlert/><span>{saveRetryError || ACCOUNT_SAVE_FAILURE}</span>{canRetryDraftSave(pendingSave.current, retrySaveContext()) && <button type="button" onClick={retrySave} disabled={busy || saveRetryBusy}>{saveRetryBusy ? '正在保存…' : '仅重试保存'}</button>}<button type="button" onClick={exportConversation}>导出记录</button></div>}
           {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
           {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button type="button" onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button type="button" onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button type="button" onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
-          {busy && <AgentWorkingState lessonTitle={pairedLessonTitle}/>}
+          {interrupted && !busy && <section className="agent-work-summary needs-attention" role="status"><b>上次提交的问题已找回</b><p>页面刷新后无法接回执行中的请求。本次没有自动重发，请先查看已保存方案；仍需处理时手动发送下方问题。</p><p>{interrupted.question}</p><div className="turn-followups">{draftId && <a href={`/cards/?draftId=${encodeURIComponent(draftId)}`}>查看已保存方案</a>}<button type="button" onClick={() => { setQuestion(interrupted.question); focusComposer(); }}>检查问题后发送</button><button type="button" onClick={() => { clearAskInFlight(interrupted); setInterrupted(null); }}>关闭提示</button></div></section>}
+          {busy && <AgentWorkingState lessonTitle={pairedLessonTitle} question={retryQuestion}/>}
           {emptyState}
           {conversationState}
         </section>

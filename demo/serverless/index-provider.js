@@ -1,3 +1,4 @@
+import { requiresSourceRead, hasSourceRead } from './agent-execution.js';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { generateGroundedAnswer, runReActRetrieval } from './grounded-answer.js';
@@ -628,10 +629,11 @@ async function buildEvidenceAnswer({ provider, question, teachingFocus = '', sco
     ...normalizedResults.filter(item => item.documentType === 'curriculum_standard').slice(0, 2),
     ...normalizedResults.filter(item => !['teacher_guide', 'textbook', 'curriculum_standard'].includes(item.documentType)).slice(0, 2)
   ].slice(0, 8);
-  if (!evidence.length) {
+  if (!evidence.length || (requiresSourceRead(question, followUpInstruction) && !hasSourceRead(evidence))) {
     return {
       provider,
       generation: 'blocked-no-evidence',
+      agentRun: { status: 'needs_evidence', execution: { retrieval: react.execution }, events: [] },
       evidenceSufficient: false,
       question,
       conversation: {

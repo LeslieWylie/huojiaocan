@@ -1,3 +1,4 @@
+import { requiresSourceRead, hasSourceRead, retrievalExecution } from './agent-execution.js';
 import { createTeachingSkillSession, selectTeachingSkills } from './teaching-skills.js';
 import { Agent } from '@earendil-works/pi-agent-core';
 import { Type, createModels, createProvider } from '@earendil-works/pi-ai';
@@ -147,11 +148,13 @@ export async function runPiRetrievalAgent({
 } = {}) {
   let current = Array.isArray(evidence) ? [...evidence] : [];
   const trace = [];
-  if (typeof retrieveMore !== 'function' && !readingContext) return { evidence: current, trace };
+  const required = requiresSourceRead(question, followUpInstruction);
+  const early = () => ({ evidence: current, trace, execution: retrievalExecution({ evidence: current, required, stopReason: 'not_run' }) });
+  if (typeof retrieveMore !== 'function' && !readingContext) return early();
 
   const activeRuntime = runtime || createPiRetrievalRuntime({ env, deepseek, deadlineAt });
   if (!activeRuntime?.configured || !activeRuntime.model || typeof activeRuntime.streamFn !== 'function') {
-    return { evidence: current, trace };
+    return early();
   }
 
   const contract = createTeachingTurnContract({
@@ -165,6 +168,11 @@ export async function runPiRetrievalAgent({
   });
   const expiresAt = Math.min(Date.now() + (activeRuntime.timeoutMs || DEFAULT_TIMEOUT_MS), Number(deadlineAt) || Infinity);
   let stopped = false;
+  let stopReason;
+  const failureReason = error => expired() ? 'timeout'
+    : [401, 403].includes(Number(error?.status || error?.statusCode)) || /auth|forbidden|key_invalid|unauthorized/u.test(String(error?.code || ''))
+      ? 'access_denied' : 'tool_error';
+  let modelTurns = 0;
   const expired = () => stopped || Date.now() >= expiresAt;
   async function withinBudget(operation) {
     if (expired()) throw new Error('retrieval_deadline');
@@ -195,7 +203,7 @@ export async function runPiRetrievalAgent({
     executionMode: 'sequential',
     execute: async (_toolCallId, params) => {
       toolCount += 1;
-      if (expired() || searchCount >= MAX_SEARCHES || typeof retrieveMore !== 'function') {
+      if (expired() || toolCount > 4 || searchCount >= MAX_SEARCHES || typeof retrieveMore !== 'function') {
         return {
           content: [{ type: 'text', text: '已达到本轮教材搜索上限，请使用已有页面完成判断。' }],
           details: { status: 'limit_reached' },
@@ -213,7 +221,9 @@ export async function runPiRetrievalAgent({
       }
       seenQueries.add(queryKey);
       searchCount += 1;
-      const additions = await withinBudget(() => retrieveMore(query));
+      let additions;
+      try { additions = await withinBudget(() => retrieveMore(query)); }
+      catch (error) { stopReason = failureReason(error); throw error; }
       if (!expired()) current = selectTeachingEvidence(current, additions);
       trace.push({ step: searchCount, action: 'search', query, reason: '补充当前篇目的教材依据' });
       return {
@@ -235,22 +245,32 @@ export async function runPiRetrievalAgent({
     executionMode: 'sequential',
     execute: async (_id, params) => {
       toolCount += 1;
-      if (expired() || readCount >= 2 || !sectionRefs.has(params?.sectionRef)) {
+      if (expired() || toolCount > 4 || readCount >= 2 || !sectionRefs.has(params?.sectionRef)) {
         return { content: [{ type: 'text', text: '节点不可用或阅读额度已用完，请依据已读材料判断，不要猜测。' }], details: { status: 'unavailable' } };
       }
       readCount += 1;
-      const pages = await withinBudget(() => readingContext.readSection(params.sectionRef));
+      let pages;
+      try { pages = await withinBudget(() => readingContext.readSection(params.sectionRef)); }
+      catch (error) { stopReason = failureReason(error); throw error; }
       if (!expired()) current = selectTeachingEvidence(current, pages);
       trace.push({ step: trace.length + 1, action: 'read', reason: '核对篇目原页与同节上下文', pagesRead: pages.length });
       return { content: [{ type: 'text', text: JSON.stringify({ evidence: evidenceForAgent(pages), remainingReads: 2 - readCount }) }], details: { pagesRead: pages.length } };
     }
   };
 
+  // Explicit original-text tasks must read a server-selected section even
+  // when the model attempts to finish immediately.
+  if (required && !hasSourceRead(current) && sections.length && !expired()) {
+    const first = sections.find(section => section.documentType === 'textbook') || sections[0];
+    try { await readTool.execute('required-source-read', { sectionRef: first.sectionRef }); }
+    catch (error) { stopReason = failureReason(error); }
+  }
+
   // The model may decide whether another page would be useful, but it cannot
   // waive the product's source requirements. Planning and card turns fetch the
   // first missing source deterministically before free tool use.
   let nextMissing = inspectEvidenceCoverage(contract, current).missing[0];
-  while (!expired() && typeof retrieveMore === 'function' && nextMissing && searchCount < Math.min(MAX_SEARCHES, contract.maxRetrievalIterations)) {
+  while (!expired() && stopReason !== 'access_denied' && typeof retrieveMore === 'function' && nextMissing && searchCount < Math.min(MAX_SEARCHES, contract.maxRetrievalIterations)) {
     const missingSource = nextMissing;
     const query = groundingQueryFor(contract, question, missingSource);
     try {
@@ -265,7 +285,8 @@ export async function runPiRetrievalAgent({
         reason: `补齐${missingSource === 'teacher_guide' ? '教师用书' : missingSource === 'textbook' ? '学生教材' : '课程标准'}依据`,
         initiatedBy: 'grounding_policy'
       });
-    } catch {
+    } catch (error) {
+      stopReason = failureReason(error);
       trace.push({
         step: searchCount,
         action: 'search_failed',
@@ -309,14 +330,20 @@ export async function runPiRetrievalAgent({
     streamFn: activeRuntime.streamFn,
     getApiKey: activeRuntime.apiKey ? () => activeRuntime.apiKey : undefined,
     toolExecution: 'sequential',
-    shouldStopAfterTurn: () => expired() || skillToolCalls > 2 || toolCount >= 4 || (searchCount >= MAX_SEARCHES && (!sections.length || readCount >= 2)),
+    shouldStopAfterTurn: () => {
+      const exhausted = modelTurns >= 4 || skillToolCalls > 2 || toolCount >= 4 || (searchCount >= MAX_SEARCHES && (!sections.length || readCount >= 2));
+      if (expired()) stopReason = 'timeout';
+      else if (exhausted && !stopReason) stopReason = 'budget_exhausted';
+      return expired() || exhausted || ['tool_error', 'access_denied'].includes(stopReason);
+    },
     onPayload: payload => payload,
     maxRetryDelayMs: 1_500
   });
 
+  agent.subscribe(event => { if (event.type === 'turn_start') modelTurns++; });
   const timer = setTimeout(() => agent.abort(), Math.max(0, expiresAt - Date.now()));
   try {
-    if (!expired()) await withinBudget(() => agent.prompt(JSON.stringify({
+    if (!expired() && stopReason !== 'access_denied') await withinBudget(() => agent.prompt(JSON.stringify({
       currentQuestion: compact(question, 900),
       followUpInstruction: compact(followUpInstruction, 1400),
       availableSections: sections,
@@ -328,9 +355,12 @@ export async function runPiRetrievalAgent({
       currentEvidence: evidenceForAgent(current)
     })));
   } catch {
+    stopReason = expired() ? 'timeout' : 'model_error';
     // Retrieval expansion is optional. The already verified evidence remains
     // usable even if the planning model or one tool turn fails.
   } finally {
+    if (Date.now() >= expiresAt) stopReason = 'timeout';
+    if (agent.state.errorMessage && !stopReason) stopReason = 'model_error';
     stopped = true;
     agent.abort();
     clearTimeout(timer);
@@ -339,5 +369,5 @@ export async function runPiRetrievalAgent({
   if (!trace.length || ['search', 'read'].includes(trace.at(-1)?.action)) {
     trace.push({ step: searchCount + 1, action: 'answer', query: '', reason: '已有页面交由最终回答流程核对' });
   }
-  return { evidence: current, trace, contract, coverage: inspectEvidenceCoverage(contract, current), skillExecution: skills.audit() };
+  return { evidence: current, trace, contract, coverage: inspectEvidenceCoverage(contract, current), skillExecution: skills.audit(), execution: retrievalExecution({ evidence: current, required, coverage: inspectEvidenceCoverage(contract, current), stopReason, counts: { searches: searchCount, reads: readCount, modelTurns } }) };
 }

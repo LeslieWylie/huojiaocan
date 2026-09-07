@@ -20,3 +20,9 @@ test('pending teacher confirmation is not automatic approval', () => {
   assert.equal(result.steps[0].statusLabel, '待确认');
   assert.match(result.title, /请结合教材确认/);
 });
+test('incomplete review retains answer but visibly requires checking', () => {
+  const result = agentPresentation({ agentRun: { events: [{ stage: 'evidence_review', status: 'pending' }], execution: { review: { status: 'partial' } } } });
+  assert.equal(result.attention, true);
+  assert.equal(result.steps[0].statusLabel, '未完成');
+  assert.match(result.detail, /审校未完成/);
+});

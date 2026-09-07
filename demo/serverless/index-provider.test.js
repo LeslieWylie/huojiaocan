@@ -671,7 +671,7 @@ test('remote PageIndex transient errors retry once and use the verified public s
 
 test('ask wrapper forwards unresolved review findings to the teacher-facing response', async t => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ model: 'test', choices: [{ message: { content: JSON.stringify({ answer: { summary: '核对原文含义', lessonPosition: '第二课时比较阅读' } }) } }] }));
-  const result = await new LocalFullTextIndexProvider().ask({ question: '《岳阳楼记》这句话是什么意思', scope: ['textbook'], lessonIdentity: { title: '岳阳楼记' }, lessonContext: { periods: 1 }, deepseek: { apiKey: 'fixture-not-a-real-key', model: 'deepseek-v4-flash' } });
+  const result = await new LocalFullTextIndexProvider().ask({ question: '《岳阳楼记》这份课时安排合适吗', scope: ['textbook'], lessonIdentity: { title: '岳阳楼记' }, lessonContext: { periods: 1 }, deepseek: { apiKey: 'fixture-not-a-real-key', model: 'deepseek-v4-flash' } });
   assert.ok(result.teachingPlanIssues.some(issue => /课时定位/u.test(issue)));
   assert.equal(result.agentRun.status, 'needs_teacher_review');
   assert.equal(result.route.evidenceCount, result.citations.length);

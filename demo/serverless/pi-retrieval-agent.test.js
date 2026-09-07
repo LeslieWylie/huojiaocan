@@ -195,9 +195,9 @@ test('Pi rejects invented section refs without reading arbitrary pages', async (
   ]);
   let reads = 0;
   await runPiRetrievalAgent({ question: '核对原文', evidence: startingEvidence, runtime, readingContext: {
-    listSections: async () => [{ sectionRef: 'allowed' }], readSection: async () => { reads++; return []; }
+    listSections: async () => [{ sectionRef: 'allowed' }], readSection: async ref => { assert.equal(ref, 'allowed'); reads++; return []; }
   } });
-  assert.equal(reads, 0);
+  assert.equal(reads, 1); // Only the mandatory trusted read; invented ref is rejected.
 });
 
 test('retrieval deadline includes deterministic searches and ignores late results', async () => {
@@ -207,6 +207,7 @@ test('retrieval deadline includes deterministic searches and ignores late result
   const start = Date.now();
   const result = await runPiRetrievalAgent({ question: '怎样备课岳阳楼记', scope: ['textbook', 'teacher-guide'], lessonIdentity: { title: '岳阳楼记' }, evidence: startingEvidence, runtime, deadlineAt: Date.now() + 40, retrieveMore: () => pending });
   assert.ok(Date.now() - start < 500);
+  assert.equal(result.execution.stopReason, 'timeout');
   resolve([{ documentId: 'late', pdfPage: 999 }]);
   await new Promise(done => setTimeout(done, 5));
   assert.deepEqual(result.evidence, startingEvidence);
@@ -233,4 +234,31 @@ test('repeated invalid skill calls stop without spending retrieval budget or cha
   assert.deepEqual(result.evidence, startingEvidence);
   assert.equal(result.skillExecution.optionalReads, 0);
   assert.deepEqual(result.skillExecution.loaded.map(x => x.id), ['material-location']);
+});
+
+test('early READY cannot replace an original-page read', async () => {
+  const { runtime } = runtimeWithResponses([fauxAssistantMessage(fauxText('READY'))]);
+  let reads = 0;
+  const result = await runPiRetrievalAgent({
+    runtime, question: '请核对原文主语', scope: ['textbook'], evidence: startingEvidence,
+    readingContext: { listSections: async () => [{ sectionRef: 'trusted', documentType: 'textbook' }],
+      readSection: async () => { reads++; return startingEvidence.map(item => ({ ...item, readMode: 'full_page' })); } }
+  });
+  assert.equal(reads, 1);
+  assert.equal(result.execution.sourceReadCompleted, true);
+  assert.equal(result.execution.counts.reads, 1);
+});
+test('READY without an available original page remains needs_evidence', async () => {
+  const { runtime } = runtimeWithResponses([fauxAssistantMessage(fauxText('READY'))]);
+  const result = await runPiRetrievalAgent({ runtime, question: '核对原文', scope: ['textbook'], evidence: startingEvidence, readingContext: { listSections: async () => [] } });
+  assert.equal(result.execution.status, 'needs_evidence');
+});
+test('access denial stops deterministic source searches without retrying another source', async () => {
+  const { runtime } = runtimeWithResponses([fauxAssistantMessage(fauxText('READY'))]);
+  let calls = 0;
+  const result = await runPiRetrievalAgent({ runtime, question: '怎样备课', scope: ['textbook', 'teacher-guide', 'curriculum-standard'], evidence: startingEvidence,
+    retrieveMore: async () => { calls++; throw Object.assign(new Error('denied'), { status: 403 }); } });
+  assert.equal(calls, 1);
+  assert.equal(result.execution.stopReason, 'access_denied');
+  assert.equal(result.execution.counts.modelTurns, 0);
 });

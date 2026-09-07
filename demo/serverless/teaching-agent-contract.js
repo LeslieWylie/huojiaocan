@@ -113,23 +113,25 @@ function event(stage, status, message, details = {}) {
   return { stage, status, message, ...details };
 }
 
-export function createSafeAgentRun({ contract, evidence = [], retrievalTrace = [], generationTrace = [], issues = [] } = {}) {
+export function createSafeAgentRun({ contract, evidence = [], retrievalTrace = [], generationTrace = [], issues = [], execution } = {}) {
   const coverage = inspectEvidenceCoverage(contract, evidence);
   const generatedRounds = (Array.isArray(generationTrace) ? generationTrace : []).filter(item => item?.status === 'completed').length;
   const searched = (Array.isArray(retrievalTrace) ? retrievalTrace : []).filter(item => item?.action === 'search').length;
   const pagesRead = (Array.isArray(retrievalTrace) ? retrievalTrace : []).filter(item => item?.action === 'read').reduce((sum, item) => sum + (Number(item.pagesRead) || 0), 0);
   const qualityIssues = (Array.isArray(issues) ? issues : []).filter(Boolean).slice(0, 6);
-  const ready = coverage.sufficient && generatedRounds > 0 && qualityIssues.length === 0;
+  const reviewCompleted = execution?.review ? execution.review.status === 'completed' : generationTrace.at(-1)?.status === 'completed' && generatedRounds > 1 && !qualityIssues.length;
+  const ready = coverage.sufficient && generatedRounds > 0 && !qualityIssues.length && reviewCompleted && (!execution?.retrieval || execution.retrieval.status === 'completed');
   return {
     version: 1,
+    ...(execution ? { execution } : {}),
     intent: contract?.intent || 'grounded_question',
     status: ready ? 'ready_for_teacher_review' : coverage.sufficient ? 'needs_teacher_review' : 'needs_evidence',
     lessonTitle: contract?.lessonTitle || '',
     sourceCoverage: coverage,
     events: [
-      event('grounding', coverage.sufficient ? 'completed' : 'needs_attention', coverage.sufficient ? '已定位本轮所需教材依据' : '仍有教材依据需要补充', { searches: searched, pagesRead }),
+      event('grounding', (coverage.sufficient && (!execution?.retrieval || execution.retrieval.status === 'completed')) ? 'completed' : 'needs_attention', coverage.sufficient ? '已定位本轮所需教材依据' : '仍有教材依据需要补充', { searches: searched, pagesRead }),
       event('draft', generatedRounds ? 'completed' : 'not_started', generatedRounds ? '已形成课堂方案初稿' : '尚未形成课堂方案'),
-      event('evidence_review', qualityIssues.length ? 'needs_attention' : generatedRounds > 1 ? 'completed' : 'pending', qualityIssues.length ? '仍有课堂安排需要教师判断' : generatedRounds > 1 ? '已进行模型辅助核对，仍需教师确认' : '等待教材依据校核', { issueCount: qualityIssues.length }),
+      event('evidence_review', qualityIssues.length ? 'needs_attention' : reviewCompleted ? 'completed' : 'pending', qualityIssues.length ? '仍有课堂安排需要教师判断' : reviewCompleted ? '已进行模型辅助核对，仍需教师确认' : '本轮审校未完成，请教师核对', { issueCount: qualityIssues.length }),
       event('teacher_confirmation', 'pending', '请教师核对后确认方案')
     ]
   };

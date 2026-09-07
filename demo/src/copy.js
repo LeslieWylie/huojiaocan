@@ -44,6 +44,7 @@ export const UI_COPY = Object.freeze({
     gateway_unauthorized: '系统 AI 的连接凭据暂时不可用。当前定稿和已保存内容都已保留，请稍后重试生成。',
     gateway_forbidden: '系统 AI 暂时拒绝了请求，请稍后重试。',
     gateway_rate_limited: '系统 AI 当前使用人数较多。定稿内容已经保留，请稍后重试。',
+    source_read_required: '尚未读到可核对的教材原页，请核对当前篇目后重试。',
     gateway_timeout: '系统 AI 本次处理时间较长，未覆盖原有内容。请直接重试生成。',
     gateway_unavailable: '系统 AI 暂时没有完成生成。定稿内容已经保留，请稍后重试。',
     gateway_invalid_response: '系统 AI 返回内容暂时无法读取，请重试。',
