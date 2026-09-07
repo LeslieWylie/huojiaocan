@@ -157,11 +157,12 @@ export async function runStructuredReviewLoop({
   const trace = [{ round: 1, stage: stageNames[0] || 'draft', status: 'completed', issues: issues.length }];
 
   for (let round = 2; round <= Math.min(Math.max(1, maxRounds), 3); round += 1) {
+    // A clean second review needs no optional repair, even at the deadline.
+    if (round >= 3 && !issues.length && !pendingReviewIssues.length) break;
     if (typeof model.remainingMs === 'function' && model.remainingMs() < MIN_RETRY_WINDOW_MS) {
       trace.push({ round, stage: stageNames[round - 1] || `review_${round}`, status: 'skipped_deadline' });
       break;
     }
-    if (round >= 3 && !issues.length && !pendingReviewIssues.length) break;
     const messages = reviewMessages?.({ value, round, issues: [...new Set([...issues, ...pendingReviewIssues])].slice(0, 10) });
     if (!Array.isArray(messages) || !messages.length) break;
     const stage = stageNames[round - 1] || `review_${round}`;

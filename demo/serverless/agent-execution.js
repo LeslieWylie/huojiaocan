@@ -1,6 +1,8 @@
 // Safe execution facts, never model-authored success or free-form error text.
 export function requiresSourceRead(question = '', instruction = '') {
-  return /原文|原句|引文|主语|纠错|引用.{0,8}(?:正确|准确|错误)|(?:这句|这句话).{0,8}(?:谁|意思|对不对)|段落比较/u.test([question, instruction].join(' '));
+  const text = [question, instruction].join(' ');
+  if (/[“「][^”」]+[”」].{0,30}(?:谁|描写对象|比较|含义)/u.test(text)) return true;
+  return /原文|原句|引文|主语|纠错|引用.{0,8}(?:正确|准确|错误)|(?:这句|这句话).{0,8}(?:谁|意思|对不对)|段落比较/u.test(text);
 }
 export function hasSourceRead(evidence = []) {
   return evidence.some(item => item?.readMode === 'full_page' && String(item.text || '').trim()

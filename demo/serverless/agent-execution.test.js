@@ -23,3 +23,7 @@ test('failed or skipped final review never claims checks completed', () => {
   assert.equal(reviewExecution([{ status: 'completed' }, { status: 'completed' }]).status, 'completed');
   assert.equal(reviewExecution([{ status: 'completed' }]).stopReason, 'review_incomplete');
 });
+test('quoted subject questions trigger source reading without saying 原文', () => {
+  assert.equal(requiresSourceRead('《岳阳楼记》：“宠辱偕忘”写的是谁？请与古仁人之心比较。'), true);
+  assert.equal(requiresSourceRead('请换成两课时，加强朗读训练'), false);
+});

@@ -200,3 +200,15 @@ test('persistent invalid JSON stops after two transport attempts', async t => {
   await assert.rejects(model.completeJson({ messages: [{ role: 'user', content: 'test' }] }), /gateway_invalid_response/);
   assert.equal(calls, 2);
 });
+test('completed clean review is not downgraded because optional repair has no time left', async () => {
+  let calls = 0;
+  const result = await runStructuredReviewLoop({
+    model: { configured: true, remainingMs: () => calls < 2 ? 10000 : 0,
+      completeJson: async () => { calls++; return { completion: {}, value: { valid: true } }; } },
+    initialMessages: [{ role: 'user', content: 'draft' }],
+    reviewMessages: () => [{ role: 'user', content: 'review' }],
+    detectIssues: () => []
+  });
+  assert.equal(calls, 2);
+  assert.deepEqual(result.trace.map(item => item.status), ['completed', 'completed']);
+});
