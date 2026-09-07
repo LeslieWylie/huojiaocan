@@ -368,3 +368,12 @@ test('insufficient original evidence never overwrites an existing saved plan', a
   expect(saves).toBe(0);
   await expect(page.locator('form.ask-large textarea')).toHaveValue('请核对原文主语');
 });
+
+test('configured gateway is not presented as a successfully tested connection', async ({ page }) => {
+  await mockApi(page);
+  await seed(page, null);
+  await page.goto('/ask/');
+  await ready(page);
+  await expect(page.locator('.topbar .mode')).toHaveText('系统连接已配置');
+  await expect(page.locator('.topbar .mode')).toHaveAttribute('title', /不代表连接已测试成功/);
+});

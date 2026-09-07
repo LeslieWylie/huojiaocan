@@ -41,7 +41,7 @@ export const UI_COPY = Object.freeze({
     deepseek_request_failed: '我的智能连接 连接失败。系统 AI 仍可使用，请切换为“系统智能（默认）”后重试。',
     gateway_not_configured: '系统 AI 尚未配置，暂时无法生成方案，请联系部署人员。',
     gateway_invalid_url: '系统 AI 地址无效，暂时无法生成方案，请联系部署人员。',
-    gateway_unauthorized: '系统 AI 的连接凭据暂时不可用。当前定稿和已保存内容都已保留，请稍后重试生成。',
+    gateway_unauthorized: '系统连接未通过认证，这不代表余额不足。请在 AI 设置中测试个人连接后选用，或联系管理员更新系统连接。',
     gateway_forbidden: '系统 AI 暂时拒绝了请求，请稍后重试。',
     gateway_rate_limited: '系统 AI 当前使用人数较多。定稿内容已经保留，请稍后重试。',
     source_read_required: '尚未读到可核对的教材原页，请核对当前篇目后重试。',
