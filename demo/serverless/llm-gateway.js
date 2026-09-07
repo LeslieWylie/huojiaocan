@@ -18,6 +18,8 @@ export class GatewayError extends Error {
     this.code = code;
     this.status = status;
     this.retryable = retryable;
+    // @openmaic/generation uses this provider-neutral retry contract.
+    this.isRetryable = retryable;
   }
 
   toJSON() {

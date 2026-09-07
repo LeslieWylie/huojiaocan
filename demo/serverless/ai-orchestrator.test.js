@@ -7,6 +7,11 @@ test('structured JSON parser accepts fenced output but rejects arrays', () => {
   assert.equal(parseStructuredJson('[{"ok":true}]'), null);
 });
 
+test('structured JSON parser reuses OpenMAIC repair for common model defects', () => {
+  assert.deepEqual(parseStructuredJson('整理如下：\n```json\n{"answer":"ok",}\n```'), { answer: 'ok' });
+  assert.deepEqual(parseStructuredJson('<think>草稿</think>\n{"answer":"ok"}'), { answer: 'ok' });
+});
+
 test('system model retries one transient provider failure within one workflow budget', async t => {
   const originalFetch = global.fetch;
   t.after(() => { global.fetch = originalFetch; });

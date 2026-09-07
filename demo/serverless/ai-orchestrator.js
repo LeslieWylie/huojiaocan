@@ -1,8 +1,8 @@
 import { createDeepSeekClient, DeepSeekError } from './deepseek.js';
 import { callGatewayChatCompletion, GatewayError } from './llm-gateway.js';
 import { gatewayConfig } from './shared.js';
+import { parseJsonResponse, withGenerationRetry } from '@openmaic/generation';
 
-const MAX_ATTEMPTS = 2;
 const DEFAULT_CALL_TIMEOUT_MS = 30_000;
 const MIN_RETRY_WINDOW_MS = 5_000;
 const DEFAULT_WORKFLOW_TIMEOUT_MS = 55_000;
@@ -25,43 +25,17 @@ export function parseStructuredJson(content) {
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/i, '')
     .trim();
-  const candidates = [raw];
-  const firstObject = raw.indexOf('{');
-  const lastObject = raw.lastIndexOf('}');
-  // Recover an object wrapped in prose, but never reinterpret a top-level
-  // array as an object by slicing out its first and last braces.
-  if (!raw.startsWith('[') && firstObject >= 0 && lastObject > firstObject) candidates.push(raw.slice(firstObject, lastObject + 1));
-  for (const source of candidates) {
-    try {
-      const parsed = JSON.parse(source);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
-    } catch {
-      // The caller receives one stable invalid-response error. Provider output
-      // is deliberately not copied into logs or browser responses.
-    }
-  }
-  return null;
+  // OpenMAIC owns extraction and repair of common model JSON defects. Keep our
+  // product contract narrower: a teaching result must still be one object,
+  // never a top-level array, primitive, or raw model response.
+  const parsed = parseJsonResponse(raw);
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
 }
 
 function retryDelayMs(env = process.env) {
   const requested = Number(env.AI_RETRY_DELAY_MS);
   if (!Number.isFinite(requested) || requested < 0) return DEFAULT_RETRY_DELAY_MS;
   return Math.min(1_500, Math.floor(requested));
-}
-
-async function withBoundedRetry(call, remainingMs, baseDelayMs = DEFAULT_RETRY_DELAY_MS) {
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    try {
-      return await call();
-    } catch (error) {
-      if (!error?.retryable || attempt === MAX_ATTEMPTS || remainingMs() < MIN_RETRY_WINDOW_MS) throw error;
-      // Provider overloads should not be hit again in the same event-loop tick.
-      // Keep the pause small and inside the shared workflow deadline.
-      const delay = Math.min(baseDelayMs * attempt, Math.max(0, remainingMs() - MIN_RETRY_WINDOW_MS));
-      if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  throw new GatewayError('gateway_request_failed');
 }
 
 /**
@@ -89,7 +63,7 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
       if (!Array.isArray(messages) || !messages.length) throw new GatewayError('gateway_invalid_request');
       if (!usePersonalDeepSeek && !gatewayReady) throw new GatewayError('gateway_not_configured');
       let repairFormat = false;
-      return withBoundedRetry(async () => {
+      return withGenerationRetry(async () => {
         // Recompute the timeout for every retry. A second attempt receives
         // only the time that is still available, never a fresh full budget.
         const callTimeoutMs = Math.min(
@@ -126,10 +100,25 @@ export function createStructuredModel({ env = process.env, deepseek, deadlineAt 
           repairFormat = true;
           const error = usePersonalDeepSeek ? new DeepSeekError('deepseek_invalid_response') : new GatewayError('gateway_invalid_response');
           error.retryable = true;
+          error.isRetryable = true;
           throw error;
         }
         return { completion, value };
-      }, remainingMs, retryDelayMs(env));
+      }, {
+        label: 'huojiaocan-structured-generation',
+        maxRetries: 1,
+        baseDelayMs: retryDelayMs(env),
+        maxDelayMs: 1_500,
+        // Keep retry timing deterministic and bounded by the one request's
+        // shared deadline. OpenMAIC supplies the retry state machine; this
+        // host adapter supplies the remaining Vercel request budget.
+        random: () => 0,
+        sleep: async delay => {
+          const available = remainingMs() - MIN_RETRY_WINDOW_MS;
+          if (available <= 0) throw new GatewayError('gateway_timeout', { retryable: true });
+          await new Promise(resolve => setTimeout(resolve, Math.min(delay, available)));
+        }
+      });
     }
   };
 }
