@@ -26,6 +26,23 @@ function compact(value, max = 900) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
+// A display excerpt is a slice of the actual page, never a generated summary.
+// Reading a whole page must not make the UI show an unrelated page-header paragraph.
+export function focusedEvidenceExcerpt(text, query, max = 220) {
+  const raw = compact(text, 100000);
+  if (raw.length <= max) return raw;
+  const stop = new Set(['学生', '教材', '教师', '用书', '请', '本次', '普通', '一课', '课时', '方案', '设计', '课堂', '依据', '保留', '写清', '怎样', '哪些']);
+  const terms = [...new Set([...new Intl.Segmenter('zh', { granularity: 'word' }).segment(String(query || '').slice(0, 1400))]
+    .filter(part => part.isWordLike && part.segment.length >= 2 && !stop.has(part.segment)).map(part => part.segment))].slice(0, 60);
+  let best = 0; let bestScore = 0;
+  for (let start = 0; start < raw.length; start += Math.max(30, Math.floor(max / 3))) {
+    const window = raw.slice(start, start + max);
+    const score = terms.reduce((sum, term) => sum + (window.includes(term) ? Math.min(term.length, 6) : 0), 0);
+    if (score > bestScore) { best = start; bestScore = score; }
+  }
+  return `${best ? '…' : ''}${raw.slice(best, best + max)}${best + max < raw.length ? '…' : ''}`;
+}
+
 function prioritizeTeachingEvidence(items = []) {
   const ranked = [...items].sort((a, b) => {
     const order = ['curriculum_standard', 'teacher_guide', 'textbook'];
@@ -161,7 +178,7 @@ function evidenceLayer(items, label, emptyText) {
   return {
     label,
     available: list.length > 0,
-    summary: list.length ? list.slice(0, 2).map(item => compact(item.text || item.quote, 420)).filter(Boolean).join('；') : emptyText,
+    summary: list.length ? list.slice(0, 2).map(item => focusedEvidenceExcerpt(item.text || item.quote, `${teachingFocus || question} ${followUpInstruction || ''}`, 220)).filter(Boolean).join('；') : emptyText,
     citationIds: list.slice(0, 3).map((_, index) => `E${index + 1}`)
   };
 }
@@ -822,19 +839,19 @@ export async function generateGroundedAnswer({ question, teachingFocus = '', sco
     curriculumStandard: {
       label: '课程标准直接要求',
       available: standard.length > 0,
-      summary: standard.length ? standard.slice(0, 2).map(item => compact(item.text || item.quote, 420)).filter(Boolean).join('；') : '本次没有定位到课程标准原文，不会把教学推断写成课程标准结论。',
+      summary: standard.length ? standard.slice(0, 2).map(item => focusedEvidenceExcerpt(item.text || item.quote, `${teachingFocus || question} ${followUpInstruction || ''}`, 220)).filter(Boolean).join('；') : '本次没有定位到课程标准原文，不会把教学推断写成课程标准结论。',
       citationIds: standardIndexes.slice(0, 3).map(index => `E${index + 1}`)
     },
     teacherGuide: {
       label: '教师用书参考处理',
       available: guide.length > 0,
-      summary: guide.length ? guide.slice(0, 2).map(item => compact(item.text || item.quote, 420)).filter(Boolean).join('；') : '本次没有定位到教师用书的直接处理建议。',
+      summary: guide.length ? guide.slice(0, 2).map(item => focusedEvidenceExcerpt(item.text || item.quote, `${teachingFocus || question} ${followUpInstruction || ''}`, 220)).filter(Boolean).join('；') : '本次没有定位到教师用书的直接处理建议。',
       citationIds: guideIndexes.slice(0, 3).map(index => `E${index + 1}`)
     },
     textbook: {
       label: '学生教材原文依据',
       available: textbook.length > 0,
-      summary: textbook.length ? textbook.slice(0, 2).map(item => compact(item.text || item.quote, 420)).filter(Boolean).join('；') : '本次没有定位到学生教材的直接原文依据。',
+      summary: textbook.length ? textbook.slice(0, 2).map(item => focusedEvidenceExcerpt(item.text || item.quote, `${teachingFocus || question} ${followUpInstruction || ''}`, 220)).filter(Boolean).join('；') : '本次没有定位到学生教材的直接原文依据。',
       citationIds: textbookIndexes.slice(0, 3).map(index => `E${index + 1}`)
     },
     synthesis: {

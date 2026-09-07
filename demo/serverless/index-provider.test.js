@@ -674,5 +674,6 @@ test('ask wrapper forwards unresolved review findings to the teacher-facing resp
   const result = await new LocalFullTextIndexProvider().ask({ question: '《岳阳楼记》这句话是什么意思', scope: ['textbook'], lessonIdentity: { title: '岳阳楼记' }, lessonContext: { periods: 1 }, deepseek: { apiKey: 'fixture-not-a-real-key', model: 'deepseek-v4-flash' } });
   assert.ok(result.teachingPlanIssues.some(issue => /课时定位/u.test(issue)));
   assert.equal(result.agentRun.status, 'needs_teacher_review');
+  assert.equal(result.route.evidenceCount, result.citations.length);
   assert.match(result.answer.lessonPosition, /本次按1课时安排/u);
 });

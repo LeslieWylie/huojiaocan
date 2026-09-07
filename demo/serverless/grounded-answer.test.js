@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { boundedConversationHistory, ensureLessonPeriodCoverage, generateGroundedAnswer } from './grounded-answer.js';
+import { boundedConversationHistory, ensureLessonPeriodCoverage, generateGroundedAnswer, focusedEvidenceExcerpt } from './grounded-answer.js';
 
 const evidence = [
   {
@@ -482,4 +482,12 @@ test('unresolved model period conflicts are flagged and not presented as the sel
   assert.doesNotMatch(result.answer.lessonPosition, /第二课时/u);
   assert.ok(result.teachingPlanIssues.some(issue => /课时定位/u.test(issue)));
   assert.equal(result.agentRun.status, 'needs_teacher_review');
+});
+
+test('full-page display selects relevant original text rather than unrelated leading prose', () => {
+  const raw = '杜甫登楼诗与陈与义诗歌赏析。'.repeat(50) + '教学活动：比较迁客骚人与古仁人的忧乐观。圈画宠辱偕忘，回到第四段核对描写对象，再对照第五段不以物喜。'.repeat(5);
+  const excerpt = focusedEvidenceExcerpt(raw, '比较迁客骚人与古仁人的忧乐观，核对宠辱偕忘的描写对象', 120);
+  assert.match(excerpt, /忧乐观|宠辱偕忘/u);
+  assert.ok(raw.includes(excerpt.replace(/^…|…$/gu, '')));
+  assert.ok(excerpt.length <= 122);
 });

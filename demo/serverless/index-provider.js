@@ -696,8 +696,8 @@ async function buildEvidenceAnswer({ provider, question, teachingFocus = '', sco
       ...route,
       ...(grounded?.route || {}),
       scopes: route.scopes,
-      matchedNodes: route.matchedNodes,
-      evidenceCount: route.evidenceCount,
+      matchedNodes: grounded?.route?.matchedNodes || route.matchedNodes,
+      evidenceCount: grounded?.route?.evidenceCount ?? route.evidenceCount,
       reactTrace: grounded?.reactTrace || react.trace || []
     },
     understanding: grounded?.understanding || `围绕“${question}”定位教材与教师教学用书中的直接依据。`,
