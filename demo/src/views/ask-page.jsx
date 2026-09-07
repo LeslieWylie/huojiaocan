@@ -1,3 +1,4 @@
+import { readAiConnectionSelection, writeAiConnectionSelection } from '../ai-connection-selection.js';
 // 备课问答页（CitationChips/RouteTrace/ConversationSide/AskPage 等，从 App.jsx 迁出）
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, Download, ExternalLink, History, MessageCircle, Network, Plus, Quote, Route, Send, ShieldCheck, Sparkles, X } from 'lucide-react';
@@ -190,7 +191,14 @@ export function AskPage() {
   const params = useMemo(() => new URLSearchParams(location.search), []);
   const isNewConversation = params.get('new') === '1';
   const isClassAdaptation = params.get('adapt') === '1';
-  const authRecovery = useMemo(() => isNewConversation ? null : readAuthRecovery(), [isNewConversation]);
+  const authRecovery = useMemo(() => {
+    const recovery = readAuthRecovery();
+    if (!isNewConversation) return recovery;
+    // A deliberately new lesson must not resume an old draft, but the
+    // question just handed to login from this exact new page must survive.
+    return recovery?.next === `${location.pathname}${location.search}` && !recovery.draftId
+      && !recovery.messages?.length && !recovery.conversationHistory?.length ? recovery : null;
+  }, [isNewConversation]);
   // A lesson target from the library is a deliberate request for a new
   // thread. Do not silently attach an older recovery payload to it. The
   // exception is the exact path that initiated a login: that hand-off is the
@@ -383,15 +391,14 @@ export function AskPage() {
       const available = Boolean(config.gatewayConfigured && config.textModelConfigured);
       setKeys(list);
       setGatewayAvailable(available);
-      let rememberedKeyId = '';
-      try { rememberedKeyId = sessionStorage.getItem('activeDeepSeekKeyId') || ''; } catch {}
+      const rememberedKeyId = readAiConnectionSelection(session?.user?.id);
       // A key activated in AI 设置 is the account's explicit choice. The
       // system gateway remains available as a visible fallback, but it must
       // not silently override the user's selected personal connection.
       const selectedKey = list.find(item => item.id === rememberedKeyId)
         || list.find(item => item.isActive)
         || (!available ? list[0] : null);
-      setKeyId(selectedKey?.id || '');
+      setKeyId(rememberedKeyId === '' && available ? '' : selectedKey?.id || '');
     }).catch(() => {
       if (!cancelled) {
         setKeys([]);
@@ -406,11 +413,9 @@ export function AskPage() {
     if (authRecovery) clearAuthRecovery();
   }, [authRecovery]);
   useEffect(() => {
-    try {
-      if (keyId) sessionStorage.setItem('activeDeepSeekKeyId', keyId);
-      else sessionStorage.removeItem('activeDeepSeekKeyId');
-    } catch {}
-  }, [keyId]);
+    if (!aiReady || !ownerPersistenceAllowed()) return;
+    writeAiConnectionSelection(session?.user?.id, keyId);
+  }, [keyId, aiReady, session?.user?.id]);
   useEffect(() => {
     if (!draftId || !session || !ownerPersistenceAllowed()) return;
     rootRequest(`/api/drafts/${draftId}`).then(data => {
@@ -754,6 +759,7 @@ export function AskPage() {
   };
   const confirmStartNewConversation = () => {
     setNewConversationPromptOpen(false);
+    clearAuthRecovery();
     clearConversationSnapshot(session?.user?.id || initialUser);
     setMessages([]); setConversationHistory([]); setExistingDraft(null); setDraftId(''); setQuestion(''); setPlanQuestion(''); setLessonRef(null); setRestoredAt(''); setRestoredFromLocal(false);
     const url = new URL(location.href);

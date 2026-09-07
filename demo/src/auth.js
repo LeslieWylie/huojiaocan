@@ -2,6 +2,8 @@ const STORAGE_KEY = 'huojiaocan.supabase.session';
 const AUTH_EVENT = 'huojiaocan:auth-change';
 let runtimeConfig = null;
 let consumedAuthCallback;
+let authRevision = 0;
+let refreshFlight = null;
 
 const AUTH_ERROR_ALIASES = Object.freeze({
   invalid_grant: 'auth_invalid',
@@ -101,7 +103,7 @@ export function clearAuthRecovery() {
 export function authOwnersConflict(previousOwner = '', nextOwner = '') {
   const previous = String(previousOwner || '');
   const next = String(nextOwner || '');
-  return Boolean(previous && next && previous !== next);
+  return Boolean(previous && previous !== next);
 }
 export function canPersistAuthOwner(activeOwner = '', sessionOwner = '', transitioning = false) {
   return !transitioning && !authOwnersConflict(activeOwner, sessionOwner);
@@ -200,19 +202,63 @@ async function authRequest(path, body, token = '') {
   }
   return data;
 }
-export async function signIn(email, password) { return save(await authRequest('token?grant_type=password', { email, password })); }
+export async function signIn(email, password) {
+  const revision = ++authRevision;
+  const result = await authRequest('token?grant_type=password', { email, password });
+  return revision === authRevision ? save(result) : null;
+}
 export async function signUp(email, password) {
   const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/login/` : '';
-  return save(await authRequest('signup', { email, password, ...(redirectTo ? { redirect_to: redirectTo } : {}) }));
+  const revision = ++authRevision;
+  const result = await authRequest('signup', { email, password, ...(redirectTo ? { redirect_to: redirectTo } : {}) });
+  return revision === authRevision ? save(result) : null;
 }
 export async function resendVerification(email) {
   return authRequest('resend', { type: 'signup', email: String(email || '').trim() });
 }
-export async function signOut() { const session = getSession(); if (session?.access_token) await authRequest('logout', {}, session.access_token).catch(() => {}); save(null); }
-export async function refreshSession() {
+export async function signOut() {
   const session = getSession();
-  if (!session?.refresh_token) return null;
-  try { return save(await authRequest('token?grant_type=refresh_token', { refresh_token: session.refresh_token })); } catch { save(null); return null; }
+  ++authRevision;
+  // Local logout is immediate; a delayed logout response must not erase a
+  // different account that signed in while the network request was pending.
+  save(null);
+  if (session?.access_token) await authRequest('logout', {}, session.access_token).catch(() => {});
+}
+function sameSession(left, right) {
+  return Boolean(left && right && left.refresh_token === right.refresh_token
+    && left.access_token === right.access_token && left.user?.id === right.user?.id);
+}
+export async function refreshSession(rejectedAccessToken = '') {
+  const initial = getSession();
+  if (!initial?.refresh_token) return null;
+  if (rejectedAccessToken && initial.access_token !== rejectedAccessToken && !sessionExpired(initial)) return initial;
+  if (refreshFlight && sameSession(refreshFlight.session, initial)) return refreshFlight.promise;
+  const revision = authRevision;
+  const execute = async () => {
+    const current = getSession();
+    if (revision !== authRevision || !sameSession(initial, current)) {
+      return current?.user?.id === initial.user?.id && !sessionExpired(current) ? current : null;
+    }
+    try {
+      const result = await authRequest('token?grant_type=refresh_token', { refresh_token: initial.refresh_token });
+      if (revision !== authRevision || !sameSession(initial, getSession())) return null;
+      if (initial.user?.id && result.user?.id !== initial.user.id) {
+        throw Object.assign(new Error('auth_invalid'), { code: 'auth_invalid', status: 401 });
+      }
+      return save(result);
+    } catch (error) {
+      if (revision !== authRevision || !sameSession(initial, getSession())) return null;
+      // An offline device or a temporary server failure does not revoke login.
+      if ([400, 401, 403].includes(error.status)) { save(null); return null; }
+      throw error;
+    }
+  };
+  const flight = { session: initial };
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : null;
+  flight.promise = (locks?.request ? locks.request('huojiaocan.auth.refresh', execute) : execute())
+    .finally(() => { if (refreshFlight === flight) refreshFlight = null; });
+  refreshFlight = flight;
+  return flight.promise;
 }
 export async function ensureSession() {
   const session = getSession();

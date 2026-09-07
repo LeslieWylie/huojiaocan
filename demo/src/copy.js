@@ -23,6 +23,7 @@ export const UI_COPY = Object.freeze({
     draft_loading: '正在读取上次保存的备课，请稍候再继续追问。',
     auth_required: '登录后才能生成备课方案，请先登录。',
     auth_invalid: '登录已过期，请重新登录后继续。',
+    auth_owner_changed: '账号已切换，本次操作未继续。请刷新后查看当前账号的备课。',
     auth_rate_limited: '验证请求过于频繁，请稍后再试。',
     user_already_exists: '该邮箱已注册，请直接登录。',
     email_not_confirmed: '邮箱还没有完成验证，请先点击验证邮件。',

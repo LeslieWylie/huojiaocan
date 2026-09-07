@@ -529,7 +529,9 @@ test('教材搜索结果兼容服务端下划线字段并保留物理页定位�
 
 test('另起一场备课不会重新打开上一条本地会话', () => {
   assert.match(appSource, /const isNewConversation = params\.get\('new'\) === '1'/u);
-  assert.match(appSource, /const authRecovery = useMemo\(\(\) => isNewConversation \? null/u);
+  assert.match(appSource, /if \(!isNewConversation\) return recovery/u);
+  assert.match(appSource, /recovery\?\.next === .*location\.pathname.*location\.search.*!recovery\.draftId/u);
+  assert.match(appSource, /setNewConversationPromptOpen\(false\);\s*clearAuthRecovery\(\)/u);
   assert.match(appSource, /const requestedDraftId = isNewConversation \? ''/u);
   assert.match(appSource, /url\.search = '\?new=1'/u);
   const reset = appSource.split('const confirmStartNewConversation = () => {')[1]?.split('const startNewConversation')[0];

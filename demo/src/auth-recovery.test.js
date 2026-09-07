@@ -81,5 +81,7 @@ test('账号 A 切换到 B 时进入持久化隔离边界', () => {
   assert.equal(canPersistAuthOwner('teacher-b', 'teacher-b', true), false);
   assert.equal(canPersistAuthOwner('teacher-b', 'teacher-b'), true);
   assert.equal(authOwnersConflict('teacher-a', 'teacher-a'), false);
+  assert.equal(authOwnersConflict('teacher-a', ''), true);
+  assert.equal(canPersistAuthOwner('teacher-a', ''), false);
   assert.equal(authOwnersConflict('', 'teacher-first'), false);
 });

@@ -85,6 +85,10 @@ export function askErrorMessage(error) { return errorCopy(error); }
 // ---- HTTP 请求层（原在 App.jsx） ----
 export async function fetchJson(url, options = {}) {
   const original = { ...options };
+  const owner = getSession()?.user?.id || '';
+  const assertOwner = () => {
+    if ((getSession()?.user?.id || '') !== owner) throw Object.assign(new Error('auth_owner_changed'), { code: 'auth_owner_changed', status: 409 });
+  };
   const isFormData = typeof FormData !== 'undefined' && original.body instanceof FormData;
   const isBinaryBody = typeof Blob !== 'undefined' && original.body instanceof Blob
     || typeof ArrayBuffer !== 'undefined' && (original.body instanceof ArrayBuffer || ArrayBuffer.isView(original.body));
@@ -96,16 +100,19 @@ export async function fetchJson(url, options = {}) {
     token = accessToken();
   }
   const send = currentToken => {
+    assertOwner();
     const headers = { ...baseHeaders };
     if (currentToken) headers.Authorization = `Bearer ${currentToken}`;
     return fetch(url, { ...original, headers, body });
   };
   let response = await send(token);
+  assertOwner();
   if (response.status === 401 && token) {
-    const refreshed = await refreshSession();
+    const refreshed = await refreshSession(token);
     if (refreshed?.access_token) response = await send(refreshed.access_token);
   }
   const payload = response.status === 204 ? {} : await response.json().catch(() => ({}));
+  assertOwner();
   if (!response.ok) {
     const error = new Error(payload.error || payload.detail || payload.message || `request_failed_${response.status}`);
     error.code = payload.error || payload.code || (response.status === 401 ? 'auth_invalid' : '');

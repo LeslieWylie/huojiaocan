@@ -483,10 +483,10 @@ export default async function handler(req, res) {
           teachingFocus: typeof body.teachingFocus === 'string' ? body.teachingFocus.slice(0, 500) : '',
           scope,
           limit: body.limit,
-          // Keep the account draft as the durable baseline, but merge any
-          // newer locally recovered turns so a temporary save failure does
-          // not make the next follow-up forget the conversation.
-          history: completedAskHistory(mergeAskHistory(ownedContext?.history, body.history), body.question, body.followUpInstruction),
+          // Only persisted history has a verified owner. A stale browser tab
+          // can carry another account's turns; never merge client history.
+          // Without an owned draft this is a fresh conversation.
+          history: completedAskHistory(ownedContext?.history, body.question, body.followUpInstruction),
           teacherReflectionContext,
           lessonContext,
           lessonIdentity: ownedContext?.lessonIdentity || (body.lessonIdentity && typeof body.lessonIdentity === 'object' ? body.lessonIdentity : undefined),
