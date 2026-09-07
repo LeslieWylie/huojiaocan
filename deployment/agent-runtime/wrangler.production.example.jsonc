@@ -1,0 +1,33 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "huojiaocan-agent-runtime",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "hyperdrive": [
+    { "binding": "HYPERDRIVE", "id": "REPLACE_WITH_HYPERDRIVE_ID" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "AGENT_QUEUE", "queue": "huojiaocan-agent-runs" }
+    ],
+    "consumers": [
+      {
+        "queue": "huojiaocan-agent-runs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 3,
+        "max_concurrency": 1
+      }
+    ]
+  },
+  "services": [
+    { "binding": "TEACHING_BACKEND", "service": "huojiaocan-teaching-backend" }
+  ],
+  "triggers": { "crons": ["* * * * *"] },
+  "vars": {
+    "AGENT_RUNTIME_ALLOWLIST": "REPLACE_WITH_TEST_ACCOUNT_ID_OR_EMAIL",
+    "SUPABASE_URL": "REPLACE_WITH_SUPABASE_URL"
+  }
+}
