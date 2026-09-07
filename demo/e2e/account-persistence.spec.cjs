@@ -14,7 +14,8 @@ test('logout, another account, and re-login preserve A conversation without shar
   };
   await page.goto('/ask/?new=1');
   await page.locator('form.ask-large textarea').fill('怎样备课《岳阳楼记》？');
-  await page.getByRole('link', { name: '立即登录', exact: true }).click();
+  // Explicitly submit before login; merely opening login must not auto-send.
+  await page.locator('form.ask-large').getByRole('button', { name: '登录后开始提问', exact: true }).click();
   await register(a);
   await expect(page).toHaveURL(/draftId=/);
   await expect(page.locator('.conversation-latest')).toContainText('怎样备课《岳阳楼记》');

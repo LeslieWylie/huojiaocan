@@ -40,7 +40,7 @@ async function createContextDraft(page) {
   const account = testAccount();
   await page.goto('/ask/?doc=textbook&page=56&node=textbook-u3-n1&lesson=11%20岳阳楼记&scope=both');
   await page.locator('form.ask-large textarea').fill('怎样围绕《岳阳楼记》的忧乐观组织课堂？');
-  await page.getByRole('link', { name: '立即登录' }).click();
+  await page.locator('form.ask-large').getByRole('button', { name: '登录后开始提问', exact: true }).click();
   await page.getByRole('button', { name: '注册', exact: true }).click();
   await page.getByLabel('邮箱').fill(account.email);
   await page.getByLabel('密码').fill(account.password);

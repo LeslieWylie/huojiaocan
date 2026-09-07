@@ -27,6 +27,9 @@ test('login recovery preserves the question through continuous Q&A, finalization
   await page.getByRole('button', { name: '创建账号并获取验证邮件' }).click();
 
   await expect(page).toHaveURL(/\/ask\//);
+  await expect(composer).toHaveValue('怎样围绕《岳阳楼记》的忧乐观组织课堂？');
+  expect(asks).toHaveLength(0);
+  await page.locator('form.ask-large').getByRole('button', { name: '开始提问', exact: true }).click();
   await expect(page.locator('.conversation-latest').getByText('怎样围绕《岳阳楼记》的忧乐观组织课堂？', { exact: true })).toBeVisible();
   await expect(page.getByText('先回答你的问题').last()).toBeVisible();
   await expect(page).toHaveURL(/draftId=/);

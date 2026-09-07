@@ -206,7 +206,7 @@ export function AskPage() {
   const hasExplicitLessonTarget = Boolean(params.get('doc') || params.get('page') || params.get('node') || params.get('lesson'));
   const currentAskPath = `${location.pathname}${location.search}`;
   const recoveryMatchesCurrentPath = Boolean(authRecovery?.next && authRecovery.next === currentAskPath);
-  const activeAuthRecovery = hasExplicitLessonTarget && !params.get('draftId') && !recoveryMatchesCurrentPath ? null : authRecovery;
+  const activeAuthRecovery = recoveryMatchesCurrentPath ? authRecovery : null;
   const initialUser = useMemo(() => getSession()?.user?.id || '', []);
   const requestedResumeId = isNewConversation ? '' : params.get('resume') || '';
   const localConversation = useMemo(() => readConversationSnapshot(initialUser, requestedResumeId), [initialUser, requestedResumeId]);
@@ -214,10 +214,13 @@ export function AskPage() {
     ? { ...activeAuthRecovery.draftSnapshot.draft, cards: activeAuthRecovery.draftSnapshot.cards || [] }
     : null;
   const requestedDraftId = isNewConversation ? '' : params.get('draftId') || activeAuthRecovery?.draftId || '';
-  const canResumeLocal = !isNewConversation && !hasExplicitLessonTarget && !params.get('q') && Boolean(localConversation) && (Boolean(requestedResumeId) || !requestedDraftId || !localConversation?.draftId || String(localConversation.draftId) === String(requestedDraftId));
+  const canResumeLocal = !isNewConversation && !hasExplicitLessonTarget && !params.get('q') && Boolean(localConversation) && (!requestedDraftId || String(localConversation.draftId || '') === String(requestedDraftId));
   // `adapt=1` means “open the newly copied plan for review”, not “run a
   // hidden prompt from the URL”. Older links may still contain q; ignore it
   // so the copied plan and cards are loaded before any new model turn.
+  // Only an explicit URL action or the exact login hand-off may auto-send.
+  // Ordinary local recovery restores text, never permission to spend a model call.
+  const autoSubmitQuestion = isClassAdaptation ? '' : (params.get('q') || (activeAuthRecovery?.resumeSubmittedQuestion ? activeAuthRecovery.pendingAction || activeAuthRecovery.question : '') || '');
   const initialQuestion = (isClassAdaptation ? '' : params.get('q')) || activeAuthRecovery?.question || (canResumeLocal ? localConversation?.question : '') || '';
   // Keep the already-rendered answer turns while a follow-up is waiting for
   // re-authentication. The turns contain the trusted citations, so returning
@@ -289,7 +292,6 @@ export function AskPage() {
   const pairedLessonTitle = lessonRef?.title || (messages.length && planQuestion ? planIdentity(planQuestion, '') : '');
   const composerRef = useRef(null);
   const autoAsked = useRef(false);
-  const localResumeRef = useRef(Boolean(recoveredMessages.length || (canResumeLocal && localConversation?.draftId)));
   const ownerPersistenceAllowed = () => canPersistAuthOwner(conversationOwner.current, session?.user?.id, ownerTransitioning.current);
   useEffect(() => {
     const nextOwner = String(session?.user?.id || '');
@@ -432,7 +434,7 @@ export function AskPage() {
       // is cleaned on the normal debounced draft save.
       shelfSyncHash.current = JSON.stringify(savedShelf);
       if (draft.question) {
-        setPlanQuestion(value => value || draft.question);
+        setPlanQuestion(draft.question);
       }
       if (draft.lesson_context) {
         setLessonContext(value => ({ ...value, ...draft.lesson_context }));
@@ -461,7 +463,7 @@ export function AskPage() {
       }
 
       const fallback = readConversationSnapshot(session?.user?.id || initialUser);
-      const sameDraft = !fallback?.draftId || !draftId || String(fallback.draftId) === String(draftId);
+      const sameDraft = !draftId || String(fallback?.draftId || '') === String(draftId);
       if (!fallback || !sameDraft) {
         setEvidenceShelfReady(true);
         setRestoredAt('');
@@ -585,7 +587,7 @@ export function AskPage() {
       const activeSession = await ensureSession();
       if (!activeSession) {
         const next = `${location.pathname}${location.search}`;
-        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, question: text, planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, pendingAction: typeof directQuestion === 'object' ? directQuestion : null, messages: messages.slice(-12), conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
+        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, question: text, planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, resumeSubmittedQuestion: !pendingTurn, pendingAction: typeof directQuestion === 'object' ? directQuestion : null, messages: messages.slice(-12), conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
         location.href = `/login/?next=${encodeURIComponent(next)}`;
         return;
       }
@@ -682,7 +684,7 @@ export function AskPage() {
       const code = requestCode(err);
       if (code === 'auth_invalid' || code === 'auth_required') {
         const next = `${location.pathname}${location.search}`;
-        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, question: text, planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, pendingAction: typeof directQuestion === 'object' ? directQuestion : null, messages: [...messages, ...(pendingTurn ? [pendingTurn] : [])].slice(-12), conversationHistory: pendingHistory || conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
+        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, question: text, planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, resumeSubmittedQuestion: !pendingTurn, pendingAction: typeof directQuestion === 'object' ? directQuestion : null, messages: [...messages, ...(pendingTurn ? [pendingTurn] : [])].slice(-12), conversationHistory: pendingHistory || conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
         location.href = `/login/?next=${encodeURIComponent(next)}`;
         return;
       }
@@ -700,9 +702,9 @@ export function AskPage() {
     finally { setBusy(false); }
   };
   useEffect(() => {
-    if (!initialQuestion || !aiReady || autoAsked.current || localResumeRef.current || isClassAdaptation || (requestedDraftId && !existingDraft)) return;
+    if (!autoSubmitQuestion || !aiReady || autoAsked.current || isClassAdaptation || (requestedDraftId && !existingDraft)) return;
     autoAsked.current = true;
-    ask(null, activeAuthRecovery?.pendingAction || initialQuestion);
+    ask(null, autoSubmitQuestion);
   }, [aiReady, existingDraft?.id]);
   const alternateScope = scope === 'textbook' ? 'teacher-guide' : 'textbook';
   const recovery = isIndexRecoveryCode(lastErrorCode);
