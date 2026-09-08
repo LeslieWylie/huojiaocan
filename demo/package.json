@@ -38,6 +38,7 @@
     "concurrently": "10.0.4",
     "echarts": "6.0.0",
     "express": "5.2.1",
+    "katex": "0.16.33",
     "lucide-react": "1.28.0",
     "motion": "12.35.2",
     "react": "19.2.8",

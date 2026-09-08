@@ -33,8 +33,19 @@ test('OpenMAIC canvas edits, undo-redo, saves and survives refresh without expos
 
   await page.goto('/slides/?draftId=slides-openmaic');
   await expect(page.locator('.openmaic-slide-surface')).toBeVisible();
+  await expect(page.locator('.openmaic-thumbnail-canvas')).toHaveCount(7);
+  await expect(page.locator('.openmaic-thumbnail-canvas .slide-element').first()).toBeVisible();
   await expect(page.locator('#teaching-slide-element-cover-title')).toContainText('岳阳楼记');
   await expect(page.getByRole('button', { name: /撤销/ })).toBeDisabled();
+
+  await page.getByRole('button', { name: '全屏授课' }).click();
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(true);
+  await page.keyboard.press('End');
+  await expect(page.getByRole('button', { name: /第 7 页/ })).toHaveClass(/active/);
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('button', { name: /第 1 页/ })).toHaveClass(/active/);
+  await page.evaluate(() => document.exitFullscreen());
+  await expect.poll(() => page.evaluate(() => Boolean(document.fullscreenElement))).toBe(false);
 
   await page.getByRole('button', { name: '插入文本框' }).click();
   const box = await page.locator('.openmaic-slide-surface').boundingBox();

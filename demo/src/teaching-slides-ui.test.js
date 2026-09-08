@@ -25,6 +25,9 @@ test('slides explicitly separate the student projector from teacher-only prepara
   assert.match(view, /学生投屏隔离/u);
   assert.match(view, /创建修订版/u);
   assert.match(view, /downloadTeachingSlidesProjector/u);
+  assert.match(view, /TeachingSlideThumbnail/u);
+  assert.match(view, /fullscreenchange/u);
+  assert.match(view, /PageDown/u);
   assert.match(app, /lazy\(\(\) => import\('\.\.\/teaching-slide-canvas\.jsx'\)\)/u);
 });
 
@@ -34,4 +37,5 @@ test('slide workbench keeps a large projection canvas and recomposes on narrow s
   assert.match(styles, /@media\(max-width:760px\)[\s\S]*?\.slides-workbench\{grid-template-columns:1fr\}/u);
   assert.match(styles, /\.slides-thumbnails\{display:flex;overflow-x:auto/u);
   assert.match(styles, /\.openmaic-slide-surface\{[^}]*aspect-ratio:16\/9/u);
+  assert.match(styles, /\.slides-thumbnail-preview\{[^}]*aspect-ratio:16\/9/u);
 });

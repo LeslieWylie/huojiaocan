@@ -5,6 +5,8 @@ import { SlideCanvas } from '@openmaic/renderer';
 import { slideToPng } from '@openmaic/renderer/snapshot';
 import { Redo2, Undo2 } from 'lucide-react';
 import { teachingSlideDeckV2Html } from '../shared/teaching-slides-v2.js';
+import '@openmaic/renderer/fonts.css';
+import 'katex/dist/katex.min.css';
 
 function createElementId() {
   return `teacher-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
@@ -66,6 +68,18 @@ export default function TeachingSlideCanvas({ slide, readOnly = false, onChange 
         snapping
       />
     </div>
+  </div>;
+}
+
+// Mirrors OpenMAIC's SlideThumbnail boundary: thumbnails use the same official
+// renderer as the stage, rather than a separate text-only approximation.
+export function TeachingSlideThumbnail({ slide }) {
+  return <div className="openmaic-thumbnail-canvas" aria-hidden="true">
+    <SlideCanvas
+      slide={slide.content.canvas}
+      chrome={false}
+      elementIdPrefix={`teaching-slide-thumbnail-${slide.id}-`}
+    />
   </div>;
 }
 
