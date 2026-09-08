@@ -1,6 +1,8 @@
 .DS_Store
 .codex/
 .wrangler/
+**/wrangler.production.jsonc
+deployment/wrangler.app.production.jsonc
 
 **/node_modules/
 **/.venv/

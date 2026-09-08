@@ -7,6 +7,7 @@
     "api/*.js": { "maxDuration": 120, "includeFiles": "teaching-skills/**/SKILL.md" }
   },
   "rewrites": [
+    { "source": "/api/ask", "destination": "/api/index?path=ask" },
     { "source": "/materials/:file*", "destination": "/api/materials?file=:file*" },
     { "source": "/api/auth", "destination": "/api/config?auth=1" },
     { "source": "/api/index/:path*", "destination": "/api/index?path=:path*" },

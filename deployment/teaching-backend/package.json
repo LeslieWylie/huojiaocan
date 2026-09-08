@@ -1,0 +1,13 @@
+{
+  "name": "huojiaocan-teaching-backend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/index.js && node --test",
+    "build": "wrangler deploy --dry-run --outdir dist"
+  },
+  "devDependencies": {
+    "wrangler": "4.129.0"
+  }
+}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveAskHandoff, submissionHandoff, LOCAL_SAVE_FAILURE, recoveredTurnsAreAhead } from './ask-handoff.js';
+import { resolveAskHandoff, submissionHandoff, LOCAL_SAVE_FAILURE, localBackupFailureMatters, recoveredTurnsAreAhead } from './ask-handoff.js';
 import { saveConversationSnapshot, readConversationSnapshot } from './conversation-recovery.js';
 
 for (const question of ['请增加朗读训练，还没发送', '']) {
@@ -67,6 +67,21 @@ test('failed storage really returns false; answered snapshot restores an empty c
     assert.equal(saveConversationSnapshot(snapshot, 'test'), true);
     assert.deepEqual(resolveAskHandoff({ canResumeLocal: true, localConversation: readConversationSnapshot('test'), hasMessages: true }), { composerText: '', autoSubmit: '' });
   } finally { globalThis.localStorage = original; }
+});
+
+test('local quota failure is not a data-loss warning after the account draft is durable', () => {
+  assert.equal(localBackupFailureMatters({
+    localSaveFailed: true,
+    agentRuntimeEnabled: true,
+    accountSaveFailed: false,
+    draftId: 'draft-1'
+  }), false);
+  assert.equal(localBackupFailureMatters({
+    localSaveFailed: true,
+    agentRuntimeEnabled: true,
+    accountSaveFailed: true,
+    draftId: 'draft-1'
+  }), true);
 });
 
 

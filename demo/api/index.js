@@ -289,6 +289,43 @@ export async function ownedClassLearningContext(user, requestedClassName, exclud
   );
 }
 
+/**
+ * Run the existing grounded teaching workflow for an already authenticated
+ * owner.  The HTTP route and the durable Agent backend share this function so
+ * they cannot drift into two different retrieval or evidence contracts.
+ */
+export async function executeOwnedAsk({ user, body, env = process.env, providerBundle } = {}) {
+  if (!user?.id) throw Object.assign(new Error('auth_required'), { code: 'auth_required', status: 401 });
+  const input = body && typeof body === 'object' ? body : {};
+  const { provider } = providerBundle || getIndexProvider();
+  const scope = await resolveDocumentScope(null, provider, input.scope ?? input.documentIds ?? input.documentId, user);
+  const active = await resolveActiveDeepSeekKey(user, typeof input.keyId === 'string' ? input.keyId.trim() : undefined, env);
+  const ownedContext = await ownedDraftAskContext(user, input.draftId);
+  const lessonContext = ownedContext?.lessonContext || (input.lessonContext && typeof input.lessonContext === 'object' ? input.lessonContext : {});
+  const classLearningContext = await ownedClassLearningContext(user, lessonContext.className, input.draftId);
+  const teacherReflectionContext = [ownedContext?.teacherReflectionContext, classLearningContext].filter(Boolean).join('\n\n').slice(0, 7200);
+  const response = await provider.ask({
+    question: input.question,
+    retrievalQuery: typeof input.retrievalQuery === 'string' ? input.retrievalQuery : '',
+    teachingFocus: typeof input.teachingFocus === 'string' ? input.teachingFocus.slice(0, 500) : '',
+    scope,
+    limit: input.limit,
+    history: completedAskHistory(ownedContext?.history, input.question, input.followUpInstruction),
+    teacherReflectionContext,
+    lessonContext,
+    lessonIdentity: ownedContext?.lessonIdentity || (input.lessonIdentity && typeof input.lessonIdentity === 'object' ? input.lessonIdentity : undefined),
+    followUpInstruction: typeof input.followUpInstruction === 'string' ? input.followUpInstruction : '',
+    operation: input.operation && typeof input.operation === 'object' ? {
+      type: typeof input.operation.type === 'string' ? input.operation.type.slice(0, 64) : '',
+      periods: Number(input.operation.periods) === 2 ? 2 : Number(input.operation.periods) === 1 ? 1 : undefined
+    } : undefined,
+    retrievalMode: input.retrievalMode,
+    deepseek: active,
+    deadlineAt: Number(input.deadlineAt) > Date.now() ? Number(input.deadlineAt) : askDeadlineAt(env)
+  });
+  return filterScopedProviderResponse(response, scope);
+}
+
 function hasBearerToken(req) {
   const headers = req?.headers || {};
   return /^Bearer\s+\S+/i.test(String(headers.authorization || headers.Authorization || '').trim());
@@ -459,42 +496,10 @@ export default async function handler(req, res) {
       let user;
       try { user = await requireUser(req); } catch (error) { return safeAuthResponse(res, error); }
       try {
-        const scope = await resolveDocumentScope(req, provider, body.scope ?? body.documentIds ?? body.documentId, user);
-        const active = await resolveActiveDeepSeekKey(user, typeof body.keyId === 'string' ? body.keyId.trim() : undefined);
-        // Learning observations are trusted only when read from this user's
-        // stored draft. Browser-supplied prose can never impersonate a
-        // teacher-confirmed classroom or homework record.
-        const ownedContext = await ownedDraftAskContext(user, body.draftId);
-        const lessonContext = ownedContext?.lessonContext || (body.lessonContext && typeof body.lessonContext === 'object' ? body.lessonContext : {});
-        const classLearningContext = await ownedClassLearningContext(user, lessonContext.className, body.draftId);
-        const teacherReflectionContext = [ownedContext?.teacherReflectionContext, classLearningContext].filter(Boolean).join('\n\n').slice(0, 7200);
-        // Keep user/account metadata at the business boundary.  The provider
-        // receives only the explicit ask contract, so it can never forward
-        // private draft/key fields to the self-hosted retrieval service.
-        const askInput = {
-          question: body.question,
-          retrievalQuery: typeof body.retrievalQuery === 'string' ? body.retrievalQuery : '',
-          teachingFocus: typeof body.teachingFocus === 'string' ? body.teachingFocus.slice(0, 500) : '',
-          scope,
-          limit: body.limit,
-          // Only persisted history has a verified owner. A stale browser tab
-          // can carry another account's turns; never merge client history.
-          // Without an owned draft this is a fresh conversation.
-          history: completedAskHistory(ownedContext?.history, body.question, body.followUpInstruction),
-          teacherReflectionContext,
-          lessonContext,
-          lessonIdentity: ownedContext?.lessonIdentity || (body.lessonIdentity && typeof body.lessonIdentity === 'object' ? body.lessonIdentity : undefined),
-          followUpInstruction: typeof body.followUpInstruction === 'string' ? body.followUpInstruction : '',
-          operation: body.operation && typeof body.operation === 'object' ? {
-            type: typeof body.operation.type === 'string' ? body.operation.type.slice(0, 64) : '',
-            periods: Number(body.operation.periods) === 2 ? 2 : Number(body.operation.periods) === 1 ? 1 : undefined
-          } : undefined,
-          retrievalMode: body.retrievalMode,
-          deepseek: active,
-          deadlineAt: askDeadlineAt()
-        };
-        const response = await provider.ask(askInput);
-        return json(res, 200, filterScopedProviderResponse(response, scope));
+        // Keep user/account metadata at the business boundary. The shared
+        // executor rehydrates owner-controlled draft context before retrieval.
+        const response = await executeOwnedAsk({ user, body, providerBundle: { provider } });
+        return json(res, 200, response);
       } catch (error) {
         if (String(error?.code || '').startsWith('auth_') || String(error?.code || '').startsWith('key_') || String(error?.code || '').startsWith('deepseek_') || String(error?.code || '').startsWith('gateway_')) return safeAuthResponse(res, error);
         throw error;

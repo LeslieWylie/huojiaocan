@@ -32,8 +32,12 @@ export function createHyperdrivePool(env) {
   if (!connectionString) throw Object.assign(new Error('hyperdrive_not_configured'), { code: 'hyperdrive_not_configured' });
   return new Pool({
     connectionString,
-    max: 1,
-    connectionTimeoutMillis: 8_000,
-    idleTimeoutMillis: 10_000
+    // Hyperdrive owns the long-lived origin pool. Keep this request-scoped
+    // client pool small, but allow enough time for Hyperdrive's documented
+    // 15-second cold origin connection window.
+    max: 5,
+    connectionTimeoutMillis: 20_000,
+    idleTimeoutMillis: 10_000,
+    allowExitOnIdle: true
   });
 }

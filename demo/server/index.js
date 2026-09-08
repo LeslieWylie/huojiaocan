@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import askHandler from '../api/ask.js';
+import askHandler from '../serverless/ask-handler.js';
 import indexHandler from '../api/index.js';
 import uploadHandler from '../api/upload.js';
 import aiHandler from '../api/ai.js';

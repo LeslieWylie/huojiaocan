@@ -10,7 +10,7 @@ import { createPiRetrievalRuntime, runPiRetrievalAgent } from '../serverless/pi-
 // Supabase transport are replaced. No network or production accounts.
 import { LocalFullTextIndexProvider } from '../serverless/index-provider.js';
 import indexHandler from './index.js';
-import askHandler from './ask.js';
+import askHandler from '../serverless/ask-handler.js';
 const asks = [];
 
 async function request(handler, path, { owner = 'B', method = 'GET', body = {} } = {}) {
