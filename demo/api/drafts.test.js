@@ -9,6 +9,7 @@ import { buildLessonStudy } from '../shared/lesson-study.js';
 import { buildLayeredHomework } from '../shared/layered-homework.js';
 import { buildHomeworkReview, mergeHomeworkReview } from '../shared/homework-review.js';
 import { defaultClassroomMomentTriage, mergeClassroomMomentTriage } from '../shared/classroom-carryover.js';
+import { buildTeachingSlideDeckV2, updateTeachingSlideDeckV2 } from '../shared/teaching-slides-v2.js';
 
 function draftFixture() {
   return {
@@ -243,11 +244,13 @@ test('ordinary draft saves cannot forge or erase server-owned same-lesson compar
 });
 
 test('ordinary draft saves cannot forge or erase server-owned teaching slides', () => {
-  const current = { summary: '原方案', teachingSlides: { sourceKey: 'slides1:server', status: 'confirmed', slides: [{ id: 'cover', title: '真实课题' }] } };
-  const saved = sanitizeClientAnswer({ summary: '教师修改', teachingSlides: { sourceKey: 'slides1:browser', status: 'confirmed' } }, current);
+  const current = { summary: '原方案', teachingSlides: { sourceKey: 'slides1:server', status: 'confirmed', slides: [{ id: 'cover', title: '真实课题' }] }, teachingSlidesV2: { version: 2, sourceKey: 'slides1:server-v2' } };
+  const saved = sanitizeClientAnswer({ summary: '教师修改', teachingSlides: { sourceKey: 'slides1:browser', status: 'confirmed' }, teachingSlidesV2: { version: 2, sourceKey: 'slides1:browser-v2' } }, current);
   assert.equal(saved.summary, '教师修改');
   assert.deepEqual(saved.teachingSlides, current.teachingSlides);
+  assert.deepEqual(saved.teachingSlidesV2, current.teachingSlidesV2);
   assert.equal(sanitizeClientAnswer({ teachingSlides: { sourceKey: 'slides1:browser' } }).teachingSlides, undefined);
+  assert.equal(sanitizeClientAnswer({ teachingSlidesV2: { sourceKey: 'slides1:browser-v2' } }).teachingSlidesV2, undefined);
 });
 
 test('ordinary draft saves cannot forge or erase server-owned layered homework', () => {
@@ -498,7 +501,9 @@ function slideDraft() {
 test('slides endpoint builds from the owned confirmed draft without writing on read', async () => {
   const result = await invokeApi({ method: 'GET', url: '/api/drafts/draft-1/slides', draft: slideDraft() });
   assert.equal(result.statusCode, 200);
+  assert.equal(result.payload.deck.version, 2);
   assert.equal(result.payload.deck.slides.length, 7);
+  assert.equal(result.payload.deck.slides[0].content.type, 'slide');
   assert.equal(result.payload.draftVersion, 8);
   assert.equal(result.calls.some(call => call.options.method === 'PATCH'), false);
 });
@@ -511,22 +516,41 @@ test('slides GET returns a recoverable unavailable state before cards exist', as
   assert.equal(result.payload.unavailableReason, 'teaching_slides_require_confirmed_plan');
 });
 
-test('slides endpoint CAS-saves teacher edits while keeping citation identity server-owned', async () => {
+test('slides endpoint CAS-applies one OpenMAIC transaction while keeping citation identity server-owned', async () => {
   const current = slideDraft();
   const preview = await invokeApi({ method: 'GET', url: '/api/drafts/draft-1/slides', draft: current });
-  const submitted = structuredClone(preview.payload.deck);
-  submitted.slides[2].title = '教师修改：回到原文';
-  submitted.slides[2].citationIds = ['forged'];
-  submitted.slides[2].teacherCitationIds = ['forged'];
-  const result = await invokeApi({ method: 'PATCH', url: '/api/drafts/draft-1/slides', draft: current, body: { version: 8, deck: submitted, confirm: true } });
+  const result = await invokeApi({ method: 'PATCH', url: '/api/drafts/draft-1/slides', draft: current, body: {
+    version: 8, slideId: 'text', confirm: true,
+    transaction: { origin: 'canvas', history: 'record', operations: [{ type: 'text.updateContent', elementId: 'text-title', content: '<p>教师修改：回到原文</p>' }] },
+    metadataPatch: { teacherNotes: ['教师修改后的提示'], citationIds: ['forged'], teacherCitationIds: ['forged'] }
+  } });
   assert.equal(result.statusCode, 200);
   assert.equal(result.payload.deck.status, 'confirmed');
-  assert.equal(result.payload.deck.slides[2].title, '教师修改：回到原文');
-  assert.deepEqual(result.payload.deck.slides[2].citationIds, ['E1']);
-  assert.deepEqual(result.payload.deck.slides[2].teacherCitationIds, ['E2']);
+  const slide = result.payload.deck.slides.find(item => item.id === 'text');
+  assert.match(slide.content.canvas.elements.find(item => item.id === 'text-title').content, /教师修改：回到原文/u);
+  assert.deepEqual(slide.metadata.citationIds, ['E1']);
+  assert.deepEqual(slide.metadata.teacherCitationIds, ['E2']);
   const write = result.calls.find(call => call.options.method === 'PATCH');
   assert.equal(new URL(write.url).searchParams.get('version'), 'eq.8');
-  assert.equal(JSON.parse(write.options.body).version, 9);
+  const saved = JSON.parse(write.options.body);
+  assert.equal(saved.version, 9);
+  assert.equal(saved.answer.teachingSlidesV2.version, 2);
+  assert.equal(saved.answer.teachingSlides, undefined);
+});
+
+test('slides endpoint creates a writable revision while archiving the confirmed deck', async () => {
+  const current = slideDraft();
+  current.answer.teachingSlidesV2 = updateTeachingSlideDeckV2(buildTeachingSlideDeckV2(current), { confirm: true, confirmedBy: 'teacher-1' });
+  const confirmedAt = current.answer.teachingSlidesV2.confirmedAt;
+  const result = await invokeApi({ method: 'PATCH', url: '/api/drafts/draft-1/slides', draft: current, body: { version: 8, revise: true } });
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.payload.deck.status, 'draft');
+  assert.equal(result.payload.deck.confirmedAt, null);
+  const write = result.calls.find(call => call.options.method === 'PATCH');
+  const saved = JSON.parse(write.options.body);
+  assert.equal(saved.answer.teachingSlidesV2History.length, 1);
+  assert.equal(saved.answer.teachingSlidesV2History[0].status, 'confirmed');
+  assert.equal(saved.answer.teachingSlidesV2History[0].confirmedAt, confirmedAt);
 });
 
 test('homework endpoint builds A B C tasks from the owned confirmed draft', async () => {

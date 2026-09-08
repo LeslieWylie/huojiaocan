@@ -19,11 +19,13 @@ test('slides explicitly separate the student projector from teacher-only prepara
   const start = app.indexOf('function TeachingSlidesPage');
   const end = app.indexOf('function ObservationProtocolPage', start);
   const view = app.slice(start, end);
-  assert.match(view, /学生投屏/u);
+  assert.match(view, /学生画布/u);
   assert.match(view, /教师备课/u);
   assert.match(view, /教师提示（不会进入投屏文件）/u);
   assert.match(view, /学生投屏隔离/u);
-  assert.match(view, /teachingSlideDeckHtml\(deck\)/u);
+  assert.match(view, /创建修订版/u);
+  assert.match(view, /downloadTeachingSlidesProjector/u);
+  assert.match(app, /lazy\(\(\) => import\('\.\.\/teaching-slide-canvas\.jsx'\)\)/u);
 });
 
 test('slide workbench keeps a large projection canvas and recomposes on narrow screens', () => {
@@ -31,4 +33,5 @@ test('slide workbench keeps a large projection canvas and recomposes on narrow s
   assert.match(styles, /\.slides-stage:fullscreen\{width:100vw;height:100vh/u);
   assert.match(styles, /@media\(max-width:760px\)[\s\S]*?\.slides-workbench\{grid-template-columns:1fr\}/u);
   assert.match(styles, /\.slides-thumbnails\{display:flex;overflow-x:auto/u);
+  assert.match(styles, /\.openmaic-slide-surface\{[^}]*aspect-ratio:16\/9/u);
 });

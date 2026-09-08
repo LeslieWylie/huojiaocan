@@ -710,3 +710,21 @@
 .agent-work-summary li[data-status="needs_attention"]{color:#805116}
 .agent-work-summary summary:focus-visible{outline:2px solid #2e624b;outline-offset:4px}
 @media(max-width:600px){.agent-working,.agent-work-summary{padding:16px}.agent-work-summary ol{grid-template-columns:1fr}.agent-working header{flex-wrap:wrap}.agent-working b,.agent-work-summary header b{font-size:17px}}
+
+/* OpenMAIC slide canvas: the route owns a bounded editor viewport while the
+   package owns all element rendering, gestures and transaction semantics. */
+.openmaic-workbench{grid-template-columns:210px minmax(620px,1fr) 300px}
+.slides-stage.openmaic-stage{display:block;min-height:0;padding:46px 18px 68px;background:#102f28;overflow:visible}
+.slides-stage.openmaic-stage:after{display:none}
+.openmaic-slide-editor{display:grid;gap:8px;width:100%}
+.openmaic-history{display:flex;align-items:center;gap:7px;min-height:38px;color:#314f45}
+.openmaic-history button{display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:0 9px;border:1px solid #ccd9d4;border-radius:6px;background:#fff;color:#315e51;font-size:11px;cursor:pointer}
+.openmaic-history button:disabled{opacity:.38;cursor:not-allowed}.openmaic-history svg{width:14px}.openmaic-history small{margin-left:5px;color:#b8ccc5;font-size:11px}
+.openmaic-slide-surface{position:relative;width:100%;aspect-ratio:16/9;min-height:0;overflow:visible;background:#173d34;box-shadow:0 12px 32px #071b1766}
+.openmaic-slide-surface.readonly{overflow:hidden}
+.openmaic-slide-surface>.maic-editing-ui-root{width:100%;height:100%}
+.openmaic-loading{display:grid;place-items:center;width:100%;aspect-ratio:16/9;color:#d9e8e2;font-size:13px}.openmaic-loading svg{animation:spin 1.1s linear infinite}
+.slides-editor-guide{display:grid;gap:10px;padding:21px 22px;color:#3b574d}.slides-editor-guide b{font-size:13px}.slides-editor-guide span{color:#946d28;font-size:15px;font-weight:850}.slides-editor-guide p{margin:0;color:#64766f;font-size:12px;line-height:1.7}
+.openmaic-stage:fullscreen{display:grid;place-items:center;padding:34px;background:#071b17}.openmaic-stage:fullscreen .slides-stage-counter,.openmaic-stage:fullscreen .slides-stage-nav,.openmaic-stage:fullscreen .openmaic-history{display:none}.openmaic-stage:fullscreen .openmaic-slide-surface{width:min(100vw,177.78vh);height:min(100vh,56.25vw)}
+@media(max-width:1380px){.openmaic-workbench{grid-template-columns:190px minmax(520px,1fr)}.openmaic-workbench>.slides-editor{grid-column:1/-1}}
+@media(max-width:760px){.openmaic-workbench{grid-template-columns:1fr}.slides-stage.openmaic-stage{padding:43px 8px 70px}.openmaic-history{align-items:flex-start;flex-wrap:wrap}.openmaic-history small{flex-basis:100%;margin-left:0}.openmaic-workbench>.slides-editor{grid-column:auto}}

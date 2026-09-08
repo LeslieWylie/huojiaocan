@@ -42,7 +42,6 @@ import { emptyTeachingDeliberation, normalizeTeachingDeliberation, teachingDelib
 import { emptyLessonStudy, lessonStudyIsStale, lessonStudyReadiness, normalizeLessonStudy } from '../shared/lesson-study.js';
 import { emptySameLessonComparison, normalizeLessonIdentity, normalizeSameLessonComparison } from '../shared/same-lesson-comparison.js';
 import { observationProtocolMarkdown } from '../shared/observation-protocol.js';
-import { teachingSlideDeckHtml } from '../shared/teaching-slides.js';
 import { layeredHomeworkStudentHtml, layeredHomeworkTeacherMarkdown } from '../shared/layered-homework.js';
 import { homeworkReviewCsv } from '../shared/homework-review.js';
 import { buildSubstituteTeachingPack } from '../shared/substitute-teaching-pack.js';

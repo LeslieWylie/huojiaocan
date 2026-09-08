@@ -1,5 +1,5 @@
 // 一课一研/同课异构/课件/分层作业页（从 App.jsx 迁出）
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { lessonStudyRecoveryKey, STUDY_DECISIONS } from './lesson2-pages.jsx';
 import { Activity, Archive, ArrowLeft, ArrowRight, Check, CheckCircle2, CircleAlert, ClipboardCheck, Download, Eye, FileCheck2, GitCompareArrows, History, Maximize2, Microscope, PanelTop, RefreshCw, Share2, ShieldCheck } from 'lucide-react';
 import { Badge } from '../ui-kit.jsx';
@@ -8,7 +8,8 @@ import { askErrorMessage, docName, queryParams, requestCode, rootRequest, useAut
 import { layeredHomeworkStudentHtml, layeredHomeworkTeacherMarkdown } from '../../shared/layered-homework.js';
 import { emptyLessonStudy, lessonStudyIsStale, lessonStudyReadiness, normalizeLessonStudy } from '../../shared/lesson-study.js';
 import { emptySameLessonComparison, normalizeSameLessonComparison } from '../../shared/same-lesson-comparison.js';
-import { teachingSlideDeckHtml } from '../../shared/teaching-slides.js';
+
+const TeachingSlideCanvas = lazy(() => import('../teaching-slide-canvas.jsx'));
 
 export function LessonStudyPage() {
   const params = useMemo(() => queryParams(), []);
@@ -224,72 +225,93 @@ export function SameLessonComparisonPage() {
 }
 
 export function TeachingSlidesPage() {
-  const params = useMemo(() => queryParams(), []), session = useAuthSession(), stageRef = useRef(null);
+  const params = useMemo(() => queryParams(), []), session = useAuthSession();
   const draftId = params.get('draftId') || '', userId = session?.user?.id || '';
-  const [deck, setDeck] = useState(null), [draftVersion, setDraftVersion] = useState(0), [active, setActive] = useState(0);
-  const [mode, setMode] = useState('student'), [busy, setBusy] = useState(true), [working, setWorking] = useState(''), [dirty, setDirty] = useState(false);
-  const [error, setError] = useState(''), [notice, setNotice] = useState(''), [stale, setStale] = useState(false);
+  const [deck, setDeck] = useState(null), [savedDeck, setSavedDeck] = useState(null), [draftVersion, setDraftVersion] = useState(0), [active, setActive] = useState(0);
+  const [mode, setMode] = useState('student'), [busy, setBusy] = useState(true), [working, setWorking] = useState('');
+  const [dirtySlideIds, setDirtySlideIds] = useState(() => new Set()), [stale, setStale] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const stageRef = useRef(null);
   const load = () => {
     setBusy(true); setError(''); setNotice('');
     if (!userId) { if (session === null) location.href = `/login/?next=${encodeURIComponent(location.pathname + location.search)}`; return; }
-    if (!draftId) { setError('还没有选定课堂方案。请先从课堂设计进入。'); setBusy(false); return; }
+    if (!draftId) { setError('还没有选定课堂方案。请先从一课三卡进入。'); setBusy(false); return; }
     rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/slides`).then(data => {
       if (data.unavailableReason) {
-        setDeck(null); setDraftVersion(Number(data.draftVersion || 0)); setStale(false);
+        setDeck(null); setSavedDeck(null); setDraftVersion(Number(data.draftVersion || 0)); setStale(false); setDirtySlideIds(new Set());
         setError(data.unavailableReason === 'teaching_slides_require_confirmed_plan' ? '请先确认当前教学方案，再生成课堂课件。' : '请先生成一课三卡，再把课堂主线整理成课件。');
         return;
       }
-      setDeck(data.deck || null); setDraftVersion(Number(data.draftVersion || 0)); setStale(Boolean(data.stale)); setDirty(false); setActive(0);
+      setDeck(data.deck || null); setSavedDeck(data.deck || null); setDraftVersion(Number(data.draftVersion || 0)); setStale(Boolean(data.stale)); setActive(0); setDirtySlideIds(new Set());
     }).catch(err => {
       const code = requestCode(err);
-      setError(code === 'teaching_slides_require_confirmed_plan' ? '请先确认当前教学方案，再生成课堂课件。' : code === 'teaching_slides_require_cards' ? '请先生成一课三卡，再把课堂主线整理成课件。' : code === 'draft_not_found' ? '没有找到这份课堂方案，或它不属于当前账号。' : askErrorMessage(err));
+      setError(code === 'teaching_slides_require_confirmed_plan' ? '请先确认教学方案，再生成课堂课件。' : code === 'teaching_slides_require_cards' ? '请先生成一课三卡，再把课堂主线转成课件。' : code === 'draft_not_found' ? '没有找到这份课堂方案，或它不属于当前账号。' : askErrorMessage(err));
     }).finally(() => setBusy(false));
   };
   useEffect(load, [draftId, userId]);
-  useEffect(() => {
-    const onKey = event => {
-      if (!deck || ['INPUT', 'TEXTAREA'].includes(event.target?.tagName)) return;
-      if (event.key === 'ArrowRight') setActive(index => Math.min(deck.slides.length - 1, index + 1));
-      if (event.key === 'ArrowLeft') setActive(index => Math.max(0, index - 1));
-    };
-    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
-  }, [deck]);
-  const current = deck?.slides?.[active] || null, readOnly = deck?.status === 'confirmed';
-  const updateSlide = (field, value) => {
-    if (!current || readOnly) return;
-    setDeck(previous => ({ ...previous, slides: previous.slides.map((slide, index) => index === active ? { ...slide, [field]: value } : slide) }));
-    setDirty(true); setNotice('');
+  const current = deck?.slides?.[active] || null, readOnly = deck?.status === 'confirmed', dirty = dirtySlideIds.size > 0;
+  const markChanged = (slideId, updater) => {
+    if (readOnly) return;
+    setDeck(previous => ({ ...previous, slides: previous.slides.map(item => item.id === slideId ? updater(item) : item) }));
+    setDirtySlideIds(previous => new Set(previous).add(slideId)); setNotice('');
   };
+  const updateCanvas = content => current && markChanged(current.id, item => ({ ...item, content }));
+  const updateTeacherNotes = value => current && markChanged(current.id, item => ({ ...item, metadata: { ...item.metadata, teacherNotes: value.split(/\r?\n/u).slice(0, 5) } }));
   const persist = async confirm => {
-    if (!deck || !draftVersion || readOnly) return;
+    if (!deck || !savedDeck || !draftVersion || readOnly || working || (confirm && dirty)) return;
     setWorking(confirm ? 'confirm' : 'save'); setError(''); setNotice('');
+    let serverDeck = savedDeck, version = draftVersion;
     try {
-      const data = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/slides`, { method: 'PATCH', body: JSON.stringify({ version: draftVersion, deck, confirm }) });
-      setDeck(data.deck); setDraftVersion(Number(data.draftVersion || data.draft?.version || draftVersion + 1)); setDirty(false); setStale(false);
-      setNotice(confirm ? '课件已经定稿。投屏文件只包含学生可见内容。' : '课件修改已保存，可以继续编辑其他页面。');
+      if (confirm) {
+        const data = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/slides`, { method: 'PATCH', body: { version, confirm: true } });
+        serverDeck = data.deck; version = Number(data.draftVersion || version + 1);
+      } else {
+        const { createReplaceSlideTransaction } = await import('../teaching-slide-canvas.jsx');
+        for (const slideId of dirtySlideIds) {
+          const before = serverDeck.slides.find(item => item.id === slideId), after = deck.slides.find(item => item.id === slideId);
+          if (!before || !after) continue;
+          const data = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/slides`, { method: 'PATCH', body: {
+            version, slideId, transaction: createReplaceSlideTransaction(before.content, after.content), metadataPatch: { teacherNotes: after.metadata.teacherNotes }
+          } });
+          serverDeck = data.deck; version = Number(data.draftVersion || version + 1);
+        }
+      }
+      setDeck(serverDeck); setSavedDeck(serverDeck); setDraftVersion(version); setDirtySlideIds(new Set()); setStale(false);
+      setNotice(confirm ? '课件已经定稿。投屏文件只包含 OpenMAIC 渲染的学生画布。' : '画布修改已保存；刷新页面后仍可恢复。');
     } catch (err) {
+      if (version !== draftVersion) { setSavedDeck(serverDeck); setDraftVersion(version); }
       setError(requestCode(err) === 'edit_conflict' ? '这份方案刚刚在其他页面更新。请重新读取后再保存，当前页面内容暂未覆盖服务器版本。' : askErrorMessage(err));
     } finally { setWorking(''); }
   };
-  const downloadProjector = () => {
-    if (!deck) return;
-    const url = URL.createObjectURL(new Blob([teachingSlideDeckHtml(deck)], { type: 'text/html;charset=utf-8' }));
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${String(deck.lessonTitle || '课堂').replace(/[《》]/gu, '')}-课堂投屏稿.html`; anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000); setNotice('离线投屏稿已下载。文件中不包含教师提示和教师用书答案。');
+  const downloadProjector = async () => {
+    if (!deck || working) return;
+    setWorking('export'); setError(''); setNotice('');
+    try { const { downloadTeachingSlidesProjector } = await import('../teaching-slide-canvas.jsx'); await downloadTeachingSlidesProjector(deck); setNotice('离线投屏稿已按 OpenMAIC 画布导出；文件中不包含教师提示和教师用书答案。'); }
+    catch (err) { setError(`投屏稿导出失败：${askErrorMessage(err)}`); }
+    finally { setWorking(''); }
+  };
+  const createRevision = async () => {
+    if (!deck || !draftVersion || !readOnly || working) return;
+    setWorking('revise'); setError(''); setNotice('');
+    try {
+      const data = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}/slides`, { method: 'PATCH', body: { version: draftVersion, revise: true } });
+      setDeck(data.deck); setSavedDeck(data.deck); setDraftVersion(Number(data.draftVersion || draftVersion + 1)); setDirtySlideIds(new Set());
+      setNotice('已从定稿创建新的可编辑修订版；原定稿已保留。');
+    } catch (err) { setError(requestCode(err) === 'edit_conflict' ? '这份方案刚刚在其他页面更新，请重新读取后再创建修订版。' : askErrorMessage(err)); }
+    finally { setWorking(''); }
   };
   const references = useMemo(() => new Map((deck?.references || []).map(item => [String(item.id), item])), [deck?.references]);
   const refText = id => { const item = references.get(String(id)); return item ? `${docName(item.documentId)} 第 ${item.pdfPage} 页` : ''; };
   return <div className="view-stack teaching-slides-page">
-    <section className="hero compact-hero slides-hero"><div><Badge tone="gold"><PanelTop/> 教材驱动课件</Badge><h1>不用从空白 PPT 开始，<br/><em>把已确认方案直接变成课堂投屏稿</em></h1><p>学生看到核心问题、原文任务、问题链和离堂任务；教师用书只进入备课提示，不会出现在下载的投屏文件中。</p><div className="hero-actions"><a href={draftId ? `/cards/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}><ArrowLeft/>{draftId ? '返回课堂设计' : '先打开一份备课方案'}</a>{deck && <><button type="button" onClick={downloadProjector}><Download/>下载离线投屏稿</button><button type="button" onClick={() => stageRef.current?.requestFullscreen?.()}><Maximize2/>全屏预览</button></>}</div></div><div className="slides-hero-seal"><strong>{deck?.slides?.length || 7}</strong><span>页课堂主线</span><em>教师提示与学生投屏分开</em></div></section>
+    <section className="hero compact-hero slides-hero"><div><Badge tone="gold"><PanelTop/> OpenMAIC 课堂课件</Badge><h1>不用从空白 PPT 开始，<br/><em>在真实画布上完成课堂投屏稿</em></h1><p>拖动、缩放和双击编辑学生画布；教师用书只进入备课提示，不会出现在离线投屏文件中。</p><div className="hero-actions"><a href={draftId ? `/cards/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}><ArrowLeft/>{draftId ? '返回课堂设计' : '先打开一份备课方案'}</a>{deck && <><button type="button" onClick={downloadProjector} disabled={Boolean(working)}><Download/>{working === 'export' ? '正在生成投屏稿…' : '下载离线投屏稿'}</button><button type="button" onClick={() => stageRef.current?.requestFullscreen?.()}><Maximize2/>全屏预览</button></>}</div></div><div className="slides-hero-seal"><strong>{deck?.slides?.length || 7}</strong><span>页课堂主线</span><em>OpenMAIC Renderer 0.1.6</em></div></section>
     {error && <section className="cards-alert" role="alert"><div className="cards-alert-icon"><CircleAlert/></div><div className="cards-alert-copy"><b>课堂课件暂时没有准备好</b><p>{error}</p></div><div className="cards-alert-actions"><button type="button" onClick={load}><RefreshCw/>重新读取</button><a href={draftId ? `/cards/?draftId=${encodeURIComponent(draftId)}` : '/ask/'}>{draftId ? '返回课堂设计' : '先打开一份备课方案'}</a></div></section>}
     {notice && <section className="quality-box"><CheckCircle2/><span>{notice}</span></section>}
-    {stale && <section className="slides-stale"><RefreshCw/><div><b>方案或三卡已经更新</b><p>这里已按最新内容重建课件。保存前可以逐页检查，不会覆盖旧课件中的教材依据身份。</p></div></section>}
-    {busy ? <section className="panel study-empty"><Activity/><h2>正在把课堂主线整理成课件</h2><p>只读取当前账号已确认的方案、三卡和真实教材页码。</p></section> : deck && <>
-      <section className="slides-toolbar panel"><div><span>查看方式</span><div className="slides-mode-switch"><button type="button" className={mode === 'student' ? 'active' : ''} onClick={() => setMode('student')}><Eye/>学生投屏</button><button type="button" className={mode === 'teacher' ? 'active' : ''} onClick={() => setMode('teacher')}><FileCheck2/>教师备课</button></div></div><div className="slides-status"><Badge tone={readOnly ? 'green' : dirty ? 'orange' : 'gold'}>{readOnly ? '课件已定稿' : dirty ? '有未保存修改' : '可继续编辑'}</Badge><small>{mode === 'student' ? '当前隐藏全部教师提示' : '教师提示只在备课视图显示'}</small></div><div className="slides-save-actions">{!readOnly && <><button type="button" onClick={() => persist(false)} disabled={!dirty || Boolean(working)}>{working === 'save' ? '正在保存…' : '保存修改'}</button><button type="button" className="primary" onClick={() => persist(true)} disabled={dirty || Boolean(working)}>{working === 'confirm' ? '正在定稿…' : '确认课件定稿'}</button></>}<button type="button" onClick={downloadProjector}><Download/>下载投屏稿</button></div></section>
-      <section className="slides-workbench">
-        <nav className="slides-thumbnails" aria-label="课件页面">{deck.slides.map((slide, index) => <button type="button" className={active === index ? 'active' : ''} onClick={() => setActive(index)} key={slide.id}><span>{String(index + 1).padStart(2, '0')}</span><div><b>{slide.title}</b><small>{slide.body[0] || '等待教师补充'}</small></div></button>)}</nav>
-        <section className={`slides-stage ${mode}`} ref={stageRef} aria-live="polite"><div className="slides-stage-counter">{String(active + 1).padStart(2, '0')} / {String(deck.slides.length).padStart(2, '0')}</div><span>{current.kind}</span><h2>{current.title}</h2><ul>{current.body.map((item, index) => <li key={`${current.id}-${index}`}>{item}</li>)}</ul>{current.prompt && <p>{current.prompt}</p>}{current.citationIds.length > 0 && <footer>{current.citationIds.map(refText).filter(Boolean).map(item => <small key={item}>{item}</small>)}</footer>}<div className="slides-stage-nav"><button type="button" onClick={() => setActive(index => Math.max(0, index - 1))} disabled={active === 0}><ArrowLeft/>上一页</button><button type="button" onClick={() => setActive(index => Math.min(deck.slides.length - 1, index + 1))} disabled={active === deck.slides.length - 1}>下一页<ArrowRight/></button></div></section>
-        <aside className="slides-editor"><header><span>{mode === 'student' ? '编辑学生看到的内容' : '教师备课提示'}</span><h2>第 {active + 1} 页</h2><p>{readOnly ? '课件已经定稿；如需调整，请先回到课堂设计修改方案并重新生成。' : '每页只承担一个课堂动作，避免把教案整段搬上屏幕。'}</p></header>{mode === 'student' ? <div className="slides-editor-fields"><label><span>页面标题</span><input value={current.title} disabled={readOnly} maxLength="100" onChange={event => updateSlide('title', event.target.value)}/></label><label><span>投屏内容（每行一项）</span><textarea rows="8" value={current.body.join('\n')} disabled={readOnly} onChange={event => updateSlide('body', event.target.value.split(/\r?\n/u).slice(0, 7))}/></label><label><span>学生行动提示</span><textarea rows="4" value={current.prompt} disabled={readOnly} onChange={event => updateSlide('prompt', event.target.value)}/></label></div> : <div className="slides-editor-fields"><label><span>教师提示（不会进入投屏文件）</span><textarea rows="10" value={current.teacherNotes.join('\n')} disabled={readOnly} onChange={event => updateSlide('teacherNotes', event.target.value.split(/\r?\n/u).slice(0, 5))}/></label><div className="slides-teacher-sources"><b>教师用书核验页</b>{current.teacherCitationIds.map(refText).filter(Boolean).length ? current.teacherCitationIds.map(refText).filter(Boolean).map(item => <span key={item}>{item}</span>) : <p>本页没有绑定教师用书页面，不会伪造参考答案。</p>}</div></div>}<footer><ShieldCheck/><p><b>学生投屏隔离</b>下载文件只包含学生视图和学生教材页码，不包含此处教师提示。</p></footer></aside>
+    {stale && <section className="slides-stale"><RefreshCw/><div><b>方案或三卡已经更新</b><p>这里已按最新内容重建七页画布；只有点击保存时才会写入新版课件。</p></div></section>}
+    {busy ? <section className="panel study-empty"><Activity/><h2>正在把课堂主线整理成 OpenMAIC 画布</h2><p>只读取当前账号已确认的方案、三卡和真实教材页码。</p></section> : deck && <>
+      <section className="slides-toolbar panel"><div><span>查看方式</span><div className="slides-mode-switch"><button type="button" className={mode === 'student' ? 'active' : ''} onClick={() => setMode('student')}><Eye/>学生画布</button><button type="button" className={mode === 'teacher' ? 'active' : ''} onClick={() => setMode('teacher')}><FileCheck2/>教师备课</button></div></div><div className="slides-status"><Badge tone={readOnly ? 'green' : dirty ? 'orange' : 'gold'}>{readOnly ? '课件已定稿' : dirty ? `${dirtySlideIds.size} 页未保存` : '可继续编辑'}</Badge><small>{mode === 'student' ? '双击文字编辑，拖动调整版式' : '教师提示只在备课视图显示'}</small></div><div className="slides-save-actions">{readOnly ? <button type="button" className="primary" onClick={createRevision} disabled={Boolean(working)}>{working === 'revise' ? '正在创建…' : '创建修订版'}</button> : <><button type="button" onClick={() => persist(false)} disabled={!dirty || Boolean(working)}>{working === 'save' ? '正在保存…' : '保存画布'}</button><button type="button" className="primary" onClick={() => persist(true)} disabled={dirty || Boolean(working)}>{working === 'confirm' ? '正在定稿…' : '确认课件定稿'}</button></>}<button type="button" onClick={downloadProjector} disabled={Boolean(working)}><Download/>下载投屏稿</button></div></section>
+      <section className="slides-workbench openmaic-workbench">
+        <nav className="slides-thumbnails" aria-label="课件页面">{deck.slides.map((slide, index) => <button type="button" className={active === index ? 'active' : ''} onClick={() => setActive(index)} key={slide.id}><span>{String(index + 1).padStart(2, '0')}</span><div><b>{slide.title}</b><small>{slide.summary || '双击画布文字开始编辑'}</small></div></button>)}</nav>
+        <section className={`slides-stage openmaic-stage ${mode}`} ref={stageRef} aria-live="polite"><div className="slides-stage-counter">{String(active + 1).padStart(2, '0')} / {String(deck.slides.length).padStart(2, '0')}</div>{current && <Suspense fallback={<div className="openmaic-loading"><Activity/>正在加载 OpenMAIC 画布编辑器…</div>}><TeachingSlideCanvas key={`${current.id}-${draftVersion}-${mode}`} slide={current} readOnly={readOnly || mode === 'teacher'} onChange={updateCanvas}/></Suspense>}<div className="slides-stage-nav"><button type="button" onClick={() => setActive(index => Math.max(0, index - 1))} disabled={active === 0}><ArrowLeft/>上一页</button><button type="button" onClick={() => setActive(index => Math.min(deck.slides.length - 1, index + 1))} disabled={active === deck.slides.length - 1}>下一页<ArrowRight/></button></div></section>
+        <aside className="slides-editor"><header><span>{mode === 'student' ? 'OpenMAIC 画布编辑' : '教师备课提示'}</span><h2>第 {active + 1} 页</h2><p>{readOnly ? '课件已经定稿；画布保持只读。' : mode === 'student' ? '使用画布上方工具插入文字、表格、线条或公式。' : '教师提示与学生画布分开保存。'}</p></header>{mode === 'student' ? <div className="slides-editor-guide"><b>当前开放的元素</b><span>文字 · 表格 · 线条 · 公式</span><p>图片、音视频、图表和代码暂不开放，先保证课堂主线清楚且离线导出稳定。</p></div> : <div className="slides-editor-fields"><label><span>教师提示（不会进入投屏文件）</span><textarea rows="10" value={(current?.metadata?.teacherNotes || []).join('\n')} disabled={readOnly} onChange={event => updateTeacherNotes(event.target.value)}/></label><div className="slides-teacher-sources"><b>教师用书核验页</b>{(current?.metadata?.teacherCitationIds || []).map(refText).filter(Boolean).length ? current.metadata.teacherCitationIds.map(refText).filter(Boolean).map(item => <span key={item}>{item}</span>) : <p>本页没有绑定教师用书页面，不会伪造参考答案。</p>}</div></div>}<footer><ShieldCheck/><p><b>学生投屏隔离</b>离线文件只嵌入七张学生画布 PNG，不包含教师提示或教师用书元数据。</p></footer></aside>
       </section>
     </>}
   </div>;

@@ -11,7 +11,8 @@ import { buildLearningEvidence, learningEvidenceContext, learningEvidenceIsStale
 import { buildPreClassPulse, mergePreClassPulse, preClassPulseIsStale } from '../shared/preclass-pulse.js';
 import { mergeTeachingDeliberation, teachingDeliberationIsStale } from '../shared/teaching-deliberation.js';
 import { buildLessonStudy, lessonStudyIsStale, mergeLessonStudy } from '../shared/lesson-study.js';
-import { buildTeachingSlideDeck, mergeTeachingSlideDeck, normalizeTeachingSlideDeck, teachingSlideDeckIsStale } from '../shared/teaching-slides.js';
+import { normalizeTeachingSlideDeck, teachingSlideDeckIsStale } from '../shared/teaching-slides.js';
+import { buildTeachingSlideDeckV2, createTeachingSlideDeckV2Revision, normalizeTeachingSlideDeckV2, teachingSlideDeckV1ToV2, teachingSlideDeckV2IsStale, updateTeachingSlideDeckV2 } from '../shared/teaching-slides-v2.js';
 import { buildLayeredHomework, layeredHomeworkIsStale, mergeLayeredHomework, normalizeLayeredHomework } from '../shared/layered-homework.js';
 import { homeworkReviewContext, homeworkReviewIsStale, mergeHomeworkReview, normalizeHomeworkReview } from '../shared/homework-review.js';
 import { deriveTeachingTasks } from '../shared/teaching-task-flow.js';
@@ -92,6 +93,8 @@ export function sanitizeClientAnswer(value, currentAnswer = null) {
   delete answer.sameLessonComparisons;
   delete answer.sameLessonComparisonHistory;
   delete answer.teachingSlides;
+  delete answer.teachingSlidesV2;
+  delete answer.teachingSlidesV2History;
   delete answer.layeredHomework;
   delete answer.homeworkReview;
   delete answer.homeworkReviewHistory;
@@ -116,6 +119,8 @@ export function sanitizeClientAnswer(value, currentAnswer = null) {
   if (currentAnswer?.sameLessonComparisons) answer.sameLessonComparisons = clone(currentAnswer.sameLessonComparisons);
   if (currentAnswer?.sameLessonComparisonHistory) answer.sameLessonComparisonHistory = clone(currentAnswer.sameLessonComparisonHistory);
   if (currentAnswer?.teachingSlides) answer.teachingSlides = clone(currentAnswer.teachingSlides);
+  if (currentAnswer?.teachingSlidesV2) answer.teachingSlidesV2 = clone(currentAnswer.teachingSlidesV2);
+  if (currentAnswer?.teachingSlidesV2History) answer.teachingSlidesV2History = clone(currentAnswer.teachingSlidesV2History);
   if (currentAnswer?.layeredHomework) answer.layeredHomework = clone(currentAnswer.layeredHomework);
   if (currentAnswer?.homeworkReview) answer.homeworkReview = clone(currentAnswer.homeworkReview);
   if (currentAnswer?.homeworkReviewHistory) answer.homeworkReviewHistory = clone(currentAnswer.homeworkReviewHistory);
@@ -174,7 +179,7 @@ function answerPlanContent(value) {
   const answer = value && typeof value === 'object' ? clone(value) : {};
   // These fields describe lifecycle, conversation recovery, or what happened
   // after class. Updating them must not invalidate a teacher-confirmed plan.
-  for (const key of ['planApproval', 'revisions', 'assetMeta', 'conversationHistory', 'conversationTurns', 'evidenceShelf', 'teachingFeedback', 'lessonReflection', 'previousLessonReflection', 'classroomRun', 'classroomMomentTriage', 'previousLessonCarryover', 'questionRehearsal', 'questionRehearsalHistory', 'learningEvidence', 'learningEvidenceHistory', 'previousLessonLearningEvidence', 'previousLessonHomeworkReview', 'preClassPulse', 'preClassPulseHistory', 'teachingDeliberation', 'teachingDeliberationHistory', 'lessonStudy', 'lessonStudyHistory', 'sameLessonComparisons', 'sameLessonComparisonHistory', 'teachingSlides', 'layeredHomework', 'homeworkReview', 'homeworkReviewHistory', 'classAdaptation']) delete answer[key];
+  for (const key of ['planApproval', 'revisions', 'assetMeta', 'conversationHistory', 'conversationTurns', 'evidenceShelf', 'teachingFeedback', 'lessonReflection', 'previousLessonReflection', 'classroomRun', 'classroomMomentTriage', 'previousLessonCarryover', 'questionRehearsal', 'questionRehearsalHistory', 'learningEvidence', 'learningEvidenceHistory', 'previousLessonLearningEvidence', 'previousLessonHomeworkReview', 'preClassPulse', 'preClassPulseHistory', 'teachingDeliberation', 'teachingDeliberationHistory', 'lessonStudy', 'lessonStudyHistory', 'sameLessonComparisons', 'sameLessonComparisonHistory', 'teachingSlides', 'teachingSlidesV2', 'teachingSlidesV2History', 'layeredHomework', 'homeworkReview', 'homeworkReviewHistory', 'classAdaptation']) delete answer[key];
   return answer;
 }
 
@@ -923,10 +928,15 @@ export default async function handler(req, res) {
     }
     if (parts.length === 2 && parts[1] === 'slides' && req.method === 'GET') {
       const current = await getDraft(user, id);
-      const stored = current.answer?.teachingSlides ? normalizeTeachingSlideDeck(current.answer.teachingSlides) : null;
-      const stale = stored ? teachingSlideDeckIsStale(current) : false;
+      const storedV2 = current.answer?.teachingSlidesV2 ? normalizeTeachingSlideDeckV2(current.answer.teachingSlidesV2) : null;
+      const storedV1 = current.answer?.teachingSlides ? normalizeTeachingSlideDeck(current.answer.teachingSlides) : null;
+      const stale = storedV2 ? teachingSlideDeckV2IsStale(current) : storedV1 ? teachingSlideDeckIsStale(current) : false;
       try {
-        const deck = stored && !stale ? stored : buildTeachingSlideDeck(current);
+        const deck = storedV2 && !stale
+          ? storedV2
+          : storedV1 && !stale
+            ? teachingSlideDeckV1ToV2(storedV1)
+            : buildTeachingSlideDeckV2(current);
         return json(res, 200, { deck, stale, draftVersion: Number(current.version || 1) });
       } catch (error) {
         if (['teaching_slides_require_confirmed_plan', 'teaching_slides_require_cards'].includes(error?.code)) {
@@ -939,11 +949,25 @@ export default async function handler(req, res) {
       const current = await getDraft(user, id);
       const body = await readJson(req);
       assertCurrentVersion(current, requestVersion(req, body));
-      const stored = current.answer?.teachingSlides ? normalizeTeachingSlideDeck(current.answer.teachingSlides) : null;
-      const base = stored && !teachingSlideDeckIsStale(current) ? stored : buildTeachingSlideDeck(current);
-      const deck = mergeTeachingSlideDeck(base, body.deck || body, { confirm: body.confirm === true, confirmedBy: user.id });
+      const storedV2 = current.answer?.teachingSlidesV2 ? normalizeTeachingSlideDeckV2(current.answer.teachingSlidesV2) : null;
+      const storedV1 = current.answer?.teachingSlides ? normalizeTeachingSlideDeck(current.answer.teachingSlides) : null;
+      const base = storedV2 && !teachingSlideDeckV2IsStale(current)
+        ? storedV2
+        : storedV1 && !teachingSlideDeckIsStale(current)
+          ? teachingSlideDeckV1ToV2(storedV1)
+          : buildTeachingSlideDeckV2(current);
       const answer = clone(current.answer || {});
-      answer.teachingSlides = deck;
+      const deck = body.revise === true
+        ? createTeachingSlideDeckV2Revision(base)
+        : updateTeachingSlideDeckV2(base, {
+          slideId: body.slideId,
+          transaction: body.transaction,
+          metadataPatch: body.metadataPatch,
+          confirm: body.confirm === true,
+          confirmedBy: user.id
+        });
+      if (body.revise === true) answer.teachingSlidesV2History = [clone(base), ...(Array.isArray(answer.teachingSlidesV2History) ? answer.teachingSlidesV2History : [])].slice(0, 8);
+      answer.teachingSlidesV2 = deck;
       const saved = await patchOwnedDraft(user, id, current.version || 1, { answer, updated_at: deck.updatedAt, version: Number(current.version || 1) + 1 });
       return json(res, 200, { draft: saved, deck, draftVersion: Number(current.version || 1) + 1 });
     }
@@ -1283,7 +1307,7 @@ export default async function handler(req, res) {
         update.citations = [];
         update.cards = [];
         const answer = clone(update.answer || current.answer || {});
-        for (const key of ['questionRehearsal', 'questionRehearsalHistory', 'learningEvidence', 'learningEvidenceHistory', 'teachingDeliberation', 'teachingDeliberationHistory', 'teachingSlides', 'layeredHomework', 'homeworkReview', 'homeworkReviewHistory']) delete answer[key];
+        for (const key of ['questionRehearsal', 'questionRehearsalHistory', 'learningEvidence', 'learningEvidenceHistory', 'teachingDeliberation', 'teachingDeliberationHistory', 'teachingSlides', 'teachingSlidesV2', 'teachingSlidesV2History', 'layeredHomework', 'homeworkReview', 'homeworkReviewHistory']) delete answer[key];
         update.answer = answer;
       } else if (Object.prototype.hasOwnProperty.call(update, 'citations')) {
         update.citations = await assertUpdatedCitationsTrusted(
@@ -1332,6 +1356,8 @@ export default async function handler(req, res) {
       if (current.answer?.teachingDeliberation) answer.teachingDeliberation = clone(current.answer.teachingDeliberation);
       if (current.answer?.teachingDeliberationHistory) answer.teachingDeliberationHistory = clone(current.answer.teachingDeliberationHistory);
       if (current.answer?.teachingSlides) answer.teachingSlides = clone(current.answer.teachingSlides);
+      if (current.answer?.teachingSlidesV2) answer.teachingSlidesV2 = clone(current.answer.teachingSlidesV2);
+      if (current.answer?.teachingSlidesV2History) answer.teachingSlidesV2History = clone(current.answer.teachingSlidesV2History);
       if (current.answer?.layeredHomework) answer.layeredHomework = clone(current.answer.layeredHomework);
       if (current.answer?.homeworkReview) answer.homeworkReview = clone(current.answer.homeworkReview);
       if (current.answer?.homeworkReviewHistory) answer.homeworkReviewHistory = clone(current.answer.homeworkReviewHistory);
