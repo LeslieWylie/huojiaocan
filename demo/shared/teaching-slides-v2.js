@@ -4,7 +4,11 @@ import { buildTeachingSlideDeck, normalizeTeachingSlideDeck, teachingSlidesSourc
 
 export const TEACHING_SLIDES_V2_VERSION = 2;
 export const TEACHING_SLIDES_SCHEMA_VERSION = 1;
-export const TEACHING_SLIDES_ALLOWED_ELEMENTS = Object.freeze(['text', 'line', 'table', 'latex']);
+export const TEACHING_SLIDES_ALLOWED_ELEMENTS = Object.freeze(['text', 'image', 'line', 'table', 'latex']);
+
+const MAX_IMAGE_BYTES = 700 * 1024;
+const MAX_DECK_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGES_PER_SLIDE = 4;
 
 const ALLOWED_ELEMENT_TYPES = new Set(TEACHING_SLIDES_ALLOWED_ELEMENTS);
 const THEME = Object.freeze({
@@ -26,6 +30,31 @@ function plainText(value, max = 600) {
 
 function escapeHtml(value) {
   return String(value || '').replace(/[&<>"']/gu, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+}
+
+function imageDataBytes(src) {
+  const match = /^data:image\/(?:png|jpeg|webp);base64,([a-z0-9+/=]+)$/iu.exec(String(src || ''));
+  if (!match) return -1;
+  const payload = match[1];
+  return Math.floor(payload.length * 3 / 4) - (payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0);
+}
+
+function validateSlideImages(canvas) {
+  const images = canvas.elements.filter(element => element.type === 'image');
+  if (images.length > MAX_IMAGES_PER_SLIDE || images.some(element => {
+    const bytes = imageDataBytes(element.src);
+    return bytes < 1 || bytes > MAX_IMAGE_BYTES;
+  })) {
+    throw Object.assign(new Error('teaching_slides_image_invalid'), { code: 'teaching_slides_image_invalid', status: 422 });
+  }
+  return images.reduce((total, element) => total + imageDataBytes(element.src), 0);
+}
+
+function validateDeckImageBudget(slides) {
+  const bytes = slides.reduce((total, slide) => total + validateSlideImages(slide.content.canvas), 0);
+  if (bytes > MAX_DECK_IMAGE_BYTES) {
+    throw Object.assign(new Error('teaching_slides_images_too_large'), { code: 'teaching_slides_images_too_large', status: 422 });
+  }
 }
 
 function textElement(id, content, geometry, { size = 34, color = '#f7f2e4', weight = 500, textType = 'content', align = 'left' } = {}) {
@@ -78,6 +107,7 @@ function validateContent(content, slideId = 'slide') {
   if (canvas.elements.some(element => !ALLOWED_ELEMENT_TYPES.has(element.type) || !isValidEditorElement(element))) {
     throw Object.assign(new Error('teaching_slides_element_not_allowed'), { code: 'teaching_slides_element_not_allowed', status: 422 });
   }
+  validateSlideImages(canvas);
   const normalized = { type: 'slide', schemaVersion: TEACHING_SLIDES_SCHEMA_VERSION, canvas };
   const validation = validateScene({ id: `scene-${slideId}`, stageId: 'teaching-slides', type: 'slide', title: slideId, order: 0, content: normalized, actions: [], createdAt: 0, updatedAt: 0 });
   if (!validation.valid) {
@@ -138,6 +168,7 @@ export function normalizeTeachingSlideDeckV2(value = {}) {
       teacherNotes: normalizeStringList(item?.metadata?.teacherNotes, 5, 360)
     }
   }));
+  validateDeckImageBudget(slides);
   return {
     version: TEACHING_SLIDES_V2_VERSION,
     schemaVersion: TEACHING_SLIDES_SCHEMA_VERSION,
@@ -179,6 +210,7 @@ export function updateTeachingSlideDeckV2(baseValue, { slideId, transaction, met
   if (index >= 0 && metadataPatch) {
     slides[index].metadata.teacherNotes = normalizeStringList(metadataPatch.teacherNotes ?? slides[index].metadata.teacherNotes, 5, 360);
   }
+  validateDeckImageBudget(slides);
   if (confirm && slides.some(item => !item.content.canvas.elements.some(element => element.type === 'text' && plainText(element.content)))) {
     throw Object.assign(new Error('teaching_slides_incomplete'), { code: 'teaching_slides_incomplete', status: 422 });
   }

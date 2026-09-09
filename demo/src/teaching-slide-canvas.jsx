@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { EditableSlideCanvasWithUI } from '@openmaic/editor/ui';
 import { applyEditorTransaction, createEditorHistory, redoEditorTransaction, undoEditorTransaction } from '@openmaic/editor/core';
 import { SlideCanvas } from '@openmaic/renderer';
@@ -10,6 +10,65 @@ import 'katex/dist/katex.min.css';
 
 function createElementId() {
   return `teacher-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+}
+
+const MAX_IMAGE_INPUT_BYTES = 12 * 1024 * 1024;
+const MAX_IMAGE_OUTPUT_BYTES = 700 * 1024;
+
+function dataUrlBytes(value) {
+  const payload = String(value || '').split(',', 2)[1] || '';
+  return Math.floor(payload.length * 3 / 4) - (payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0);
+}
+
+function loadLocalImage(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => { URL.revokeObjectURL(objectUrl); resolve(image); };
+    image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('image_decode_failed')); };
+    image.src = objectUrl;
+  });
+}
+
+async function prepareTeachingSlideImage(file) {
+  if (!file || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('image_type_invalid');
+  if (file.size > MAX_IMAGE_INPUT_BYTES) throw new Error('image_input_too_large');
+  const image = await loadLocalImage(file);
+  let scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+  let quality = 0.86;
+  let src = '';
+  let width = 0;
+  let height = 0;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    width = Math.max(1, Math.round(image.naturalWidth * scale));
+    height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+    src = canvas.toDataURL('image/webp', quality);
+    if (dataUrlBytes(src) <= MAX_IMAGE_OUTPUT_BYTES) return { src, ext: 'webp', width, height };
+    if (quality > 0.62) quality -= 0.08;
+    else scale *= 0.8;
+  }
+  throw new Error('image_output_too_large');
+}
+
+function TeachingImagePicker({ request, onError }) {
+  const inputRef = useRef(null);
+  const [working, setWorking] = useState(false);
+  const pick = async file => {
+    if (!file || working) return;
+    setWorking(true); onError('');
+    try { request.onPick(await prepareTeachingSlideImage(file)); }
+    catch (error) {
+      onError(error?.message === 'image_type_invalid' ? '请选择 PNG、JPG 或 WebP 图片。' : error?.message === 'image_input_too_large' ? '原图不能超过 12 MB。' : '这张图片无法处理，请换一张后重试。');
+    } finally { setWorking(false); }
+  };
+  return <div className="teaching-image-picker">
+    <button type="button" onClick={() => inputRef.current?.click()} disabled={working}>{working ? '正在压缩图片…' : '选择本地图片'}</button>
+    <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={event => void pick(event.target.files?.[0])}/>
+    <small>支持 PNG、JPG、WebP；自动压缩后随课件保存，可离线投屏。</small>
+  </div>;
 }
 
 export function createReplaceSlideTransaction(before, after) {
@@ -25,10 +84,13 @@ export function createReplaceSlideTransaction(before, after) {
 export default function TeachingSlideCanvas({ slide, readOnly = false, onChange }) {
   const [selection, setSelection] = useState({ elementIds: [] });
   const [history, setHistory] = useState(() => createEditorHistory(slide.content));
+  const [assetError, setAssetError] = useState('');
   const host = useMemo(() => ({
     locale: 'zh-CN',
     createElementId,
-    translate: (_key, _params, fallback) => fallback
+    translate: (_key, _params, fallback) => fallback,
+    renderAssetPicker: request => <TeachingImagePicker request={request} onError={setAssetError}/>,
+    onError: error => setAssetError(error?.message || '图片无法插入，请重试。')
   }), []);
 
   if (readOnly) return <div className="openmaic-slide-surface readonly"><SlideCanvas slide={slide.content.canvas} /></div>;
@@ -52,8 +114,9 @@ export default function TeachingSlideCanvas({ slide, readOnly = false, onChange 
     <div className="openmaic-history" aria-label="画布编辑历史">
       <button type="button" onClick={() => navigate('undo')} disabled={!history.past.length} title="撤销"><Undo2/>撤销</button>
       <button type="button" onClick={() => navigate('redo')} disabled={!history.future.length} title="重做"><Redo2/>重做</button>
-      <small>双击文字直接编辑；可拖动、缩放或插入文字、表格、线条和公式。</small>
+      <small>双击文字直接编辑；可拖动、缩放或插入文字、图片、表格、线条和公式。</small>
     </div>
+    {assetError && <div className="openmaic-asset-error" role="alert">{assetError}</div>}
     <div className="openmaic-slide-surface">
       <EditableSlideCanvasWithUI
         slide={history.present.canvas}
@@ -62,7 +125,7 @@ export default function TeachingSlideCanvas({ slide, readOnly = false, onChange 
         selection={selection}
         onSelectionChange={setSelection}
         onTransaction={apply}
-        insertItems={['text', 'table', 'line', 'latex']}
+        insertItems={['text', 'image', 'table', 'line', 'latex']}
         insertToolbarPlacement="top"
         elementIdPrefix="teaching-slide-element-"
         snapping

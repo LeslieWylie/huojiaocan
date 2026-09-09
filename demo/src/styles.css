@@ -720,6 +720,7 @@
 .openmaic-history{display:flex;align-items:center;gap:7px;min-height:38px;color:#314f45}
 .openmaic-history button{display:inline-flex;align-items:center;gap:5px;min-height:34px;padding:0 9px;border:1px solid #ccd9d4;border-radius:6px;background:#fff;color:#315e51;font-size:11px;cursor:pointer}
 .openmaic-history button:disabled{opacity:.38;cursor:not-allowed}.openmaic-history svg{width:14px}.openmaic-history small{margin-left:5px;color:#b8ccc5;font-size:11px}
+.teaching-image-picker{display:grid;gap:8px;width:250px;padding:4px}.teaching-image-picker button{min-height:42px;border:1px dashed #a8bbb3;border-radius:7px;background:#f7faf8;color:#27584d;font:inherit;font-size:12px;font-weight:800;cursor:pointer}.teaching-image-picker button:hover{border-color:#b98d39;background:#fffaf0}.teaching-image-picker button:disabled{cursor:wait;opacity:.65}.teaching-image-picker input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}.teaching-image-picker small{color:#697b75;font-size:10px;line-height:1.55}.openmaic-asset-error{border-left:3px solid #b54e3f;background:#fff2ee;padding:8px 10px;color:#87392f;font-size:11px}
 .openmaic-slide-surface{position:relative;width:100%;aspect-ratio:16/9;min-height:0;overflow:visible;background:#173d34;box-shadow:0 12px 32px #071b1766}
 .openmaic-slide-surface.readonly{overflow:hidden}
 .openmaic-slide-surface>.maic-editing-ui-root{width:100%;height:100%}
