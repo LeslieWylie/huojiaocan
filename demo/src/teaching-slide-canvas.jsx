@@ -5,7 +5,7 @@ import { SlideCanvas } from '@openmaic/renderer';
 import { slideToPng } from '@openmaic/renderer/snapshot';
 import { Redo2, Undo2 } from 'lucide-react';
 import { teachingSlideDeckV2Html } from '../shared/teaching-slides-v2.js';
-import { resolveTeachingSlide, resolveTeachingSlideDeck, textbookPageAsset, uploadSlideAsset } from './slide-assets.js';
+import { listSlideAssets, resolveTeachingSlide, resolveTeachingSlideDeck, textbookPageAsset, uploadSlideAsset } from './slide-assets.js';
 import '@openmaic/renderer/fonts.css';
 import 'katex/dist/katex.min.css';
 
@@ -58,6 +58,13 @@ async function prepareTeachingSlideImage(file) {
 function TeachingImagePicker({ request, onError, textbookPages = [] }) {
   const inputRef = useRef(null);
   const [working, setWorking] = useState(false);
+  const [library, setLibrary] = useState([]);
+  const [libraryState, setLibraryState] = useState('loading');
+  useEffect(() => {
+    let active = true;
+    listSlideAssets().then(assets => { if (active) { setLibrary(assets.slice(0, 12)); setLibraryState('ready'); } }).catch(() => { if (active) setLibraryState('error'); });
+    return () => { active = false; };
+  }, []);
   const pick = async file => {
     if (!file || working) return;
     setWorking(true); onError('');
@@ -73,10 +80,13 @@ function TeachingImagePicker({ request, onError, textbookPages = [] }) {
     catch { onError(`教材第 ${page} 页暂时无法插入，请稍后重试。`); }
     finally { setWorking(false); }
   };
+  const reuse = asset => request.onPick({ src: asset.id, ext: String(asset.mime || '').split('/')[1] || undefined, width: Number(asset.metadata?.width) || undefined, height: Number(asset.metadata?.height) || undefined });
+  const assetLabel = asset => asset.metadata?.kind === 'textbook-page' && asset.metadata?.pdfPage ? `教材第 ${asset.metadata.pdfPage} 页` : asset.metadata?.originalName || '课件图片';
   return <div className="teaching-image-picker">
     <button type="button" onClick={() => inputRef.current?.click()} disabled={working}>{working ? '正在压缩图片…' : '选择本地图片'}</button>
     <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={event => void pick(event.target.files?.[0])}/>
     {textbookPages.map(page => <button type="button" className="textbook-page-pick" onClick={() => void pickTextbookPage(page)} disabled={working} key={page}>插入教材原页 · 第 {page} 页</button>)}
+    <div className="teaching-asset-library"><b>我的课件素材</b>{libraryState === 'loading' ? <span>正在读取…</span> : libraryState === 'error' ? <span>素材池暂时无法读取</span> : library.length ? <div>{library.map(asset => <button type="button" onClick={() => reuse(asset)} title={assetLabel(asset)} key={asset.id}><img src={asset.url} alt=""/><small>{assetLabel(asset)}</small></button>)}</div> : <span>还没有素材，先上传一张图片。</span>}</div>
     <small>图片保存到当前账号的素材池；教材按钮只显示本页已经核验过的学生教材页。</small>
   </div>;
 }

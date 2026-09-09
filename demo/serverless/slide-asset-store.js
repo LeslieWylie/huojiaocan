@@ -53,7 +53,11 @@ async function storageRead(config, key, fetchImpl = globalThis.fetch) {
 }
 
 async function storageRemove(config, key, fetchImpl = globalThis.fetch) {
-  const response = await fetchImpl(storageEndpoint(config, key), { method: 'DELETE', headers: storageHeaders(config) });
+  const response = await fetchImpl(`${config.url}/storage/v1/object/${encodeURIComponent(config.bucket)}`, {
+    method: 'DELETE',
+    headers: storageHeaders(config, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ prefixes: [key] })
+  });
   if (!response.ok && response.status !== 404) throw new Error('slide_asset_storage_delete_failed');
 }
 
@@ -76,6 +80,15 @@ export class SupabaseSlideAssetStore {
       fetchImpl: this.fetchImpl
     });
     return Array.isArray(rows) ? rows[0] || null : null;
+  }
+
+  async list(principal, limit = 12) {
+    const rows = await supabaseRest(TABLE, {
+      query: { owner_id: `eq.${principal.key}`, select: 'asset_id,mime_type,byte_size,revision,metadata,created_at,updated_at', order: 'updated_at.desc', limit: String(Math.max(1, Math.min(60, Number(limit) || 12))) },
+      env: this.env,
+      fetchImpl: this.fetchImpl
+    });
+    return (Array.isArray(rows) ? rows : []).map(row => ({ id: row.asset_id, mime: row.mime_type || '', byteLength: Number(row.byte_size), revision: Number(row.revision), metadata: row.metadata || {}, createdAt: row.created_at, updatedAt: row.updated_at }));
   }
 
   async put(principal, data, meta = {}) {
@@ -164,13 +177,25 @@ export class LocalSlideAssetStore {
     try { return JSON.parse(await fs.readFile(this.paths(principal, ref).meta, 'utf8')); } catch (error) { if (error?.code === 'ENOENT') return null; throw error; }
   }
 
+  async list(principal, limit = 12) {
+    const directory = path.join(this.root, encodeURIComponent(principal.key));
+    let names;
+    try { names = await fs.readdir(directory); } catch (error) { if (error?.code === 'ENOENT') return []; throw error; }
+    const rows = await Promise.all(names.filter(name => name.endsWith('.json')).map(async name => {
+      const id = decodeURIComponent(name.slice(0, -5));
+      const [row, stat] = await Promise.all([this.row(principal, id), fs.stat(path.join(directory, name))]);
+      return row ? { id, mime: row.mime || '', byteLength: Number(row.byteLength), revision: Number(row.revision), metadata: row.metadata || {}, createdAt: row.createdAt || stat.birthtime.toISOString(), updatedAt: stat.mtime.toISOString() } : null;
+    }));
+    return rows.filter(Boolean).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt))).slice(0, Math.max(1, Math.min(60, Number(limit) || 12)));
+  }
+
   async put(principal, data, meta = {}) {
     const id = newAssetId();
     const files = this.paths(principal, id);
     const bytes = new Uint8Array(await data.arrayBuffer());
     await fs.mkdir(path.dirname(files.bytes), { recursive: true, mode: 0o700 });
     await fs.writeFile(files.bytes, bytes, { flag: 'wx', mode: 0o600 });
-    await fs.writeFile(files.meta, JSON.stringify({ mime: selectedMime(data, meta), byteLength: bytes.byteLength, revision: 1, metadata: meta }), { flag: 'wx', mode: 0o600 });
+    await fs.writeFile(files.meta, JSON.stringify({ mime: selectedMime(data, meta), byteLength: bytes.byteLength, revision: 1, metadata: meta, createdAt: new Date().toISOString() }), { flag: 'wx', mode: 0o600 });
     return id;
   }
 
@@ -196,7 +221,7 @@ export class LocalSlideAssetStore {
     if (!row) throw new AssetNotFoundError();
     const files = this.paths(principal, ref);
     const bytes = new Uint8Array(await data.arrayBuffer());
-    const next = { mime: selectedMime(data, meta, row.mime), byteLength: bytes.byteLength, revision: Number(row.revision) + 1, metadata: meta === undefined ? row.metadata || {} : meta };
+    const next = { mime: selectedMime(data, meta, row.mime), byteLength: bytes.byteLength, revision: Number(row.revision) + 1, metadata: meta === undefined ? row.metadata || {} : meta, createdAt: row.createdAt || new Date().toISOString() };
     const suffix = `${process.pid}-${Date.now()}`;
     await fs.writeFile(`${files.bytes}.${suffix}`, bytes, { mode: 0o600 });
     await fs.writeFile(`${files.meta}.${suffix}`, JSON.stringify(next), { mode: 0o600 });

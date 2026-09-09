@@ -1,25 +1,55 @@
 import { HttpAssetStore } from '@openmaic/storage/asset/http';
-import { accessToken, ensureSession, getSession, sessionExpired } from './auth.js';
+import { accessToken, ensureSession, getSession, refreshSession, sessionExpired } from './auth.js';
 
 let current = null;
 
-function ownerAssetStore() {
+function ownerFetch(owner) {
+  return async (input, init = {}) => {
+    const assertOwner = () => { if ((getSession()?.user?.id || '') !== owner) throw new Error('auth_owner_changed'); };
+    assertOwner();
+    if (sessionExpired()) await ensureSession();
+    let token = accessToken();
+    const send = currentToken => {
+      assertOwner();
+      const headers = new Headers(init.headers || {});
+      if (currentToken) headers.set('Authorization', `Bearer ${currentToken}`);
+      return fetch(input, { ...init, headers });
+    };
+    let response = await send(token);
+    if (response.status === 401 && token) {
+      const refreshed = await refreshSession(token);
+      token = refreshed?.access_token || '';
+      if (token) response = await send(token);
+    }
+    assertOwner();
+    return response;
+  };
+}
+
+function ownerContext() {
   const owner = getSession()?.user?.id || '';
   if (!owner) throw Object.assign(new Error('auth_required'), { code: 'auth_required' });
+  return { owner, fetchImpl: ownerFetch(owner) };
+}
+
+function ownerAssetStore() {
+  const { owner, fetchImpl } = ownerContext();
   if (current?.owner === owner) return current.store;
   if (current) void current.store.close();
   const store = new HttpAssetStore({
     baseUrl: '/api/slide-assets',
-    headers: async () => {
-      if ((getSession()?.user?.id || '') !== owner) throw new Error('auth_owner_changed');
-      if (sessionExpired()) await ensureSession();
-      const token = accessToken();
-      if (!token) throw new Error('auth_required');
-      return { Authorization: `Bearer ${token}` };
-    }
+    fetch: fetchImpl
   });
   current = { owner, store };
   return store;
+}
+
+export async function listSlideAssets() {
+  const { fetchImpl } = ownerContext();
+  const response = await fetchImpl('/api/slide-assets/library', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(payload.error || 'slide_asset_list_failed'), { code: payload.error || 'slide_asset_list_failed', status: response.status });
+  return Promise.all((payload.assets || []).map(async asset => ({ ...asset, url: await resolveSlideAsset(asset.id) })));
 }
 
 export function isSlideAssetRef(value) {
