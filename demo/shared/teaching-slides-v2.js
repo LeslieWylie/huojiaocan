@@ -39,15 +39,19 @@ function imageDataBytes(src) {
   return Math.floor(payload.length * 3 / 4) - (payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0);
 }
 
+function validImageAddress(src) {
+  return /^ast_[0-9a-z]+$/u.test(String(src || '')) || imageDataBytes(src) >= 0;
+}
+
 function validateSlideImages(canvas) {
   const images = canvas.elements.filter(element => element.type === 'image');
   if (images.length > MAX_IMAGES_PER_SLIDE || images.some(element => {
     const bytes = imageDataBytes(element.src);
-    return bytes < 1 || bytes > MAX_IMAGE_BYTES;
+    return !/^ast_[0-9a-z]+$/u.test(String(element.src || '')) && (bytes < 1 || bytes > MAX_IMAGE_BYTES);
   })) {
     throw Object.assign(new Error('teaching_slides_image_invalid'), { code: 'teaching_slides_image_invalid', status: 422 });
   }
-  return images.reduce((total, element) => total + imageDataBytes(element.src), 0);
+  return images.reduce((total, element) => total + Math.max(0, imageDataBytes(element.src)), 0);
 }
 
 function validateDeckImageBudget(slides) {
@@ -104,7 +108,7 @@ function validateContent(content, slideId = 'slide') {
     throw Object.assign(new Error('teaching_slides_too_many_elements'), { code: 'teaching_slides_too_many_elements', status: 422 });
   }
   const canvas = normalizeSlide(content.canvas);
-  if (canvas.elements.some(element => !ALLOWED_ELEMENT_TYPES.has(element.type) || !isValidEditorElement(element))) {
+  if (canvas.elements.some(element => !ALLOWED_ELEMENT_TYPES.has(element.type) || !isValidEditorElement(element) || element.type === 'image' && !validImageAddress(element.src))) {
     throw Object.assign(new Error('teaching_slides_element_not_allowed'), { code: 'teaching_slides_element_not_allowed', status: 422 });
   }
   validateSlideImages(canvas);

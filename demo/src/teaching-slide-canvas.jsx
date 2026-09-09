@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { EditableSlideCanvasWithUI } from '@openmaic/editor/ui';
 import { applyEditorTransaction, createEditorHistory, redoEditorTransaction, undoEditorTransaction } from '@openmaic/editor/core';
 import { SlideCanvas } from '@openmaic/renderer';
 import { slideToPng } from '@openmaic/renderer/snapshot';
 import { Redo2, Undo2 } from 'lucide-react';
 import { teachingSlideDeckV2Html } from '../shared/teaching-slides-v2.js';
+import { resolveTeachingSlide, resolveTeachingSlideDeck, textbookPageAsset, uploadSlideAsset } from './slide-assets.js';
 import '@openmaic/renderer/fonts.css';
 import 'katex/dist/katex.min.css';
 
@@ -15,9 +16,8 @@ function createElementId() {
 const MAX_IMAGE_INPUT_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGE_OUTPUT_BYTES = 700 * 1024;
 
-function dataUrlBytes(value) {
-  const payload = String(value || '').split(',', 2)[1] || '';
-  return Math.floor(payload.length * 3 / 4) - (payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0);
+function canvasBlob(canvas, quality) {
+  return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('image_encode_failed')), 'image/webp', quality));
 }
 
 function loadLocalImage(file) {
@@ -36,7 +36,6 @@ async function prepareTeachingSlideImage(file) {
   const image = await loadLocalImage(file);
   let scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
   let quality = 0.86;
-  let src = '';
   let width = 0;
   let height = 0;
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -45,15 +44,18 @@ async function prepareTeachingSlideImage(file) {
     const canvas = document.createElement('canvas');
     canvas.width = width; canvas.height = height;
     canvas.getContext('2d').drawImage(image, 0, 0, width, height);
-    src = canvas.toDataURL('image/webp', quality);
-    if (dataUrlBytes(src) <= MAX_IMAGE_OUTPUT_BYTES) return { src, ext: 'webp', width, height };
+    const blob = await canvasBlob(canvas, quality);
+    if (blob.size <= MAX_IMAGE_OUTPUT_BYTES) {
+      const src = await uploadSlideAsset(blob, { kind: 'teacher-upload', originalName: String(file.name || '').slice(0, 160), width, height });
+      return { src, ext: 'webp', width, height };
+    }
     if (quality > 0.62) quality -= 0.08;
     else scale *= 0.8;
   }
   throw new Error('image_output_too_large');
 }
 
-function TeachingImagePicker({ request, onError }) {
+function TeachingImagePicker({ request, onError, textbookPages = [] }) {
   const inputRef = useRef(null);
   const [working, setWorking] = useState(false);
   const pick = async file => {
@@ -64,11 +66,33 @@ function TeachingImagePicker({ request, onError }) {
       onError(error?.message === 'image_type_invalid' ? '请选择 PNG、JPG 或 WebP 图片。' : error?.message === 'image_input_too_large' ? '原图不能超过 12 MB。' : '这张图片无法处理，请换一张后重试。');
     } finally { setWorking(false); }
   };
+  const pickTextbookPage = async page => {
+    if (working) return;
+    setWorking(true); onError('');
+    try { request.onPick(await textbookPageAsset(page)); }
+    catch { onError(`教材第 ${page} 页暂时无法插入，请稍后重试。`); }
+    finally { setWorking(false); }
+  };
   return <div className="teaching-image-picker">
     <button type="button" onClick={() => inputRef.current?.click()} disabled={working}>{working ? '正在压缩图片…' : '选择本地图片'}</button>
     <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={event => void pick(event.target.files?.[0])}/>
-    <small>支持 PNG、JPG、WebP；自动压缩后随课件保存，可离线投屏。</small>
+    {textbookPages.map(page => <button type="button" className="textbook-page-pick" onClick={() => void pickTextbookPage(page)} disabled={working} key={page}>插入教材原页 · 第 {page} 页</button>)}
+    <small>图片保存到当前账号的素材池；教材按钮只显示本页已经核验过的学生教材页。</small>
   </div>;
+}
+
+function useResolvedSlide(slide, onError) {
+  const [resolved, setResolved] = useState(slide);
+  useEffect(() => {
+    let active = true;
+    const needsResolution = (slide?.content?.canvas?.elements || []).some(element => element.type === 'image' && /^ast_/u.test(String(element.src || '')))
+      || /^ast_/u.test(String(slide?.content?.canvas?.background?.image?.src || ''));
+    if (needsResolution) setResolved(null);
+    else { setResolved(slide); return () => { active = false; }; }
+    resolveTeachingSlide(slide).then(value => { if (active) setResolved(value); }).catch(error => { if (active) onError?.(error); });
+    return () => { active = false; };
+  }, [slide?.id, slide?.content?.canvas]);
+  return resolved;
 }
 
 export function createReplaceSlideTransaction(before, after) {
@@ -81,19 +105,21 @@ export function createReplaceSlideTransaction(before, after) {
   return { origin: 'system', history: 'record', operations };
 }
 
-export default function TeachingSlideCanvas({ slide, readOnly = false, onChange }) {
+export default function TeachingSlideCanvas({ slide, readOnly = false, onChange, textbookPages = [] }) {
   const [selection, setSelection] = useState({ elementIds: [] });
   const [history, setHistory] = useState(() => createEditorHistory(slide.content));
   const [assetError, setAssetError] = useState('');
+  const visible = useResolvedSlide({ ...slide, content: history.present }, () => setAssetError('课件图片暂时无法读取，请刷新后重试。'));
   const host = useMemo(() => ({
     locale: 'zh-CN',
     createElementId,
     translate: (_key, _params, fallback) => fallback,
-    renderAssetPicker: request => <TeachingImagePicker request={request} onError={setAssetError}/>,
+    renderAssetPicker: request => <TeachingImagePicker request={request} onError={setAssetError} textbookPages={textbookPages}/>,
     onError: error => setAssetError(error?.message || '图片无法插入，请重试。')
-  }), []);
+  }), [textbookPages.join(',')]);
 
-  if (readOnly) return <div className="openmaic-slide-surface readonly"><SlideCanvas slide={slide.content.canvas} /></div>;
+  if (!visible) return <div className="openmaic-slide-surface readonly"><div className="openmaic-loading">正在读取课件素材…</div></div>;
+  if (readOnly) return <div className="openmaic-slide-surface readonly"><SlideCanvas slide={visible.content.canvas} /></div>;
 
   const apply = transaction => {
     setHistory(current => {
@@ -119,7 +145,7 @@ export default function TeachingSlideCanvas({ slide, readOnly = false, onChange 
     {assetError && <div className="openmaic-asset-error" role="alert">{assetError}</div>}
     <div className="openmaic-slide-surface">
       <EditableSlideCanvasWithUI
-        slide={history.present.canvas}
+        slide={visible.content.canvas}
         documentSlide={history.present.canvas}
         host={host}
         selection={selection}
@@ -137,18 +163,22 @@ export default function TeachingSlideCanvas({ slide, readOnly = false, onChange 
 // Mirrors OpenMAIC's SlideThumbnail boundary: thumbnails use the same official
 // renderer as the stage, rather than a separate text-only approximation.
 export function TeachingSlideThumbnail({ slide }) {
+  const [error, setError] = useState('');
+  const visible = useResolvedSlide(slide, () => setError('素材未加载'));
   return <div className="openmaic-thumbnail-canvas" aria-hidden="true">
-    <SlideCanvas
-      slide={slide.content.canvas}
+    {error && <span className="openmaic-thumbnail-error">{error}</span>}
+    {visible ? <SlideCanvas
+      slide={visible.content.canvas}
       chrome={false}
       elementIdPrefix={`teaching-slide-thumbnail-${slide.id}-`}
-    />
+    /> : <span className="openmaic-thumbnail-loading">读取素材…</span>}
   </div>;
 }
 
 export async function downloadTeachingSlidesProjector(deck) {
+  const resolved = await resolveTeachingSlideDeck(deck);
   const images = [];
-  for (const slide of deck.slides) images.push(await slideToPng(slide.content.canvas, { width: 1280, pixelRatio: 1, format: 'dataUrl', backgroundColor: '#173d34' }));
+  for (const slide of resolved.slides) images.push(await slideToPng(slide.content.canvas, { width: 1280, pixelRatio: 1, format: 'dataUrl', backgroundColor: '#173d34' }));
   const url = URL.createObjectURL(new Blob([teachingSlideDeckV2Html(deck, images)], { type: 'text/html;charset=utf-8' }));
   const anchor = document.createElement('a');
   anchor.href = url;

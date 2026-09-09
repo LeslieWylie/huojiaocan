@@ -9,6 +9,7 @@ import draftsHandler from '../api/drafts.js';
 import meHandler from '../api/me.js';
 import configHandler from '../api/config.js';
 import assetsHandler from '../api/assets.js';
+import slideAssetsHandler from '../api/slide-assets.js';
 import sharesHandler from '../serverless/teaching-share-api.js';
 import authProxy from '../serverless/auth-proxy.js';
 
@@ -20,6 +21,7 @@ const port = Number(process.env.PORT || 8787);
 // Keep byte uploads ahead of JSON parsing so the PDF stream remains untouched.
 app.post('/api/upload', uploadHandler);
 app.post('/api/index/documents/upload', uploadHandler);
+app.use('/api/slide-assets', slideAssetsHandler);
 app.use(express.json({ limit: '1mb' }));
 app.use((req, res, next) => {
   res.on('finish', () => console.log(`[api] ${req.method} ${req.originalUrl} → ${res.statusCode}`));
