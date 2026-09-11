@@ -1,3 +1,4 @@
+import { paginateTemplateSlides } from './teaching-slides-pagination.js';
 import { normalizeSlide, validateScene } from '@openmaic/dsl';
 import { applyEditorTransaction, isValidEditorElement } from '@openmaic/editor/core';
 import { buildTeachingSlideDeck, normalizeTeachingSlideDeck, teachingSlidesSourceKey } from './teaching-slides.js';
@@ -123,13 +124,13 @@ function validateContent(content, slideId = 'slide') {
 export function teachingSlideDeckV1ToV2(value = {}) {
   const legacy = normalizeTeachingSlideDeck(value);
   const referenceMap = new Map(legacy.references.map(item => [String(item.id), item]));
-  return {
+  return normalizeTeachingSlideDeckV2({
     version: TEACHING_SLIDES_V2_VERSION,
     schemaVersion: TEACHING_SLIDES_SCHEMA_VERSION,
     sourceKey: legacy.sourceKey,
     status: legacy.status,
     lessonTitle: legacy.lessonTitle,
-    slides: legacy.slides.map(item => ({
+    slides: paginateTemplateSlides(legacy.slides.map(item => ({
       id: item.id,
       kind: item.kind,
       order: item.order,
@@ -141,14 +142,14 @@ export function teachingSlideDeckV1ToV2(value = {}) {
         teacherCitationIds: [...item.teacherCitationIds],
         teacherNotes: [...item.teacherNotes]
       }
-    })),
+    })), { generated: true }).slides,
     references: clone(legacy.references),
     updatedAt: legacy.updatedAt,
     confirmedAt: legacy.confirmedAt,
     confirmedBy: legacy.confirmedBy,
     renderer: { name: '@openmaic/renderer', version: '0.1.6' },
     editor: { name: '@openmaic/editor', version: '0.0.5' }
-  };
+  });
 }
 
 export function buildTeachingSlideDeckV2(draft = {}) {
@@ -159,7 +160,9 @@ export function normalizeTeachingSlideDeckV2(value = {}) {
   if (Number(value.version) !== TEACHING_SLIDES_V2_VERSION) {
     throw Object.assign(new Error('teaching_slides_version_unsupported'), { code: 'teaching_slides_version_unsupported', status: 422 });
   }
-  const slides = (Array.isArray(value.slides) ? value.slides : []).slice(0, 12).map((item, index) => ({
+  if (!Array.isArray(value.slides) || value.slides.length > 120) throw Object.assign(new Error('teaching_slides_page_limit'), { code: 'teaching_slides_page_limit', status: 422 });
+  if (new Set(value.slides.map((item, index) => plainText(item?.id || `slide-${index + 1}`, 100))).size !== value.slides.length) throw Object.assign(new Error('teaching_slides_duplicate_id'), { code: 'teaching_slides_duplicate_id', status: 422 });
+  const slides = value.slides.map((item, index) => ({
     id: plainText(item?.id || `slide-${index + 1}`, 100),
     kind: plainText(item?.kind || 'content', 40),
     order: index + 1,
@@ -235,4 +238,11 @@ export function teachingSlideDeckV2Html(value = {}, imageDataUrls = []) {
   }
   const slides = imageDataUrls.map((src, index) => `<section class="slide ${index === 0 ? 'active' : ''}" data-index="${index}"><img src="${src}" alt="第 ${index + 1} 页课堂投屏"><div class="counter">${String(index + 1).padStart(2, '0')} / ${String(imageDataUrls.length).padStart(2, '0')}</div></section>`).join('');
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(deck.lessonTitle)} · 课堂投屏稿</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0d241f}.slide{display:none;width:100vw;height:100vh;align-items:center;justify-content:center}.slide.active{display:flex}.slide img{display:block;max-width:100vw;max-height:100vh;object-fit:contain}.counter{position:fixed;right:24px;top:18px;color:#d7e5df;background:#0d241fcc;border-radius:999px;padding:7px 11px;font:700 13px system-ui}@media print{html,body{overflow:visible}.slide{display:flex!important;page-break-after:always}.counter{display:none}}</style></head><body>${slides}<script>(()=>{let i=0;const s=[...document.querySelectorAll('.slide')];const show=n=>{i=Math.max(0,Math.min(s.length-1,n));s.forEach((el,j)=>el.classList.toggle('active',j===i))};addEventListener('keydown',e=>{if(['ArrowRight','PageDown',' '].includes(e.key))show(i+1);if(['ArrowLeft','PageUp'].includes(e.key))show(i-1);if(e.key.toLowerCase()==='f')document.documentElement.requestFullscreen?.()});show(0)})()</script></body></html>`;
+}
+
+export function paginateTeachingSlideDeckV2(value) {
+  const base = normalizeTeachingSlideDeckV2(value);
+  const { slides, report } = paginateTemplateSlides(base.slides);
+  const deck = normalizeTeachingSlideDeckV2({ ...base, slides, status: 'draft', updatedAt: new Date().toISOString(), confirmedAt: null, confirmedBy: null });
+  return { deck, report };
 }

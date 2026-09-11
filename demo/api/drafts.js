@@ -12,7 +12,7 @@ import { buildPreClassPulse, mergePreClassPulse, preClassPulseIsStale } from '..
 import { mergeTeachingDeliberation, teachingDeliberationIsStale } from '../shared/teaching-deliberation.js';
 import { buildLessonStudy, lessonStudyIsStale, mergeLessonStudy } from '../shared/lesson-study.js';
 import { normalizeTeachingSlideDeck, teachingSlideDeckIsStale } from '../shared/teaching-slides.js';
-import { buildTeachingSlideDeckV2, createTeachingSlideDeckV2Revision, normalizeTeachingSlideDeckV2, teachingSlideDeckV1ToV2, teachingSlideDeckV2IsStale, updateTeachingSlideDeckV2 } from '../shared/teaching-slides-v2.js';
+import { buildTeachingSlideDeckV2, paginateTeachingSlideDeckV2, createTeachingSlideDeckV2Revision, normalizeTeachingSlideDeckV2, teachingSlideDeckV1ToV2, teachingSlideDeckV2IsStale, updateTeachingSlideDeckV2 } from '../shared/teaching-slides-v2.js';
 import { buildLayeredHomework, layeredHomeworkIsStale, mergeLayeredHomework, normalizeLayeredHomework } from '../shared/layered-homework.js';
 import { homeworkReviewContext, homeworkReviewIsStale, mergeHomeworkReview, normalizeHomeworkReview } from '../shared/homework-review.js';
 import { deriveTeachingTasks } from '../shared/teaching-task-flow.js';
@@ -932,7 +932,7 @@ export default async function handler(req, res) {
       const storedV1 = current.answer?.teachingSlides ? normalizeTeachingSlideDeck(current.answer.teachingSlides) : null;
       const stale = storedV2 ? teachingSlideDeckV2IsStale(current) : storedV1 ? teachingSlideDeckIsStale(current) : false;
       try {
-        const deck = storedV2 && !stale
+        const deck = storedV2
           ? storedV2
           : storedV1 && !stale
             ? teachingSlideDeckV1ToV2(storedV1)
@@ -951,13 +951,15 @@ export default async function handler(req, res) {
       assertCurrentVersion(current, requestVersion(req, body));
       const storedV2 = current.answer?.teachingSlidesV2 ? normalizeTeachingSlideDeckV2(current.answer.teachingSlidesV2) : null;
       const storedV1 = current.answer?.teachingSlides ? normalizeTeachingSlideDeck(current.answer.teachingSlides) : null;
-      const base = storedV2 && !teachingSlideDeckV2IsStale(current)
+      const base = storedV2
         ? storedV2
         : storedV1 && !teachingSlideDeckIsStale(current)
           ? teachingSlideDeckV1ToV2(storedV1)
           : buildTeachingSlideDeckV2(current);
       const answer = clone(current.answer || {});
-      const deck = body.revise === true
+      const pagination = body.paginate === true ? paginateTeachingSlideDeckV2(base) : null;
+      if (pagination && body.preview === true) return json(res, 200, { ...pagination, draftVersion: Number(current.version || 1) });
+      const deck = pagination ? pagination.deck : body.revise === true
         ? createTeachingSlideDeckV2Revision(base)
         : updateTeachingSlideDeckV2(base, {
           slideId: body.slideId,
@@ -966,10 +968,10 @@ export default async function handler(req, res) {
           confirm: body.confirm === true,
           confirmedBy: user.id
         });
-      if (body.revise === true) answer.teachingSlidesV2History = [clone(base), ...(Array.isArray(answer.teachingSlidesV2History) ? answer.teachingSlidesV2History : [])].slice(0, 8);
+      if (body.revise === true || pagination) answer.teachingSlidesV2History = [clone(base), ...(Array.isArray(answer.teachingSlidesV2History) ? answer.teachingSlidesV2History : [])].slice(0, 8);
       answer.teachingSlidesV2 = deck;
       const saved = await patchOwnedDraft(user, id, current.version || 1, { answer, updated_at: deck.updatedAt, version: Number(current.version || 1) + 1 });
-      return json(res, 200, { draft: saved, deck, draftVersion: Number(current.version || 1) + 1 });
+      return json(res, 200, { draft: saved, deck, ...(pagination ? { report: pagination.report } : {}), draftVersion: Number(current.version || 1) + 1 });
     }
     if (parts.length === 2 && parts[1] === 'homework-pack' && req.method === 'GET') {
       const current = await getDraft(user, id);
