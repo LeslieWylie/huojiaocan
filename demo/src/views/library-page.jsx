@@ -2,8 +2,10 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, BookOpen, ChevronRight, CircleAlert, ExternalLink, FileSearch, FileText, Library, Search } from 'lucide-react';
 import { Badge, SectionHead } from '../ui-kit.jsx';
-import { canonicalDocumentId, citationText, currentPageReturn, docName, findTreeNode, groupSearchResults, nodePageRange, normalizeCatalogItem, normalizeTree, pageTitle, pdfPageUrl, prioritizeSearchResults, queryParams, request, searchResultDocumentId, searchResultPage, statusLabel, uniqueCitations } from '../app-core.js';
+import { canonicalDocumentId, citationText, currentPageReturn, docName, findTreeNode, groupSearchResults, nodePageRange, normalizeCatalogItem, normalizeTree, pageTitle, pdfPageUrl, prioritizeSearchResults, queryParams, request, rootRequest, searchResultDocumentId, searchResultPage, statusLabel, uniqueCitations } from '../app-core.js';
 import { buildPreparationHref, buildReaderHref, findTreeNodeByNormalizedTitle, normalizeLessonIdentity as normalizeReaderLessonIdentity, resolveCrossDocTarget } from '../reader-target.js';
+
+import { lessonTitleForDraft } from '../../shared/lesson-identity.js';
 
 const PdfPagePreview = lazy(() => import('../pdf-page-preview.jsx'));
 
@@ -62,6 +64,16 @@ export function Tree({ nodes, current, onPick, error, retry, loading }) {
 }
 export function LibraryPage() {
   const params = useMemo(() => queryParams(), []);
+  const returnDraftId = params.get('draftId') || params.get('returnDraftId') || '';
+  const [returnLessonTitle, setReturnLessonTitle] = useState('');
+  useEffect(() => {
+    if (!returnDraftId) return;
+    let active = true;
+    rootRequest(`/api/drafts/${encodeURIComponent(returnDraftId)}`).then(data => {
+      if (active) setReturnLessonTitle(lessonTitleForDraft(data.draft || data));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [returnDraftId]);
   const [doc,setDoc]=useState(canonicalDocumentId(params.get('doc')) || '');
   const [docs,setDocs]=useState([]); const [docsError,setDocsError]=useState(''); const [tree,setTree]=useState([]); const [treeError,setTreeError]=useState(''); const [treeBusy,setTreeBusy]=useState(false); const [treeDocumentId,setTreeDocumentId]=useState(''); const [selectedNode,setSelectedNode]=useState(params.get('node')||''); const [selectedLessonTitle,setSelectedLessonTitle]=useState(params.get('lesson') || ''); const [page,setPage]=useState(null); const [pageNo,setPageNo]=useState(Number(params.get('page'))||1); const [pageInput,setPageInput]=useState(String(Number(params.get('page'))||1)); const [pageBusy,setPageBusy]=useState(false); const [pageError,setPageError]=useState(''); const [pageRetry,setPageRetry]=useState(0); const [pdfError,setPdfError]=useState(false); const [query,setQuery]=useState(params.get('q')||''); const rawRequestedScope=params.get('scope'); const requestedScope=canonicalDocumentId(rawRequestedScope); const [scope,setScope]=useState(rawRequestedScope==='all'||rawRequestedScope==='both'?rawRequestedScope:requestedScope==='teacher-guide'||requestedScope==='textbook'||requestedScope==='curriculum-standard'?requestedScope:'both'); const [results,setResults]=useState([]); const [visibleResults,setVisibleResults]=useState(6); const [searched,setSearched]=useState(Boolean(params.get('q'))); const [searchError,setSearchError]=useState(''); const [busy,setBusy]=useState(false); const initialSearch=useRef(Boolean(params.get('q')));
   const treeRequestRef = useRef(0);
@@ -192,7 +204,7 @@ export function LibraryPage() {
       }
     }
   }, [tree, pageNo, selectedNode, selectedLessonTitle, doc, treeDocumentId]);
-  const updateUrl = ({documentId, pageNumber, nodeId = '', lessonTitle = selectedLessonTitle, keepSearch = true}) => { const url=new URL(location.href); url.pathname='/library/'; url.search=new URLSearchParams({doc:documentId,page:String(pageNumber),...(keepSearch&&query?{q:query}:{}),...(scope?{scope}:{}),...(nodeId?{node:nodeId}:{}),...(lessonTitle?{lesson:lessonTitle}:{})}).toString(); globalThis.history?.replaceState?.(null,'',url); };
+  const updateUrl = ({documentId, pageNumber, nodeId = '', lessonTitle = selectedLessonTitle, keepSearch = true}) => { const url=new URL(location.href); url.pathname='/library/'; url.search=new URLSearchParams({doc:documentId,page:String(pageNumber),...(returnDraftId?{returnDraftId}:{}),...(keepSearch&&query?{q:query}:{}),...(scope?{scope}:{}),...(nodeId?{node:nodeId}:{}),...(lessonTitle?{lesson:lessonTitle}:{})}).toString(); globalThis.history?.replaceState?.(null,'',url); };
   useEffect(() => {
     const syncFromUrl = () => {
       const next = new URLSearchParams(location.search);
@@ -305,6 +317,7 @@ export function LibraryPage() {
   const visibleSearchGroups = groupSearchResults(results.slice(0, visibleResults));
   return (
     <div className="view-stack index-page">
+      {returnDraftId && <p className="notice"><a href={`/cards/?draftId=${encodeURIComponent(returnDraftId)}`}>返回{returnLessonTitle || '当前'}备课 <ArrowRight size={16}/></a> · 查阅其他篇目不会切换这份方案；从当前材料开始备课会新建方案。</p>}
       <section className="hero index-hero">
         <div><Badge tone="green"><Library/> 教材库</Badge><h1>先选定要查的材料，<br/>再从目录进入具体篇目</h1><p>课程标准说明学段要求与学业质量，学生教材用于核对课文原页，教师教学用书用于参考课时、活动和教学处理。目录、搜索和教材原页核验会始终同步。</p></div>
         <div className="index-health"><b>{docs.reduce((sum, item) => sum + item.pageCount, 0)}</b><span>页可定位</span><small>{docs.length} 份材料 · 已准备好按页查找</small></div>

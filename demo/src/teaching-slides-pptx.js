@@ -43,19 +43,23 @@ function htmlTextRuns(html, fallbackColor, fallbackFont) {
   return runs.length ? runs : [{ text: '', options: { color: color(fallbackColor), fontFace: fallbackFont || DEFAULT_FONT } }];
 }
 
-function dataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error || new Error('image_read_failed'));
-    reader.readAsDataURL(blob);
-  });
-}
-
 async function embeddableImage(src) {
-  if (/^data:image\//u.test(src)) return src;
-  const response = await fetch(src);
-  if (!response.ok) throw new Error('slide_image_read_failed');
-  return dataUrl(await response.blob());
+  if (/^data:image\/(?:png|jpeg);/u.test(src)) return src;
+  // The asset store returns blob URLs. Decode through the permitted image
+  // channel, not fetch (connect-src); PNG also works in older Office versions
+  // that cannot display the WebP bytes used by our online material library.
+  const image = await new Promise((resolve, reject) => {
+    const value = new Image();
+    value.crossOrigin = 'anonymous';
+    value.onload = () => resolve(value);
+    value.onerror = () => reject(new Error('slide_image_read_failed'));
+    value.src = src;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  canvas.getContext('2d').drawImage(image, 0, 0);
+  return canvas.toDataURL('image/png');
 }
 
 function box(element) {

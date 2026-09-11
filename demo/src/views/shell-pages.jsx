@@ -55,9 +55,14 @@ const LESSON_PAGES = new Set(['cards', 'slides', 'alignment', 'study', 'homework
 function navigationHref(id, href) {
   const source = new URLSearchParams(location.search);
   const target = new URL(href, location.origin);
+  const draftId = source.get('draftId') || source.get('returnDraftId');
+  if (id === 'library' && draftId) target.searchParams.set('returnDraftId', draftId);
   if (LESSON_PAGES.has(id) || id === 'ask') {
-    const draftId = source.get('draftId');
-    if (draftId) target.searchParams.set('draftId', draftId);
+    if (draftId) {
+      target.searchParams.set('draftId', draftId);
+      // Browsing another material does not change the lesson we return to.
+      return target.pathname + target.search;
+    }
   }
   if (['library', 'unit', 'ask', 'inspect', 'validation', 'jobs'].includes(id)) {
     for (const key of ['doc', 'page', 'node', 'lesson', 'scope']) {
@@ -100,7 +105,7 @@ export function Sidebar({ active, open, close }) {
   const totalPages = docs.reduce((sum, item) => sum + item.pageCount, 0);
   return <>{open && <button type="button" className="sidebar-scrim" aria-label="关闭导航" onClick={close}/>}<aside className={`sidebar ${open ? 'open' : ''}`}>
     <div className="sidebar-mobile-head"><Logo/><button type="button" onClick={close} aria-label="关闭导航"><X size={18}/></button></div><div className="desktop-logo"><Logo/></div>
-    <div className="workspace-label">当前项目</div><a className="book-card" href="/library/"><div className="book-cover">九上<br/><span>语文</span></div><div><strong>{shortTitle}</strong><small>{docs.length ? `${docs.length} 份材料 · ${totalPages} 页` : '正在读取教材目录'}</small></div><ChevronRight size={16}/></a>
+    <div className="workspace-label">当前项目</div><a className="book-card" href={navigationHref('library', '/library/')}><div className="book-cover">九上<br/><span>语文</span></div><div><strong>{shortTitle}</strong><small>{docs.length ? `${docs.length} 份材料 · ${totalPages} 页` : '正在读取教材目录'}</small></div><ChevronRight size={16}/></a>
     <nav>{PRIMARY_NAV.map(([id, href, Icon, label]) => <a key={id} href={navigationHref(id, href)} aria-current={active === id ? 'page' : undefined} className={active === id ? 'active' : ''}><Icon size={18}/>{label}</a>)}</nav>
     <div className="sidebar-tool-groups">
       <details className="sidebar-tool-group sidebar-more-tools" open={MORE_TOOL_NAV.some(([id]) => id === active)}><summary><span>更多工具</span><ChevronDown/></summary><div>{MORE_TOOL_NAV.map(([id, href, Icon, label]) => <a className={active === id ? 'active' : ''} href={navigationHref(id, href)} aria-current={active === id ? 'page' : undefined} key={id}><Icon/><span>{label}</span></a>)}</div></details>
@@ -130,7 +135,8 @@ export function Layout({ active, children }) {
     return () => { cancelled = true; };
   }, [session?.user?.id, session?.access_token]);
   const aiLabel = aiState === 'ready' ? '个人连接已配置' : aiState === 'needs-key' ? '需配置 AI 连接' : aiState === 'login' ? '需要登录后开始备课' : aiState === 'unavailable' ? 'AI 服务暂时不可用' : '正在检查 AI 服务';
-  const currentDraftId = new URLSearchParams(location.search).get('draftId') || '';
+  const pageParams = new URLSearchParams(location.search);
+  const currentDraftId = pageParams.get('draftId') || (active === 'library' ? pageParams.get('returnDraftId') : '') || '';
   const askHref = currentDraftId ? `/ask/?draftId=${encodeURIComponent(currentDraftId)}` : '/ask/';
   return <div className="app-shell"><a className="skip-link" href="#main-content">跳到主要内容</a><Sidebar active={active} open={open} close={() => setOpen(false)}/><main className="main-area" id="main-content" tabIndex={-1}><header className="topbar"><div className="breadcrumb"><button type="button" className="mobile-menu" aria-label="打开侧栏导航" onClick={() => setOpen(true)}><Menu/></button><span>活教参</span><ChevronRight/><b>{title}</b></div><div className="top-actions"><span className={`mode mode-${aiState}`} title="仅使用当前账号的 DeepSeek 连接；配置存在不代表连接已测试成功"><i/>{aiLabel}</span>{session ? <><a href="/settings/">AI 设置</a><button type="button" className="text-action" onClick={async()=>{await signOut();location.reload();}}>退出</button></> : <a href="/login/">登录</a>}<a href={askHref}><MessageCircle/>{currentDraftId ? '本课问答' : '提问'}</a><a href="/ingest/"><Upload/>导入</a></div></header><div className="content">{['inspect', 'validation'].includes(active) && <MaterialSwitcher active={active}/>} {LESSON_PAGES.has(active) && !currentDraftId ? <LessonPicker title={title} userId={session?.user?.id}/> : children}</div></main></div>;
 }

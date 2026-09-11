@@ -4,8 +4,34 @@ import { fileURLToPath, URL } from 'node:url';
 
 const page = (path) => fileURLToPath(new URL(path, import.meta.url));
 
+// OpenMAIC also injects these rules at runtime. Publish the exact installed
+// package rules as a same-origin stylesheet for pages that disallow inline CSS.
+const openmaicStylesId = 'virtual:openmaic-runtime.css';
+function openmaicStyles() {
+  return {
+    name: 'openmaic-runtime-styles',
+    resolveId(id) { if (id === openmaicStylesId) return `\0${id}`; },
+    async load(id) {
+      if (id !== `\0${openmaicStylesId}`) return;
+      const definitions = [
+        ['@openmaic/renderer', 'SLIDE_RENDERER_STYLES'],
+        ['@openmaic/editor/react', 'EDITOR_REACT_STYLES'],
+        ['@openmaic/editor/ui', 'EDITING_UI_STYLES']
+      ];
+      const rules = await Promise.all(definitions.map(async ([entry, name]) => {
+        const path = new URL('./styles.js', import.meta.resolve(entry));
+        this.addWatchFile(fileURLToPath(path));
+        const module = await import(path.href);
+        if (typeof module[name] !== 'string') throw new Error(`Missing OpenMAIC stylesheet: ${name}`);
+        return module[name];
+      }));
+      return rules.join('\n');
+    }
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), openmaicStyles()],
   server: {
     port: 5173,
     proxy: {

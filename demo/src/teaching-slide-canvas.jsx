@@ -7,6 +7,7 @@ import { Redo2, Undo2 } from 'lucide-react';
 import { teachingSlideDeckV2Html } from '../shared/teaching-slides-v2.js';
 import { listSlideAssets, resolveTeachingSlide, resolveTeachingSlideDeck, textbookPageAsset, uploadSlideAsset } from './slide-assets.js';
 import '@openmaic/renderer/fonts.css';
+import 'virtual:openmaic-runtime.css';
 import 'katex/dist/katex.min.css';
 
 function createElementId() {
