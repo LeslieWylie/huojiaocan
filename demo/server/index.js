@@ -9,7 +9,7 @@ import draftsHandler from '../api/drafts.js';
 import meHandler from '../api/me.js';
 import configHandler from '../api/config.js';
 import assetsHandler from '../api/assets.js';
-import slideAssetsHandler from '../api/slide-assets.js';
+import slideAssetsHandler from '../serverless/slide-assets-api.js';
 import sharesHandler from '../serverless/teaching-share-api.js';
 import authProxy from '../serverless/auth-proxy.js';
 

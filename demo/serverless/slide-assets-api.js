@@ -1,7 +1,7 @@
 import { createAssetHttpHandler } from '@openmaic/storage/server';
-import { requireUser, safeAuthResponse } from '../serverless/auth.js';
-import { json } from '../serverless/shared.js';
-import { createSlideAssetStore } from '../serverless/slide-asset-store.js';
+import { requireUser, safeAuthResponse } from './auth.js';
+import { json } from './shared.js';
+import { createSlideAssetStore } from './slide-asset-store.js';
 
 let route;
 let store;

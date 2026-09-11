@@ -2,6 +2,7 @@ import { allowMethod, json, readJson } from '../serverless/shared.js';
 import { requireUser, safeAuthResponse, supabaseRest } from '../serverless/auth.js';
 import { assetFromDraft, copyDraftForReuse, filterAssets } from '../serverless/asset-model.js';
 import { compareRevision, confirmedDraftContext, requireDraftVersion } from '../serverless/draft-revisions.js';
+import slideAssetsHandler from '../serverless/slide-assets-api.js';
 import teachingShareHandler from '../serverless/teaching-share-api.js';
 import { buildSameLessonComparison, mergeSameLessonComparison, normalizeSameLessonComparison, sameLessonComparisonIsStale } from '../shared/same-lesson-comparison.js';
 import { buildResearchLedger } from '../shared/research-ledger.js';
@@ -53,6 +54,10 @@ async function listDraftAssets(user) {
 }
 
 export default async function handler(req, res) {
+  if (Object.prototype.hasOwnProperty.call(req.query || {}, 'slidePath')) {
+    req.query.path = req.query.slidePath;
+    return slideAssetsHandler(req, res);
+  }
   if (Object.prototype.hasOwnProperty.call(req.query || {}, 'share') || Object.prototype.hasOwnProperty.call(req.query || {}, 'sharePath')) {
     return teachingShareHandler(req, res);
   }

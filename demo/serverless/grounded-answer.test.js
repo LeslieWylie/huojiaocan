@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { boundedConversationHistory, ensureLessonPeriodCoverage, generateGroundedAnswer, focusedEvidenceExcerpt } from './grounded-answer.js';
+import { boundedConversationHistory, ensureLessonPeriodCoverage, generateGroundedAnswer, focusedEvidenceExcerpt, teachingPlanIssues } from './grounded-answer.js';
 
 const evidence = [
   {
@@ -527,4 +527,15 @@ test('enabled teaching methods reach generation and repair without becoming cita
   const citations = result.sections.flatMap(section => section.citations || []);
   assert.ok(citations.length);
   assert.ok(citations.every(c => ['textbook', 'teacher-guide'].includes(c.documentId) && c.pdfPage !== 999));
+});
+
+
+test('a later close reading is not mistaken for foundational reading by words inside instructions', () => {
+  const plan = [
+    {title:'初读诗歌', content:'诵读全诗，梳理感受。'},
+    {title:'逐节品意象，梳理情感递进', content:'每节请一名学生朗读，讨论四个意象的顺序。'},
+    {title:'聚焦末节，品浅浅的张力', content:'承接前一环节，补充背景。最后全班齐读全诗，在大陆在那头处稍作停顿。'}
+  ];
+  assert.deepEqual(teachingPlanIssues({lessonPlan:plan}), []);
+  assert.ok(teachingPlanIssues({lessonPlan:[{title:'品味语言',content:'分析作用'},{title:'初读与疏通文意',content:'借助注释理解'}]}).some(x=>x.includes('教学顺序倒置')));
 });

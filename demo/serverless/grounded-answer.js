@@ -347,12 +347,13 @@ export async function runReActRetrieval({ question, scope, evidence, history, te
 function teachingPhaseRank(value) {
   const text = String(value || '');
   if (/导入|回顾|激趣|预习/u.test(text)) return 10;
-  if (/通读|诵读|朗读|初读|疏通|字词|文意|正音|停顿/u.test(text)) return 20;
+  if (/通读|初读|疏通|字词|文意|正音/u.test(text)) return 20;
+  // Reading can recur after analysis; do not classify every朗读/停顿 as initial reading.
   if (/整体感知|梳理|层次|结构|概括/u.test(text)) return 30;
   if (/品味|赏析|语言|比较|细读|情感|意象/u.test(text)) return 40;
   if (/背景|主旨|探究|归纳|先忧后乐|价值|情怀/u.test(text)) return 50;
   if (/小结|总结|作业|拓展|迁移|收束|评价|检测/u.test(text)) return 60;
-  return 35;
+  return null;
 }
 
 function lessonPlanForReview(value) {
@@ -373,15 +374,17 @@ export function teachingPlanIssues(value, lessonContext = {}) {
   let seenReadingFoundation = false;
   let seenAnalysis = false;
   for (const item of entries) {
-    const label = `${item?.title || ''} ${item?.content || ''}`.trim();
+    const label = String(item?.title || '').trim() || String(item?.content || '').trim().slice(0, 60);
+    // Activity descriptions mention later/earlier steps and quoted teacher prompts.
+    // Classify the activity heading, not incidental words anywhere in the paragraph.
     const rank = teachingPhaseRank(label);
     const period = Number(item?.period) || null;
     const samePeriod = !previous?.period || !period || previous.period === period;
     if (rank === 20 && seenAnalysis && !seenReadingFoundation) issues.push(`教学顺序倒置：“${label || '诵读或疏通环节'}”必须先于依赖文本理解的品味与探究活动。`);
-    if (samePeriod && previous && rank !== 60 && previous.rank !== 60 && rank + 5 < previous.rank) issues.push(`教学顺序倒置：“${label || '后一个环节'}”应安排在“${previous.label || '前一个环节'}”之前。`);
+    if (samePeriod && previous && rank !== null && rank !== 60 && previous.rank !== 60 && rank + 5 < previous.rank) issues.push(`教学顺序倒置：“${label || '后一个环节'}”应安排在“${previous.label || '前一个环节'}”之前。`);
     if (rank === 20) seenReadingFoundation = true;
     if (rank >= 40 && rank < 60) seenAnalysis = true;
-    if (rank !== 60) previous = { rank, label, period };
+    if (rank !== null && rank !== 60) previous = { rank, label, period };
   }
   const periods = Math.max(1, Math.min(4, Number(lessonContext?.periods) || 1));
   const periodMinutes = Math.max(35, Math.min(60, Number(lessonContext?.periodMinutes) || 45));

@@ -24,5 +24,4 @@ Worker 不接受用户指定上游地址，因此不是开放代理。它负责�
 `huojiaocan-agent-runtime` 处理，其余页面、现有 API 和教材 PDF 仍走原 Vercel/Pages 固定源站。
 绑定缺失时 Agent 路径固定返回 `404 agent_runtime_not_enabled`，不会落回 Vercel 同名路径或开放任意上游。
 
-该路由代码尚未发布；必须先完成 `deployment/agent-runtime/README.md` 中的 PostgreSQL、Hyperdrive、Queue、
-测试账号白名单和内部教学执行器前置条件。
+2026-09-11 已核对线上存在该路由和持久 Runtime。PostgreSQL、Hyperdrive、Queue、测试账号白名单与内部教学执行器均沿用现有配置；本次更新未扩大账号白名单。

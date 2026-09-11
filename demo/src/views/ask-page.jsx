@@ -893,6 +893,8 @@ export function AskPage() {
     try {
       const result = await resumePersistentAgentTurn({ request: rootRequest, pending: agentPending, onProgress: progress => setAgentPhase(progress.status) });
       if (getSession()?.user?.id !== owner) return;
+      clearAskInFlight(interrupted);
+      setInterrupted(null);
       if (result.request.status === 'saved') { location.reload(); return; }
       setAgentPending(null); setGeneratedPreview(result.response);
       setError('本轮教材依据不足，原方案已保留。请核对原页后再继续。');

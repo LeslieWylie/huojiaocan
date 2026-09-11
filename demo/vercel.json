@@ -13,7 +13,7 @@
     { "source": "/api/index/:path*", "destination": "/api/index?path=:path*" },
     { "source": "/api/ai/:path*", "destination": "/api/ai?path=:path*" },
     { "source": "/api/drafts/:path*", "destination": "/api/drafts?path=:path*" },
-    { "source": "/api/slide-assets/:path*", "destination": "/api/slide-assets?path=:path*" },
+    { "source": "/api/slide-assets/:path*", "destination": "/api/assets?slidePath=:path*" },
     { "source": "/api/shares", "destination": "/api/assets?share=1" },
     { "source": "/api/shares/:path*", "destination": "/api/assets?sharePath=:path*" },
     { "source": "/api/assets/:path*", "destination": "/api/assets?path=:path*" }
