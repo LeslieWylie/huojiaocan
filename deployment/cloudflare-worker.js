@@ -156,6 +156,12 @@ async function handleRequest(request, env = {}) {
   // JavaScript bundle until a cache-busting query is added manually.  Assets
   // remain cacheable by their content hash; only the HTML shell is uncached.
   const contentType = responseHeaders.get('Content-Type') || '';
+  if (contentType.toLowerCase().includes('text/html') && ['/slides', '/slides/', '/slides/index.html'].includes(incoming.pathname)) {
+    // OpenMAIC stores rich-text formatting in style attributes, including the
+    // HTML parsed by editable PPTX export. Keep this compatibility allowance
+    // on the lesson slide document only; stylesheets remain same-origin.
+    responseHeaders.set('Content-Security-Policy', `${SECURITY_HEADERS['Content-Security-Policy']}; style-src-elem 'self'; style-src-attr 'unsafe-inline'`);
+  }
   if (contentType.toLowerCase().includes('text/html')) {
     responseHeaders.set('Cache-Control', 'no-store, max-age=0');
     responseHeaders.set('CDN-Cache-Control', 'no-store');
