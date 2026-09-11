@@ -65,7 +65,8 @@ function boundedHistory(value = []) {
 export async function executeAgentTeaching(payload, env = process.env) {
   const input = requestInput(payload);
   if (!(input.draftVersion > 0)) throw codeError('draft_version_required');
-  await ownedDraft(input.ownerId, input.draftId, env);
+  const draft = await ownedDraft(input.ownerId, input.draftId, env);
+  if (Number(draft.version) !== input.draftVersion) throw codeError('edit_conflict', 409);
   const response = await executeOwnedAsk({
     user: { id: input.ownerId, email: '', token: '' },
     env,
@@ -92,9 +93,13 @@ export async function saveAgentTeaching(payload, env = process.env) {
   const input = requestInput(payload);
   if (!(input.draftVersion > 0)) throw codeError('draft_version_required');
   const draft = await ownedDraft(input.ownerId, input.draftId, env);
+  if (draft.answer?.agentSaveReceipt?.requestId === input.requestId) {
+    return { draftId: draft.id, draftVersion: draft.version, reused: true };
+  }
   if (Number(draft.version) !== input.draftVersion) throw codeError('edit_conflict', 409);
   const rawResponse = payload.result?.response;
   if (!rawResponse || typeof rawResponse !== 'object') throw codeError('agent_result_required');
+  if (rawResponse.evidenceSufficient === false || rawResponse.generation === 'blocked-no-evidence') throw codeError('agent_evidence_insufficient', 422);
 
   const merged = mergeFollowUpCitations(draft.citations, rawResponse);
   const response = merged.response;
@@ -121,6 +126,7 @@ export async function saveAgentTeaching(payload, env = process.env) {
     sourceCoverage: response.sourceCoverage || response.answer?.sourceCoverage,
     conversationHistory,
     conversationTurns,
+    agentSaveReceipt: { requestId: input.requestId, baseVersion: input.draftVersion },
     evidenceShelf: Array.isArray(payload.materialSnapshot) ? payload.materialSnapshot : (priorAnswer.evidenceShelf || [])
   };
   const nextVersion = Number(draft.version) + 1;

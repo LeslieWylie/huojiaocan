@@ -179,3 +179,18 @@ test('已捕获的执行错误形成失败终态，不触发 Queue 重投或重�
   assert.equal((await h.runtime.requests.getOwned(posted.request.id, 'teacher-a')).status, 'failed');
   assert.equal((await h.runtime.sessions.getSession(session.id)).status, 'failed');
 });
+
+test('依据不足的结果可恢复但不覆盖原方案', async t => {
+  let saves = 0;
+  const h = await harness({
+    execute: async () => ({ response: { evidenceSufficient: false, generation: 'blocked-no-evidence' } }),
+    save: async () => { saves++; }
+  });
+  t.after(h.close);
+  const { session, posted } = await sessionWithRequest(h.runtime);
+  const outcome = await h.runtime.processSession(session.id, 'worker-a');
+  assert.equal(outcome.status, 'needs_evidence');
+  assert.equal(saves, 0);
+  const stored = await h.runtime.requests.getOwned(posted.request.id, 'teacher-a');
+  assert.equal(stored.result.response.evidenceSufficient, false);
+});

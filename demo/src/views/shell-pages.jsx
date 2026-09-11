@@ -1,5 +1,5 @@
 // 应用壳：侧栏导航/布局/教学任务/引导页（从 App.jsx 迁出）
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Activity, Archive, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardCheck, FileSearch, FileText, GitCompareArrows, History, Layers3, Library, Menu, MessageCircle, Microscope, Network, PanelTop, Play, RefreshCw, Route, ShieldCheck, Target, Upload, X } from 'lucide-react';
 import { Badge, Logo } from '../ui-kit.jsx';
 import { ROUTES, normalizeCatalogItem, request, rootRequest, statusLabel, useAuthSession } from '../app-core.js';
@@ -50,6 +50,47 @@ export function draftRecoverySnapshot(draft, cards = draft?.cards) {
   };
 }
 
+const LESSON_PAGES = new Set(['cards', 'slides', 'alignment', 'study', 'homework', 'rehearsal', 'pulse', 'worksheet', 'learning', 'deliberation', 'reflection']);
+
+function navigationHref(id, href) {
+  const source = new URLSearchParams(location.search);
+  const target = new URL(href, location.origin);
+  if (LESSON_PAGES.has(id) || id === 'ask') {
+    const draftId = source.get('draftId');
+    if (draftId) target.searchParams.set('draftId', draftId);
+  }
+  if (['library', 'unit', 'ask', 'inspect', 'validation', 'jobs'].includes(id)) {
+    for (const key of ['doc', 'page', 'node', 'lesson', 'scope']) {
+      if (!target.searchParams.has(key) && source.get(key)) target.searchParams.set(key, source.get(key));
+    }
+  }
+  return target.pathname + target.search;
+}
+
+function LessonPicker({ title, userId }) {
+  const [drafts, setDrafts] = useState([]);
+  const [state, setState] = useState('loading');
+  const [query, setQuery] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setDrafts([]); setState('loading');
+    if (!userId) { setState('login'); return; }
+    rootRequest('/api/drafts').then(data => {
+      if (active) { setDrafts(data.drafts || []); setState('ready'); }
+    }).catch(() => { if (active) setState('error'); });
+    return () => { active = false; };
+  }, [userId, attempt]);
+  const matching = drafts.filter(draft => `${draft.title || ''} ${draft.question || ''}`.includes(query.trim()));
+  return <section className="panel lesson-picker"><header><span>{title}</span><h1>这次继续哪一课？</h1><p>选择已有方案，沿用本课教材依据和教师修改。</p></header>
+    {state === 'login' ? <a className="primary" href={`/login/?next=${encodeURIComponent(location.pathname + location.search)}`}>登录查看我的方案</a> : state === 'loading' ? <p role="status">正在读取你的备课方案…</p> : state === 'error' ? <div role="alert"><p>方案暂时无法读取，请重试。</p><button type="button" onClick={() => setAttempt(value => value + 1)}>重新读取</button></div> : <>
+      {drafts.length > 0 && <label className="lesson-picker-search"><span>查找课程</span><input value={query} onChange={event => setQuery(event.target.value)} placeholder="输入课题或备课问题"/></label>}
+      <div className="lesson-picker-list">{matching.map(draft => <a key={draft.id} href={`${location.pathname}?draftId=${encodeURIComponent(draft.id)}`}><span><b>{draft.title || '未命名方案'}</b><small>{draft.question || '继续完善本课'}{draft.updated_at ? ` · ${new Date(draft.updated_at).toLocaleDateString('zh-CN')}` : ''}</small></span><ArrowRight/></a>)}</div>
+      {!matching.length && <p>{drafts.length ? '没有匹配的课程，换个关键词试试。' : '还没有备课方案。从教材库选择课文，保存第一份方案后就能继续。'}</p>}
+    </>}
+    <footer><a href="/library/"><Library/>选择教材，开始新课</a></footer></section>;
+}
+
 export function Sidebar({ active, open, close }) {
   const [docs, setDocs] = useState([]);
   useEffect(() => { request('/documents').then(data => setDocs((data.documents || []).map(normalizeCatalogItem).filter(Boolean))).catch(() => {}); }, []);
@@ -60,13 +101,21 @@ export function Sidebar({ active, open, close }) {
   return <>{open && <button type="button" className="sidebar-scrim" aria-label="关闭导航" onClick={close}/>}<aside className={`sidebar ${open ? 'open' : ''}`}>
     <div className="sidebar-mobile-head"><Logo/><button type="button" onClick={close} aria-label="关闭导航"><X size={18}/></button></div><div className="desktop-logo"><Logo/></div>
     <div className="workspace-label">当前项目</div><a className="book-card" href="/library/"><div className="book-cover">九上<br/><span>语文</span></div><div><strong>{shortTitle}</strong><small>{docs.length ? `${docs.length} 份材料 · ${totalPages} 页` : '正在读取教材目录'}</small></div><ChevronRight size={16}/></a>
-    <nav>{PRIMARY_NAV.map(([id, href, Icon, label]) => <a key={id} href={href} className={active === id ? 'active' : ''}><Icon size={18}/>{label}</a>)}</nav>
+    <nav>{PRIMARY_NAV.map(([id, href, Icon, label]) => <a key={id} href={navigationHref(id, href)} aria-current={active === id ? 'page' : undefined} className={active === id ? 'active' : ''}><Icon size={18}/>{label}</a>)}</nav>
     <div className="sidebar-tool-groups">
-      <details className="sidebar-tool-group sidebar-more-tools" open={MORE_TOOL_NAV.some(([id]) => id === active)}><summary><span>更多工具</span><ChevronDown/></summary><div>{MORE_TOOL_NAV.map(([id, href, Icon, label]) => <a className={active === id ? 'active' : ''} href={href} key={id}><Icon/><span>{label}</span></a>)}</div></details>
+      <details className="sidebar-tool-group sidebar-more-tools" open={MORE_TOOL_NAV.some(([id]) => id === active)}><summary><span>更多工具</span><ChevronDown/></summary><div>{MORE_TOOL_NAV.map(([id, href, Icon, label]) => <a className={active === id ? 'active' : ''} href={navigationHref(id, href)} aria-current={active === id ? 'page' : undefined} key={id}><Icon/><span>{label}</span></a>)}</div></details>
     </div>
     <div className="sidebar-foot"><ShieldCheck size={15}/><span>原始教材是唯一可核验的依据</span></div>
   </aside></>;
 }
+function MaterialSwitcher({ active }) {
+  const [docs, setDocs] = useState([]);
+  useEffect(() => { request('/documents').then(data => setDocs((data.documents || []).map(normalizeCatalogItem).filter(Boolean))).catch(() => {}); }, []);
+  const params = new URLSearchParams(location.search);
+  const current = params.get('documentId') || params.get('doc') || 'teacher-guide';
+  return <div className="material-switcher"><label><span>当前材料</span><select aria-label="选择要检查的材料" value={current} onChange={event => { location.href = `${location.pathname}?doc=${encodeURIComponent(event.target.value)}&page=1`; }}>{!docs.length && <option value={current}>正在读取材料…</option>}{docs.map(doc => <option value={doc.id} key={doc.id}>{doc.title}</option>)}</select></label><a href={`${active === 'inspect' ? '/validation/' : '/inspect/'}?doc=${encodeURIComponent(current)}&page=${encodeURIComponent(params.get('page') || '1')}`}>{active === 'inspect' ? '查看质量检查' : '打开页面校正'}<ArrowRight/></a></div>;
+}
+
 export function Layout({ active, children }) {
   const [open, setOpen] = useState(false);
   const title = ROUTES.find(item => item[0] === active)?.[3] || '备课首页';
@@ -83,7 +132,7 @@ export function Layout({ active, children }) {
   const aiLabel = aiState === 'ready' ? '个人连接已配置' : aiState === 'needs-key' ? '需配置 AI 连接' : aiState === 'login' ? '需要登录后开始备课' : aiState === 'unavailable' ? 'AI 服务暂时不可用' : '正在检查 AI 服务';
   const currentDraftId = new URLSearchParams(location.search).get('draftId') || '';
   const askHref = currentDraftId ? `/ask/?draftId=${encodeURIComponent(currentDraftId)}` : '/ask/';
-  return <div className="app-shell"><a className="skip-link" href="#main-content">跳到主要内容</a><Sidebar active={active} open={open} close={() => setOpen(false)}/><main className="main-area" id="main-content" tabIndex={-1}><header className="topbar"><div className="breadcrumb"><button type="button" className="mobile-menu" aria-label="打开侧栏导航" onClick={() => setOpen(true)}><Menu/></button><span>活教参</span><ChevronRight/><b>{title}</b></div><div className="top-actions"><span className={`mode mode-${aiState}`} title="仅使用当前账号的 DeepSeek 连接；配置存在不代表连接已测试成功"><i/>{aiLabel}</span>{session ? <><a href="/settings/">AI 设置</a><button type="button" className="text-action" onClick={async()=>{await signOut();location.reload();}}>退出</button></> : <a href="/login/">登录</a>}<a href={askHref}><MessageCircle/>{currentDraftId ? '本课问答' : '提问'}</a><a href="/ingest/"><Upload/>导入</a></div></header><div className="content">{children}</div></main></div>;
+  return <div className="app-shell"><a className="skip-link" href="#main-content">跳到主要内容</a><Sidebar active={active} open={open} close={() => setOpen(false)}/><main className="main-area" id="main-content" tabIndex={-1}><header className="topbar"><div className="breadcrumb"><button type="button" className="mobile-menu" aria-label="打开侧栏导航" onClick={() => setOpen(true)}><Menu/></button><span>活教参</span><ChevronRight/><b>{title}</b></div><div className="top-actions"><span className={`mode mode-${aiState}`} title="仅使用当前账号的 DeepSeek 连接；配置存在不代表连接已测试成功"><i/>{aiLabel}</span>{session ? <><a href="/settings/">AI 设置</a><button type="button" className="text-action" onClick={async()=>{await signOut();location.reload();}}>退出</button></> : <a href="/login/">登录</a>}<a href={askHref}><MessageCircle/>{currentDraftId ? '本课问答' : '提问'}</a><a href="/ingest/"><Upload/>导入</a></div></header><div className="content">{['inspect', 'validation'].includes(active) && <MaterialSwitcher active={active}/>} {LESSON_PAGES.has(active) && !currentDraftId ? <LessonPicker title={title} userId={session?.user?.id}/> : children}</div></main></div>;
 }
 
 export const GUIDANCE_STEPS = [
@@ -94,13 +143,27 @@ export const GUIDANCE_STEPS = [
   ['连续追问', '围绕同一篇目继续追问，系统会保留本场对话、教材范围和已经核对过的页面。'],
   ['生成课堂材料', '把已经核对的内容整理成方案、三卡和渐进式板书，教师可以编辑、保存、锁定。']
 ];
+const GUIDANCE_CHAPTERS = [
+  { title: '选定篇目', action: '打开教材库', href: '/library/', cue: '在目录中找到课文，打开对应教材页。' },
+  { title: '核对课程标准', action: '打开课标对齐', href: '/alignment/', cue: '先选本课方案，再核对相关学段要求。' },
+  { title: '读教师用书', action: '查看教师用书', href: '/library/?doc=teacher-guide', cue: '查找教学目标、重点难点和活动建议。' },
+  { title: '回到学生教材', action: '核对课文原页', href: '/library/?doc=textbook', cue: '核对原文、页码和学生需要完成的任务。' },
+  { title: '连续追问', action: '进入备课问答', href: '/ask/', cue: '在同一方案中追问，修改后保存。' },
+  { title: '生成课堂材料', action: '打开一课三卡', href: '/cards/', cue: '确认方案后生成三卡，编辑并保存。' }
+];
 export function GuidancePage() {
+  const video = useRef(null);
+  const [chapter, setChapter] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const seek = index => {
+    setChapter(index);
+    if (video.current) { video.current.currentTime = index * 10; video.current.play().catch(() => {}); }
+  };
   return <div className="view-stack guidance-page">
-    <section className="hero compact-hero guidance-hero"><div><Badge tone="green"><Play/> 使用引导</Badge><h1>从选篇目开始，<br/><em>一步步把课备到课堂上</em></h1><p>这不是一次性生成教案。活教参会先定位篇目，再查看教师用书、核对学生教材，最后把已经确认的依据整理成可直接使用的课堂材料。</p><div className="hero-actions"><a className="primary" href="/library/"><Library/>先选一篇课文</a><a href="/ask/"><MessageCircle/>直接开始提问</a></div></div><div className="guidance-hero-mark"><span>01</span><b>选篇目</b><i/><span>02</span><b>看教师用书</b><i/><span>03</span><b>回原文</b></div></section>
-    <section className="panel guidance-video-panel"><div className="guidance-video-intro"><Badge tone="gold">三分钟看懂</Badge><h2>一条备课路径，五个动作完成</h2><p>建议第一次使用时完整看一遍。以后从教材库进入某篇课文，就可以沿着同样的顺序继续。</p><div className="guidance-video-note"><CheckCircle2/><span><b>视频中的每一步都能在页面中直接完成</b><small>目录定位、教材原页核验、连续追问和课堂材料会沿用同一篇目。</small></span></div></div><div className="guidance-video-frame"><video controls playsInline preload="metadata" poster="/guidance/活教参备课引导封面.svg"><source src="/guidance/活教参备课引导.mp4" type="video/mp4"/><track kind="captions" src="/guidance/活教参备课引导.vtt" srcLang="zh-CN" label="中文字幕" default/>当前浏览器无法播放视频。</video><p>如果视频无法播放，可以直接查看下方的文字步骤。</p></div></section>
-    <section className="guidance-steps panel"><header><div><Badge tone="blue">文字版路径</Badge><h2>每一步应该看什么、做什么</h2></div><span>从材料定位到课堂使用</span></header><div className="guidance-step-grid">{GUIDANCE_STEPS.map(([title, body], index) => <article key={title}><div className="guidance-step-number">0{index + 1}</div><div><h3>{title}</h3><p>{body}</p>{index === 0 && <a href="/library/">打开教材库 <ArrowRight/></a>}{index === 3 && <a href="/ask/">进入备课问答 <ArrowRight/></a>}{index === 4 && <a href="/ask/">继续追问并保存方案 <ArrowRight/></a>}{index === 5 && <a href="/ask/">生成本课课堂材料 <ArrowRight/></a>}</div></article>)}</div></section>
-    <details className="panel guidance-checklist"><summary><span><ClipboardCheck/>第一次使用，可以按这张清单走</span><ChevronDown/></summary><div><p>选好篇目后，不必重复上传或重复构建；问答、引用、三卡和板书都读取已经准备好的教材。</p><ul>{['确认课文起始页和教师用书相关页', '先看教师用书的教学处理，再回到学生教材核对原文', '追问时沿用同一场对话，不要另开一个问题丢失上下文', '生成后先编辑，再保存和锁定需要带进课堂的内容'].map(item => <li key={item}><Check/>{item}</li>)}</ul></div></details>
-    </div>;
+    <header className="guidance-heading"><span>使用引导 · 1 分钟</span><h1>跟着一篇课文，走完一次备课</h1><p>六个步骤，可按章节观看，也可以直接进入页面操作。</p><a className="primary" href="/library/">选择一篇课文 <ArrowRight/></a></header>
+    <section className="panel guidance-player"><div className="guidance-screen"><video ref={video} controls playsInline preload="metadata" poster="/guidance/活教参备课引导封面.jpg" onTimeUpdate={event => setChapter(Math.min(5, Math.floor(event.currentTarget.currentTime / 10)))} onError={() => setFailed(true)}><source src="/guidance/活教参备课引导.mp4?v=2" type="video/mp4"/><track kind="captions" src="/guidance/活教参备课引导.vtt?v=2" srcLang="zh-CN" label="中文字幕"/>当前浏览器无法播放视频。</video>{failed && <p role="alert">视频暂时无法播放，可以按右侧章节的文字说明继续操作。</p>}<p>页面操作演示 · 示例账号与方案用于说明流程，教学内容请以实际教材为准。</p></div><aside className="guidance-chapters" aria-label="视频章节"><h2>跟着做</h2>{GUIDANCE_CHAPTERS.map((item, index) => <button key={item.title} type="button" className={chapter === index ? 'active' : ''} aria-pressed={chapter === index} onClick={() => seek(index)}><span>0{index + 1}</span><b>{item.title}</b><small>0:{String(index * 10).padStart(2, '0')}</small></button>)}<div className="guidance-next"><p>{GUIDANCE_CHAPTERS[chapter].cue}</p><a href={navigationHref(['library','alignment','library','library','ask','cards'][chapter], GUIDANCE_CHAPTERS[chapter].href)}>{GUIDANCE_CHAPTERS[chapter].action}<ArrowRight/></a></div></aside></section>
+    <section className="guidance-steps panel"><header><div><h2>每一步完成后，留下什么</h2></div></header><div className="guidance-step-grid">{GUIDANCE_STEPS.map(([title, body], index) => <article key={title}><div className="guidance-step-number">0{index + 1}</div><div><h3>{title}</h3><p>{body}</p><a href={GUIDANCE_CHAPTERS[index].href}>{GUIDANCE_CHAPTERS[index].action}<ArrowRight/></a></div></article>)}</div></section>
+  </div>;
 }
 export const TASK_PHASE_META = {
   continue_preparation: { label: '备课', icon: MessageCircle, tone: 'prepare' },

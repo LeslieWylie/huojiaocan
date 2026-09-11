@@ -23,7 +23,7 @@ import { teachingDeliberationIsStale } from '../../shared/teaching-deliberation.
 import { normalizePreviousLessonCarryover } from '../../shared/classroom-carryover.js';
 import { agentPresentation } from '../agent-presentation.js';
 import { mergeFollowUpCitations } from '../citation-merge.js';
-import { persistentAgentCapabilities, runPersistentAgentTurn } from '../agent-runtime-client.js';
+import { persistentAgentCapabilities, runPersistentAgentTurn, resumePersistentAgentTurn, readPendingAgentTurn, clearPendingAgentTurn } from '../agent-runtime-client.js';
 
 export function CitationChips({ citations, refs, returnTo = 'ask', limit = 4 }) {
   const items = citationByRef(citations, refs);
@@ -63,10 +63,10 @@ export function PlanAnswer({ answer, citations, cardSuggestions, draftId, return
   return <div className="structured-answer chat-answer"><section className="chat-reply"><Badge tone="green">先回答你的问题</Badge><p>{answer.reply || answer.summary}</p><CitationChips citations={citations} refs={answer.evidenceRefs} returnTo={returnTo}/></section><details className="workflow-collapsed"><summary>查看本课三步路径</summary><WorkflowStrip lessonTitle={answer.lesson?.title}/></details><div className="answer-page-tabs" role="tablist" aria-label="备课方案分段阅读"><button type="button" className={readPage === 1 ? 'active' : ''} onClick={() => setReadPage(1)} role="tab" aria-selected={readPage === 1}><b>01</b><span>本轮建议</span><small>先看主张与教材依据</small></button><button type="button" className={readPage === 2 ? 'active' : ''} onClick={() => setReadPage(2)} role="tab" aria-selected={readPage === 2}><b>02</b><span>课堂方案</span><small>需要时再展开细节</small></button></div>{readPage === 1 ? <section className="answer-page answer-page-one"><section className="answer-summary"><Badge tone="green">针对当前问题的建议</Badge><h2>{answer.summary}</h2>{answer.lessonPosition && <p className="answer-position">{answer.lessonPosition}</p>}<CitationChips citations={citations} refs={answer.evidenceRefs} returnTo={returnTo}/></section>{materialBasis}{objectives}<div className="answer-page-next"><span>主张和依据确认后</span><b>继续查看课堂怎样实施</b><button type="button" onClick={() => setReadPage(2)}>查看课堂方案 <ArrowRight/></button></div></section> : <section className="answer-page answer-page-two">{execution}<div className="answer-page-prev"><button type="button" onClick={() => setReadPage(1)}><ArrowRight/>返回本轮建议</button><span>第 2 部分 / 2</span></div></section>}</div>;
 }
 export function ContextSelect({ label, value, onChange, options, hint }) {
-  return <label className="context-control"><span className="context-control-label">{label}</span><span className="context-select"><select value={value} onChange={onChange}>{options.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}</select><ChevronDown size={14}/></span>{hint && <small>{hint}</small>}</label>;
+  return <label className="context-control"><span className="context-control-label">{label}</span><span className="context-select"><select aria-label={label} value={value} onChange={onChange}>{options.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}</select><ChevronDown size={14}/></span>{hint && <small>{hint}</small>}</label>;
 }
 export function ContextText({ label, value, onChange, hint, placeholder }) {
-  return <label className="context-control context-text"><span className="context-control-label">{label}</span><span className="context-select"><input value={value} onChange={onChange} maxLength="40" placeholder={placeholder}/></span>{hint && <small>{hint}</small>}</label>;
+  return <label className="context-control context-text"><span className="context-control-label">{label}</span><span className="context-select"><input aria-label={label} value={value} onChange={onChange} maxLength="40" placeholder={placeholder}/></span>{hint && <small>{hint}</small>}</label>;
 }
 export function AgentReviewNote({ response }) {
   const presentation = agentPresentation(response);
@@ -76,7 +76,7 @@ export function AgentReviewNote({ response }) {
     <details><summary>查看本轮处理记录</summary>{presentation.notices.map(notice => <p key={notice}>{notice}</p>)}<ol>{presentation.steps.map(step => <li key={step.stage} data-status={step.status}><span>{step.status === 'completed' ? <CheckCircle2 size={17}/> : step.status === 'needs_attention' ? <CircleAlert size={17}/> : <History size={17}/>}<b>{step.label}</b></span><small>{step.statusLabel}</small></li>)}</ol><p className="agent-work-footnote">记录来自本轮服务返回，不代表教学内容已由教师审核。</p></details>
   </section>;
 }
-export function AgentWorkingState({ lessonTitle, question }) {
+export function AgentWorkingState({ lessonTitle, question, phase }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const started = Date.now();
@@ -87,17 +87,17 @@ export function AgentWorkingState({ lessonTitle, question }) {
     <header><Sparkles size={22}/><div><b>正在处理这一轮问题</b><p>{lessonTitle ? `当前篇目：${lessonTitle}` : '围绕已选择的教材与本轮要求整理回答'}</p></div><time aria-label={`已等待 ${elapsed} 秒`}>{elapsed} 秒</time></header>
     <p className="agent-current-question"><b>本轮问题：</b>{question}</p>
     <p role="status">{elapsed >= 45 ? '这次等待较久。请求仍在处理中，请勿重复发送。' : '请稍候，回答返回后会显示教材依据与可用的处理记录。'}</p>
-    <small>当前不显示逐步进度；你可以继续阅读上方历史回答。</small>
+    <small>{({ queued: '已排队，等待开始', retrieving: '正在核对教材依据', composing: '正在整理课堂方案', checking: '正在检查引用和结构', ready_to_save: '方案已生成，正在保存', reconnecting: '连接暂时中断，正在接回原任务' })[phase] || '你可以继续阅读上方历史回答。'}</small>
   </section>;
 }
-export function ConversationTurn({ turn, draftId, onQuickAsk, onSaveEvidence }) {
+export function ConversationTurn({ turn, draftId, onQuickAsk, onSaveEvidence, pending = false }) {
   const response = turn.response;
   const blocked = response?.generation === 'blocked-no-evidence' || response?.evidenceSufficient === false;
   if (!response) return null;
   const cardsDraftId = draftId || response.draftId || '';
   const cardsHref = cardsDraftId ? `/cards/?draftId=${encodeURIComponent(cardsDraftId)}` : '';
   const askReturnTo = cardsDraftId ? `/ask/?draftId=${encodeURIComponent(cardsDraftId)}` : 'ask';
-  return <article className="conversation-turn"><div className="turn-question"><small>你的问题</small><p>{turn.question}</p>{turn.operationLabel && <span className="turn-operation">本轮调整：{turn.operationLabel.replace(/请保持当前篇目与核心问题，/u, '').replace(/。$/u, '')}</span>}{response.conversation?.historyUsed && <span className="turn-context-used"><CheckCircle2 size={13}/>已沿用本场对话上下文</span>}</div>{response.retrievalMode === 'stable_snapshot' && <div className="snapshot-banner"><CheckCircle2/><div><b>{UI_COPY.recovery.snapshotBanner}</b><small>{UI_COPY.recovery.snapshotBody}{response.fallbackAt ? ` 快照时间：${new Date(response.fallbackAt).toLocaleString()}` : ''}</small></div></div>}{blocked ? <div className="answer-blocked compact-blocked"><div className="answer-blocked-head"><CircleAlert/><div><Badge tone="orange">依据不足，已停止生成</Badge><h2>{UI_COPY.ask.blockedTitle}</h2><p>{response.agentRun?.execution?.retrieval?.sourceReadRequired ? '本轮尚未读到可用于核对的教材原页，未生成结论。请先打开教材核对篇目与原文。' : UI_COPY.ask.blockedBody}</p><a href={`/library/?return=${encodeURIComponent(askReturnTo)}`}>核对当前教材</a></div></div></div> : <><AgentReviewNote response={response}/>{Array.isArray(response.teachingPlanIssues) && response.teachingPlanIssues.length > 0 && <div className="agent-teaching-warning"><CircleAlert/><div><b>当前流程仍需教师确认</b><ul>{response.teachingPlanIssues.slice(0, 3).map(item => <li key={item}>{item}</li>)}</ul></div></div>}<div className="understanding-card"><small>问题理解</small><p>{response.understanding || response.question}</p></div><RouteTrace route={response.route}/><PlanAnswer answer={response.answer} citations={response.citations || []} cardSuggestions={response.cardSuggestionItems || response.cardSuggestions || response.threeCardSuggestions} draftId={cardsDraftId} returnTo={askReturnTo}/><div className="turn-followups"><button type="button" onClick={() => onQuickAsk({ prompt: '请优先展开教师用书中的教学建议，并保留当前篇目。' })}>展开教师用书依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请只呈现最直接的原始教材依据，并保留当前篇目。' })}>只看原始依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请调整为两课时课堂节奏。', operation: { type: 'change_periods', periods: 2 }, lessonContextPatch: { periods: 2 } })}>换成两课时</button>{cardsHref ? <a className="turn-followup-primary" href={cardsHref}>查看并定稿方案 <ArrowRight size={14}/></a> : <button type="button" onClick={() => onQuickAsk({ prompt: '请先保存当前备课方案，再进入教师定稿。' })}>保存方案后定稿</button>}</div><div className="turn-evidence-actions"><button type="button" onClick={() => onSaveEvidence?.(response.citations || [])}><Plus size={14}/>加入本课依据夹</button><small>把本轮已核验页面收好，之后可从右侧直接回看。</small></div><details className="raw-evidence"><summary>查看原文片段与页码</summary><div>{(response.citations || []).slice(0, 6).map(item => { const href = citationLink(item, askReturnTo); return href ? <a href={href} key={item.id}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}</small><p>{citationText(item)}</p></a> : <span className="citation-unavailable" key={item.id || `${item.documentId}-${item.pdfPage}`}>该依据的教材页码待确认</span>; })}</div></details></>}</article>;
+  return <article className="conversation-turn"><div className="turn-question"><small>你的问题</small><p>{turn.question}</p>{turn.operationLabel && <span className="turn-operation">本轮调整：{turn.operationLabel.replace(/请保持当前篇目与核心问题，/u, '').replace(/。$/u, '')}</span>}{response.conversation?.historyUsed && <span className="turn-context-used"><CheckCircle2 size={13}/>已沿用本场对话上下文</span>}</div>{response.retrievalMode === 'stable_snapshot' && <div className="snapshot-banner"><CheckCircle2/><div><b>{UI_COPY.recovery.snapshotBanner}</b><small>{UI_COPY.recovery.snapshotBody}{response.fallbackAt ? ` 快照时间：${new Date(response.fallbackAt).toLocaleString()}` : ''}</small></div></div>}{blocked ? <div className="answer-blocked compact-blocked"><div className="answer-blocked-head"><CircleAlert/><div><Badge tone="orange">依据不足，已停止生成</Badge><h2>{UI_COPY.ask.blockedTitle}</h2><p>{response.agentRun?.execution?.retrieval?.sourceReadRequired ? '本轮尚未读到可用于核对的教材原页，未生成结论。请先打开教材核对篇目与原文。' : UI_COPY.ask.blockedBody}</p><a href={`/library/?return=${encodeURIComponent(askReturnTo)}`}>核对当前教材</a></div></div></div> : <><AgentReviewNote response={response}/>{Array.isArray(response.teachingPlanIssues) && response.teachingPlanIssues.length > 0 && <div className="agent-teaching-warning"><CircleAlert/><div><b>当前流程仍需教师确认</b><ul>{response.teachingPlanIssues.slice(0, 3).map(item => <li key={item}>{item}</li>)}</ul></div></div>}<div className="understanding-card"><small>问题理解</small><p>{response.understanding || response.question}</p></div><RouteTrace route={response.route}/><PlanAnswer answer={response.answer} citations={response.citations || []} cardSuggestions={response.cardSuggestionItems || response.cardSuggestions || response.threeCardSuggestions} draftId={cardsDraftId} returnTo={askReturnTo}/><div className="turn-followups"><button type="button" onClick={() => onQuickAsk({ prompt: '请优先展开教师用书中的教学建议，并保留当前篇目。' })}>展开教师用书依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请只呈现最直接的原始教材依据，并保留当前篇目。' })}>只看原始依据</button><button type="button" onClick={() => onQuickAsk({ prompt: '请调整为两课时课堂节奏。', operation: { type: 'change_periods', periods: 2 }, lessonContextPatch: { periods: 2 } })}>换成两课时</button>{pending ? <span className="turn-pending-save">新方案尚未保存，定稿页仍是上一版</span> : cardsHref ? <a className="turn-followup-primary" href={cardsHref}>查看并定稿方案 <ArrowRight size={14}/></a> : <button type="button" onClick={() => onQuickAsk({ prompt: '请先保存当前备课方案，再进入教师定稿。' })}>保存方案后定稿</button>}</div><div className="turn-evidence-actions"><button type="button" onClick={() => onSaveEvidence?.(response.citations || [])}><Plus size={14}/>加入本课依据夹</button><small>把本轮已核验页面收好，之后可从右侧直接回看。</small></div><details className="raw-evidence"><summary>查看原文片段与页码</summary><div>{(response.citations || []).slice(0, 6).map(item => { const href = citationLink(item, askReturnTo); return href ? <a href={href} key={item.id}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}</small><p>{citationText(item)}</p></a> : <span className="citation-unavailable" key={item.id || `${item.documentId}-${item.pdfPage}`}>该依据的教材页码待确认</span>; })}</div></details></>}</article>;
 }
 export function EvidenceShelf({ items, onRemove, onClear, returnTo = 'ask' }) {
   return <section className="evidence-shelf"><header><div><b>本课依据夹</b><small>{items.length ? `${items.length} 个已核验页面` : '把重要页面收在这里'}</small></div>{items.length ? <button type="button" onClick={onClear}>清空</button> : null}</header>{items.length ? <div className="evidence-shelf-list">{items.map(item => { const href = citationLink(item, returnTo); return <div className="evidence-shelf-item" key={`${item.documentId}:${item.pdfPage}`}>{href ? <a href={href}><b>{docName(item.documentId)} · 第{item.pdfPage}页</b><small>{item.sectionPath?.join(' › ') || '原始页面'}{item.printedPage ? ` · 书页 ${item.printedPage}` : ''}</small></a> : <span className="citation-unavailable"><b>教材页码待确认</b><small>这条依据暂时不能打开原页</small></span>}<button type="button" aria-label="移除依据" onClick={() => onRemove(item)}><X size={13}/></button></div>; })}</div> : <p>在回答下方点击“加入本课依据夹”，把需要反复核对的教师用书和教材页面集中起来。</p>}</section>;
@@ -283,6 +283,11 @@ export function AskPage() {
   const [gatewayAvailable, setGatewayAvailable] = useState(false);
   const [aiReady, setAiReady] = useState(false);
   const [agentRuntimeEnabled, setAgentRuntimeEnabled] = useState(false);
+  const [agentPending, setAgentPending] = useState(() => readPendingAgentTurn(initialUser, requestedDraftId));
+  const [agentPhase, setAgentPhase] = useState('');
+  const [agentRecoveryBusy, setAgentRecoveryBusy] = useState(false);
+  const [generatedPreview, setGeneratedPreview] = useState(null);
+  const agentRecoveryFlight = useRef(false);
   const [lessonContext, setLessonContext] = useState(activeAuthRecovery?.lessonContext || (canResumeLocal && localConversation?.lessonContext) || { periods: 1, className: requestedClassName, classLevel: '普通', teachingGoal: '理解文本', teachingMode: '探究', ...(initialUnitRef ? { unitRef: initialUnitRef } : {}) });
   const [lessonRef, setLessonRef] = useState(initialLessonRef || (canResumeLocal ? localConversation?.lessonRef : null));
   const [pairedEvidence, setPairedEvidence] = useState({ textbook: null, teacherGuide: null });
@@ -608,7 +613,10 @@ export function AskPage() {
     const normalizedAction = normalizeAskAction(directQuestion, options, question);
     const requestOptions = normalizedAction.options;
     const text = normalizedAction.text;
-    if (!text || busy || activeRequest.current || saveRetryInFlight.current) return;
+    if (!text || busy || agentRecoveryBusy || agentPending || activeRequest.current || saveRetryInFlight.current) return;
+    let baseDraft = existingDraft;
+    let baseMessages = messages;
+    let nextEvidenceShelf = evidenceShelf;
     pendingSave.current = null;
     setSaveRetryError('');
     const consumedUrl = new URL(location.href);
@@ -635,6 +643,7 @@ export function AskPage() {
     setBusy(true); setError(''); setLastErrorCode(''); setRetryQuestion(currentQuestion); setRetryTarget(typeof directQuestion === 'object' ? directQuestion : currentQuestion);
     let pendingTurn = null;
     let pendingHistory = [];
+    let persistentOutcome = null;
     try {
       const activeSession = await ensureSession();
       if (!activeSession) {
@@ -643,17 +652,29 @@ export function AskPage() {
         location.href = `/login/?next=${encodeURIComponent(next)}`;
         return;
       }
+      if (draftId) {
+        const latest = await rootRequest(`/api/drafts/${encodeURIComponent(draftId)}`);
+        baseDraft = latest.draft || latest;
+        if (ownerTransitioning.current || authOwnersConflict(activeSession.user.id, getSession()?.user?.id)) return;
+        if (baseDraft.answer?.conversationTurns?.length) baseMessages = baseDraft.answer.conversationTurns;
+        if (JSON.stringify(evidenceShelf) === JSON.stringify(existingDraft?.answer?.evidenceShelf || [])) {
+          nextEvidenceShelf = baseDraft.answer?.evidenceShelf || [];
+          shelfSyncHash.current = JSON.stringify(nextEvidenceShelf);
+          setEvidenceShelf(nextEvidenceShelf);
+        }
+        setExistingDraft(baseDraft);
+      }
       if (!aiReady) throw Object.assign(new Error('ai_checking'), { code: 'ai_checking' });
       if (!keyId && !gatewayAvailable) throw Object.assign(new Error('key_not_found'), { code: 'key_not_found' });
-      if (draftId && !existingDraft?.version) throw Object.assign(new Error('draft_loading'), { code: 'draft_loading' });
+      if (draftId && !baseDraft?.version) throw Object.assign(new Error('draft_loading'), { code: 'draft_loading' });
       const selectedScope = requestOptions.scope || scope;
       const lessonIdentity = {
         title: resolvedIdentityTitle,
-        coreQuestion: existingDraft?.answer?.lesson?.coreQuestion || stableCoreQuestion || canonicalQuestion
+        coreQuestion: baseDraft?.answer?.lesson?.coreQuestion || stableCoreQuestion || canonicalQuestion
       };
-      const groundedHistory = conversationHistory.length ? conversationHistory : buildConversationHistory(messages);
+      const groundedHistory = baseDraft?.answer?.conversationHistory?.length ? baseDraft.answer.conversationHistory : conversationHistory.length ? conversationHistory : buildConversationHistory(messages);
       const askBody = {
-        draftId: existingDraft?.id || draftId || '',
+        draftId: baseDraft?.id || draftId || '',
         question: currentQuestion,
         retrievalQuery,
         teachingFocus,
@@ -680,11 +701,13 @@ export function AskPage() {
       // PageIndex and the model gateway are external read services. Retry one
       // transient failure before showing recovery controls, but never retry a
       // malformed request, auth failure, or an evidence insufficiency result.
-      let persistentOutcome = null;
-      const response = agentRuntimeEnabled && existingDraft?.id
+      const response = agentRuntimeEnabled && baseDraft?.id
         ? (persistentOutcome = await runPersistentAgentTurn({
             request: rootRequest,
-            draft: existingDraft,
+            draft: baseDraft,
+            ownerId: activeSession.user.id,
+            onAccepted: setAgentPending,
+            onProgress: progress => setAgentPhase(progress.status),
             connectionId: keyId,
             question: currentQuestion,
             inputSnapshot: {
@@ -693,7 +716,7 @@ export function AskPage() {
               lessonRef: nextLessonRef,
               operationLabel: requestOptions.prompt || ''
             },
-            materialSnapshot: evidenceShelf
+            materialSnapshot: nextEvidenceShelf
           })).response
         : await withAskRetry(
             () => request('/ask', { method: 'POST', body: askBody }),
@@ -701,6 +724,7 @@ export function AskPage() {
           );
       if (ownerTransitioning.current || authOwnersConflict(activeSession.user.id, getSession()?.user?.id)) return;
       clearAskInFlight(activeRequest.current);
+      setAgentPending(null); setAgentPhase(''); setGeneratedPreview(null);
       if (response?.generation === 'blocked-no-evidence' || response?.evidenceSufficient === false) {
         setMessages(items => [...items, { question: currentQuestion, response }]);
         setQuestion(currentQuestion);
@@ -710,19 +734,19 @@ export function AskPage() {
       // catalogue pages. Prefer that corrected title over an old browser
       // draft that may still contain conversational text such as “我岳阳楼记”.
       const lessonTitle = planIdentity(response?.answer?.lesson?.title || resolvedIdentityTitle || identityTitle || canonicalQuestion, '当前篇目');
-      const previousLessonTitle = planIdentity(existingDraft?.answer?.lesson?.title || existingDraft?.lesson_context?.lessonRef?.title || existingDraft?.title, '');
-      const sameLesson = sameLessonRef(existingDraft?.lesson_context?.lessonRef, nextLessonRef)
+      const previousLessonTitle = planIdentity(baseDraft?.answer?.lesson?.title || baseDraft?.lesson_context?.lessonRef?.title || baseDraft?.title, '');
+      const sameLesson = sameLessonRef(baseDraft?.lesson_context?.lessonRef, nextLessonRef)
         || Boolean(previousLessonTitle && lessonTitle && previousLessonTitle === lessonTitle);
       const previousCitations = sameLesson
-        ? (Array.isArray(existingDraft?.citations) ? existingDraft.citations : messages.flatMap(item => Array.isArray(item.response?.citations) ? item.response.citations : []))
+        ? (Array.isArray(baseDraft?.citations) ? baseDraft.citations : messages.flatMap(item => Array.isArray(item.response?.citations) ? item.response.citations : []))
         : [];
       const mergedEvidence = mergeFollowUpCitations(previousCitations, response);
       const normalizedResponse = mergedEvidence.response;
       const nextCitations = mergedEvidence.citations;
       const nextTurn = { role: 'user', question: currentQuestion, operationLabel: requestOptions.prompt || '', response: normalizedResponse };
-      const nextHistory = conversationHistory.length
-        ? [...conversationHistory, { role: 'user', content: currentQuestion }, { role: 'assistant', content: normalizedResponse.answer?.reply || normalizedResponse.answer?.summary || '' }].slice(-10)
-        : buildConversationHistory([...messages, nextTurn]);
+      const nextHistory = groundedHistory.length
+        ? [...groundedHistory, { role: 'user', content: currentQuestion }, { role: 'assistant', content: normalizedResponse.answer?.reply || normalizedResponse.answer?.summary || '' }].slice(-10)
+        : buildConversationHistory([...baseMessages, nextTurn]);
       pendingTurn = nextTurn;
       pendingHistory = nextHistory;
       // This is now a real conversation, even if its account save fails.
@@ -730,15 +754,15 @@ export function AskPage() {
       const answeredUrl = new URL(location.href);
       answeredUrl.searchParams.delete('new');
       globalThis.history?.replaceState?.(null, '', answeredUrl);
-      const nextConversationTurns = [...messages, nextTurn].map(persistedConversationTurn).filter(Boolean).slice(-12);
-      const draftPayload = { title: lessonTitle, question: nextIdentityQuestion, scope: scopeDocumentIds(selectedScope), lessonContext: { ...nextLessonContext, ...(nextLessonRef ? { lessonRef: nextLessonRef } : {}) }, answer: { ...(normalizedResponse.answer || {}), ...(sameLesson && existingDraft?.answer?.planApproval ? { planApproval: { ...existingDraft.answer.planApproval, hasUnconfirmedChanges: true } } : {}), sourceCoverage: normalizedResponse.sourceCoverage || normalizedResponse.answer?.sourceCoverage, conversationHistory: nextHistory, conversationTurns: nextConversationTurns, evidenceShelf, ...(sameLesson && existingDraft?.answer?.previousLessonReflection ? { previousLessonReflection: existingDraft.answer.previousLessonReflection } : {}), ...(sameLesson && existingDraft?.answer?.lessonReflection ? { lessonReflection: existingDraft.answer.lessonReflection } : {}) }, citations: nextCitations, cards: sameLesson ? cardsForAskDraft(existingDraft) : [] };
+      const nextConversationTurns = [...baseMessages, nextTurn].map(persistedConversationTurn).filter(Boolean).slice(-12);
+      const draftPayload = { title: lessonTitle, question: nextIdentityQuestion, scope: scopeDocumentIds(selectedScope), lessonContext: { ...nextLessonContext, ...(nextLessonRef ? { lessonRef: nextLessonRef } : {}) }, answer: { ...(normalizedResponse.answer || {}), ...(sameLesson && baseDraft?.answer?.planApproval ? { planApproval: { ...baseDraft.answer.planApproval, hasUnconfirmedChanges: true } } : {}), sourceCoverage: normalizedResponse.sourceCoverage || normalizedResponse.answer?.sourceCoverage, conversationHistory: nextHistory, conversationTurns: nextConversationTurns, evidenceShelf: nextEvidenceShelf, ...(sameLesson && baseDraft?.answer?.previousLessonReflection ? { previousLessonReflection: baseDraft.answer.previousLessonReflection } : {}), ...(sameLesson && baseDraft?.answer?.lessonReflection ? { lessonReflection: baseDraft.answer.lessonReflection } : {}) }, citations: nextCitations, cards: sameLesson ? cardsForAskDraft(baseDraft) : [] };
       let savedDraft;
       if (persistentOutcome) {
-        const current = await rootRequest(`/api/drafts/${encodeURIComponent(existingDraft.id)}`);
+        const current = await rootRequest(`/api/drafts/${encodeURIComponent(baseDraft.id)}`);
         savedDraft = current.draft || current;
       } else {
-        pendingSave.current = pendingDraftSave({ ownerUserId: activeSession.user?.id, draftId, version: existingDraft?.version, payload: draftPayload });
-        if (!pendingSave.current || !canRetryDraftSave(pendingSave.current, { ownerUserId: getSession()?.user?.id, draftId, version: existingDraft?.version, transitioning: ownerTransitioning.current })) {
+        pendingSave.current = pendingDraftSave({ ownerUserId: activeSession.user?.id, draftId, version: baseDraft?.version, payload: draftPayload });
+        if (!pendingSave.current || !canRetryDraftSave(pendingSave.current, { ownerUserId: getSession()?.user?.id, draftId, version: baseDraft?.version, transitioning: ownerTransitioning.current })) {
           throw Object.assign(new Error('auth_owner_changed'), { code: 'auth_owner_changed' });
         }
         savedDraft = await writePendingDraft(pendingSave.current, rootRequest);
@@ -755,7 +779,8 @@ export function AskPage() {
       if (savedDraft) {
         setExistingDraft(savedDraft);
         shelfReadyForDraft.current = String(savedDraft.id);
-        shelfSyncHash.current = JSON.stringify(evidenceShelf);
+        shelfSyncHash.current = JSON.stringify(nextEvidenceShelf);
+        setEvidenceShelf(nextEvidenceShelf);
         setRecentDrafts(items => [{
           id: savedDraft.id,
           title: savedDraft.title || lessonTitle,
@@ -768,28 +793,37 @@ export function AskPage() {
         setRecentDrafts(items => [{ id: savedDraftId, title: lessonTitle, question: nextIdentityQuestion, updated_at: new Date().toISOString() }, ...items.filter(item => String(item.id) !== String(savedDraftId))].slice(0, 6));
       }
       normalizedResponse.draftId = savedDraftId;
-      setConversationHistory(nextHistory);
+      setConversationHistory(savedDraft?.answer?.conversationHistory || nextHistory);
       setRestoredAt('');
       setRestoredFromLocal(false);
 
       if (!planQuestion) setPlanQuestion(nextIdentityQuestion);
       clearAuthRecovery();
       setLessonContext(nextLessonContext); setLessonRef(nextLessonRef);
-      setMessages(items => [...items, nextTurn]);
+      setMessages(savedDraft?.answer?.conversationTurns?.length ? savedDraft.answer.conversationTurns : nextConversationTurns);
       setQuestion('');
       setAccountSaveFailed(false);
     } catch (err) {
       const code = requestCode(err);
+      const durablePending = readPendingAgentTurn(session?.user?.id || initialUser, draftId);
+      setAgentPending(durablePending);
+      if (err.generatedResponse) setGeneratedPreview(err.generatedResponse);
       if (unsafeSaveRetry(err)) pendingSave.current = null;
       if (ownerTransitioning.current || authOwnersConflict(conversationOwner.current, getSession()?.user?.id)) return;
       if (code === 'auth_invalid' || code === 'auth_required') {
         const next = `${location.pathname}${location.search}`;
-        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, ...submissionHandoff(text, directQuestion, Boolean(pendingTurn)), planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, messages: [...messages, ...(pendingTurn ? [pendingTurn] : [])].slice(-12), conversationHistory: pendingTurn ? pendingHistory : conversationHistory, draftSnapshot: draftRecoverySnapshot(existingDraft), savedAt: new Date().toISOString() });
+        saveAuthRecovery({ ownerUserId: session?.user?.id || initialUser, next, ...submissionHandoff(text, directQuestion, Boolean(pendingTurn)), planQuestion: nextIdentityQuestion, scope, lessonContext: nextLessonContext, lessonRef: nextLessonRef, draftId, messages: [...messages, ...(pendingTurn ? [pendingTurn] : [])].slice(-12), conversationHistory: pendingTurn ? pendingHistory : conversationHistory, draftSnapshot: draftRecoverySnapshot(baseDraft), savedAt: new Date().toISOString() });
         location.href = `/login/?next=${encodeURIComponent(next)}`;
         return;
       }
+      if (persistentOutcome?.request?.status === 'saved') {
+        setGeneratedPreview(persistentOutcome.response);
+        setLastErrorCode('agent_saved_read_failed');
+        setError('新方案已保存，但账号中的最新内容暂时没有读取成功。请重新打开方案，不必重新生成。');
+        return;
+      }
       if (pendingTurn) {
-        const recoveredMessages = [...messages, pendingTurn].slice(-12);
+        const recoveredMessages = [...baseMessages, pendingTurn].slice(-12);
         setMessages(recoveredMessages);
         setConversationHistory(pendingHistory);
         setRestoredAt(new Date().toISOString());
@@ -848,11 +882,32 @@ export function AskPage() {
     autoAsked.current = true;
     ask(null, autoSubmitQuestion);
   }, [aiReady, existingDraft?.id]);
+  useEffect(() => {
+    setAgentPending(readPendingAgentTurn(session?.user?.id, draftId));
+    setGeneratedPreview(null);
+  }, [session?.user?.id, draftId]);
+  const resumeAgent = async () => {
+    if (!agentPending || busy || agentRecoveryFlight.current) return;
+    agentRecoveryFlight.current = true; setAgentRecoveryBusy(true); setError('');
+    const owner = getSession()?.user?.id;
+    try {
+      const result = await resumePersistentAgentTurn({ request: rootRequest, pending: agentPending, onProgress: progress => setAgentPhase(progress.status) });
+      if (getSession()?.user?.id !== owner) return;
+      if (result.request.status === 'saved') { location.reload(); return; }
+      setAgentPending(null); setGeneratedPreview(result.response);
+      setError('本轮教材依据不足，原方案已保留。请核对原页后再继续。');
+    } catch (err) {
+      if (getSession()?.user?.id !== owner) return;
+      setAgentPending(readPendingAgentTurn(owner, draftId));
+      if (err.generatedResponse) setGeneratedPreview(err.generatedResponse);
+      setLastErrorCode(requestCode(err)); setError(askErrorMessage(err));
+    } finally { agentRecoveryFlight.current = false; setAgentRecoveryBusy(false); }
+  };
   const alternateScope = scope === 'textbook' ? 'teacher-guide' : 'textbook';
   const recovery = isIndexRecoveryCode(lastErrorCode);
   const draftReady = !requestedDraftId || Boolean(existingDraft?.version);
   const canAsk = Boolean(session && aiReady && draftReady && (keyId || gatewayAvailable));
-  const askBlocked = Boolean(session && (!aiReady || !draftReady || !keyId && !gatewayAvailable));
+  const askBlocked = Boolean(agentPending || agentRecoveryBusy || session && (!aiReady || !draftReady || !keyId && !gatewayAvailable));
   // Once the account draft is durable, a best-effort local snapshot hitting
   // browser quota is not a data-loss condition. Keep the warning only when
   // the browser copy is still the user's recovery path.
@@ -965,8 +1020,8 @@ export function AskPage() {
         <button type="button" onClick={focusComposer}>继续追问</button>
       </div>
       <div className="conversation-list">
-        {messages.length > 1 && <details className="conversation-history-fold"><summary><History size={15}/><span>展开此前 {messages.length - 1} 轮问答</span><ChevronDown size={15}/></summary><div>{messages.slice(0, -1).map((turn, index) => <ConversationTurn key={`${turn.question}-${index}`} turn={turn} draftId={draftId} onQuickAsk={value => ask(null, value)} onSaveEvidence={saveEvidence}/>)}</div></details>}
-        <section className="conversation-latest" aria-label="最新一轮问答"><header><span>最新一轮</span><small>默认先看当前结论，需要时再回看历史</small></header><ConversationTurn turn={messages.at(-1)} draftId={draftId} onQuickAsk={value => ask(null, value)} onSaveEvidence={saveEvidence}/></section>
+        {messages.length > 1 && <details className="conversation-history-fold"><summary><History size={15}/><span>展开此前 {messages.length - 1} 轮问答</span><ChevronDown size={15}/></summary><div>{messages.slice(0, -1).map((turn, index) => <ConversationTurn key={`${turn.question}-${index}`} turn={turn} draftId={draftId} pending={busy || accountSaveFailed || Boolean(agentPending)} onQuickAsk={value => ask(null, value)} onSaveEvidence={saveEvidence}/>)}</div></details>}
+        <section className="conversation-latest" aria-label="最新一轮问答"><header><span>最新一轮</span><small>默认先看当前结论，需要时再回看历史</small></header><ConversationTurn turn={messages.at(-1)} draftId={draftId} pending={busy || accountSaveFailed || Boolean(agentPending)} onQuickAsk={value => ask(null, value)} onSaveEvidence={saveEvidence}/></section>
       </div>
     </>
   ) : null;
@@ -1019,8 +1074,10 @@ export function AskPage() {
           {accountSaveFailed && <div className="ask-error ask-save-recovery" role="status"><CircleAlert/><span>{saveRetryError || ACCOUNT_SAVE_FAILURE}</span>{canRetryDraftSave(pendingSave.current, retrySaveContext()) && <button type="button" onClick={retrySave} disabled={busy || saveRetryBusy}>{saveRetryBusy ? '正在保存…' : '仅重试保存'}</button>}<button type="button" onClick={exportConversation}>导出记录</button></div>}
           {error && <div className="ask-error"><CircleAlert/><span>{error}</span></div>}
           {error && recovery && <div className="ask-recovery"><div className="ask-recovery-copy"><b>{UI_COPY.recovery.title}</b><p>{UI_COPY.recovery.body}</p></div><div className="ask-recovery-actions"><button type="button" onClick={() => ask(null, retryableTarget)} disabled={busy || askBlocked}>{UI_COPY.recovery.retry}</button><button type="button" onClick={() => { setScope(alternateScope); ask(null, retryableTarget, { scope: alternateScope }); }} disabled={busy || askBlocked}>{UI_COPY.recovery.switchBook}</button><a href="/validation/">{UI_COPY.recovery.status}</a><button type="button" onClick={() => ask(null, retryableTarget, { retrievalMode: 'stable_snapshot' })} disabled={busy || askBlocked}>{UI_COPY.recovery.snapshot}</button><a href={askLibraryHref}>返回教材库核对</a></div></div>}
-          {interrupted && !busy && <section className="agent-work-summary needs-attention" role="status"><b>上次提交的问题已找回</b><p>页面刷新后无法接回执行中的请求。本次没有自动重发，请先查看已保存方案；仍需处理时手动发送下方问题。</p><p>{interrupted.question}</p><div className="turn-followups">{draftId && <a href={`/cards/?draftId=${encodeURIComponent(draftId)}`}>查看已保存方案</a>}<button type="button" onClick={() => { setQuestion(interrupted.question); focusComposer(); }}>检查问题后发送</button><button type="button" onClick={() => { clearAskInFlight(interrupted); setInterrupted(null); }}>关闭提示</button></div></section>}
-          {busy && <AgentWorkingState lessonTitle={pairedLessonTitle} question={retryQuestion}/>}
+          {interrupted && !busy && !agentPending && <section className="agent-work-summary needs-attention" role="status"><b>上次提交的问题已找回</b><p>页面刷新后无法接回执行中的请求。本次没有自动重发，请先查看已保存方案；仍需处理时手动发送下方问题。</p><p>{interrupted.question}</p><div className="turn-followups">{draftId && <a href={`/cards/?draftId=${encodeURIComponent(draftId)}`}>查看已保存方案</a>}<button type="button" onClick={() => { setQuestion(interrupted.question); focusComposer(); }}>检查问题后发送</button><button type="button" onClick={() => { clearAskInFlight(interrupted); setInterrupted(null); }}>关闭提示</button></div></section>}
+          {agentPending && !busy && <section className="panel agent-resume-panel" role="status"><h2>{generatedPreview ? '新结果已生成，尚未写入定稿' : '有一轮生成等待恢复'}</h2><p>{agentRecoveryBusy ? '正在接回原任务，已有结果不会重新生成。' : '网络中断或离开页面不会删除后台结果。先检查这轮任务，再继续备课。'}</p><div><button type="button" className="primary" disabled={agentRecoveryBusy} onClick={resumeAgent}>{agentRecoveryBusy ? '正在恢复…' : '检查并恢复这轮结果'}</button><a href={`/cards/?draftId=${encodeURIComponent(draftId)}`}>查看账号中的最新方案</a>{(generatedPreview || lastErrorCode === 'agent_request_not_found') && <button type="button" disabled={agentRecoveryBusy} onClick={() => { clearPendingAgentTurn(agentPending.ownerId, agentPending.draftId, agentPending.clientRequestId); setAgentPending(null); setError(generatedPreview ? '本次结果保留在下方预览，后续生成会基于账号中的最新方案。' : '未找到原任务，后续生成会先读取账号中的最新方案。'); }}>{generatedPreview ? '保留预览，继续备课' : '清除失效记录，继续备课'}</button>}</div></section>}
+          {generatedPreview && <details className="panel agent-generated-preview" open><summary>{lastErrorCode === 'agent_saved_read_failed' ? '查看本次结果（已保存，等待刷新）' : '查看本次生成结果（尚未替换定稿）'}</summary><PlanAnswer answer={generatedPreview.answer} citations={generatedPreview.citations || []} returnTo={askReaderReturn}/></details>}
+          {busy && <AgentWorkingState lessonTitle={pairedLessonTitle} question={retryQuestion} phase={agentPhase}/>}
           {emptyState}
           {conversationState}
         </section>
@@ -1040,7 +1097,7 @@ export function AskPage() {
           <ContextSelect label="AI 来源" value={keyId} onChange={e => setKeyId(e.target.value)} options={[{value:'', label: '请选择个人 DeepSeek 连接'}, ...keys.map(key => ({value:key.id, label:`我的智能连接（${key.keyHint}）`}))]} hint={!aiReady ? '正在检查 AI 服务' : keyId ? '我的智能连接' : gatewayAvailable ? '系统智能' : '请稍后重试'}/>
         </div>
         {selectedClassProfile && <div className="class-memory-strip"><History/><div><span>已接上 {selectedClassProfile.className} 的教学记录</span><b>{selectedClassProfile.nextFocus || selectedClassProfile.confirmedObservation || '此前课堂已经留下教师确认的班级事实。'}</b><p>来自 {selectedClassProfile.lessonCount} 节已保存课程；只影响课堂组织，不会替代当前教材与教师用书依据。</p></div><a href={`/ask/?draftId=${encodeURIComponent(selectedClassProfile.latestDraftId)}`}>查看最近一课</a></div>}
-        {contextChanged && <div className="context-recompute"><div><b>备课条件已变化</b><p>当前方案仍按上一组条件生成。重新整理后，会同步调整课堂流程、问题链、评价和三张卡；已锁定的卡片不会被覆盖。</p></div><button type="button" className="primary" disabled={busy || askBlocked} onClick={() => ask(null, { prompt: '请根据当前备课条件重新整理完整课堂方案。保持当前篇目与核心问题不变；先核对教师用书的教学建议，再回到学生教材核对原文，并结合当前班情取舍。请同步更新课堂流程、问题链、评价和未锁定的三张卡。', operation: { type: 'recompute_plan' } })}>重新整理本方案</button></div>}
+        {contextChanged && <div className="context-recompute"><div><b>备课条件已变化</b><p>当前方案仍按上一组条件生成。重新整理后，会调整课堂流程、问题链与评价。确认新版方案后，再更新需要调整的课堂卡片；锁定内容保留。</p></div><button type="button" className="primary" disabled={busy || askBlocked} onClick={() => ask(null, { prompt: '请根据当前备课条件重新整理完整课堂方案。保持当前篇目与核心问题不变；先核对教师用书的教学建议，再回到学生教材核对原文，并结合当前班情取舍。请更新课堂流程、问题链与评价，并说明哪些课堂卡片需要随后调整。', operation: { type: 'recompute_plan' } })}>重新整理本方案</button></div>}
       </section>
       <DualSourceEvidenceDesk title={pairedLessonTitle} evidence={pairedEvidence} busy={pairedEvidenceBusy} error={pairedEvidenceError} onSave={saveEvidence} returnTo={askReaderReturn}/>
       {newConversationPromptOpen && <div className="modal-backdrop" role="presentation" onMouseDown={() => setNewConversationPromptOpen(false)}><section className="panel ask-new-conversation-modal" role="dialog" aria-modal="true" aria-labelledby="ask-new-conversation-title" onMouseDown={event => event.stopPropagation()}><header><div><span>开始新的备课</span><h2 id="ask-new-conversation-title">要另起一课吗？</h2></div><button type="button" onClick={() => setNewConversationPromptOpen(false)} aria-label="关闭"><X/></button></header><p>当前草稿、教材依据和历史问答都会保留在账号中；这里只会清空本页正在进行的对话，方便你选择另一篇课文重新开始。</p><div className="ask-new-conversation-preserved"><CheckCircle2/><div><b>{activeLessonLabel}</b><small>{draftId ? '当前方案仍可从备课记录中继续打开' : '当前对话记录仍会保留'}</small></div></div><footer><button type="button" autoFocus onClick={() => setNewConversationPromptOpen(false)}>继续当前备课</button><button type="button" className="primary" onClick={confirmStartNewConversation}>保留草稿，另起一课</button></footer></section></div>}

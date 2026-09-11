@@ -86,11 +86,12 @@ export class AgentRuntime {
       await this.appendPhase(session, workerId, 'saved', { requestId: request.id });
       return { status: 'saved', request: saved };
     } catch (error) {
+      const pending = await this.requests.setPhase(request.id, 'ready_to_save', { expected: 'ready_to_save', errorCode: String(error?.code || 'save_failed') });
       await this.appendPhase(session, workerId, 'ready_to_save', {
         requestId: request.id,
         reason: String(error?.code || 'save_failed')
       });
-      return { status: 'ready_to_save', request };
+      return { status: 'ready_to_save', request: pending || request };
     }
   }
 
@@ -172,6 +173,14 @@ export class AgentRuntime {
         await this.appendPhase(session, workerId, 'cancelled', { requestId: request.id });
         await this.finish(session, workerId, 'cancelled');
         return { status: 'cancelled', request: cancelled };
+      }
+      if (result?.response?.evidenceSufficient === false || result?.response?.generation === 'blocked-no-evidence') {
+        request = await this.requests.markResultReady(request.id, session.attempt, result);
+        if (!request) throw Object.assign(new Error('request_lease_lost'), { code: 'request_lease_lost' });
+        const blocked = await this.requests.setPhase(request.id, 'needs_evidence', { expected: 'ready_to_save' });
+        await this.appendPhase(session, workerId, 'needs_evidence', { requestId: request.id });
+        await this.finish(session, workerId, 'succeeded');
+        return { status: 'needs_evidence', request: blocked };
       }
       request = await this.requests.markResultReady(request.id, session.attempt, result);
       activeRequest = request;

@@ -7,7 +7,7 @@ import { CardSourceList } from '../ui-board.jsx';
 import { askErrorMessage, docName, queryParams, requestCode, rootRequest, useAuthSession } from '../app-core.js';
 import { layeredHomeworkStudentHtml, layeredHomeworkTeacherMarkdown } from '../../shared/layered-homework.js';
 import { emptyLessonStudy, lessonStudyIsStale, lessonStudyReadiness, normalizeLessonStudy } from '../../shared/lesson-study.js';
-import { emptySameLessonComparison, normalizeSameLessonComparison } from '../../shared/same-lesson-comparison.js';
+import { emptySameLessonComparison, normalizeSameLessonComparison, normalizeLessonIdentity } from '../../shared/same-lesson-comparison.js';
 
 const TeachingSlideCanvas = lazy(() => import('../teaching-slide-canvas.jsx'));
 const TeachingSlideThumbnail = lazy(() => import('../teaching-slide-canvas.jsx').then(module => ({ default: module.TeachingSlideThumbnail })));
@@ -146,6 +146,25 @@ export function ComparisonPractice({ profile, side }) {
   </article>;
 }
 
+function ComparisonPicker({ userId }) {
+  const [assets, setAssets] = useState([]);
+  const [left, setLeft] = useState('');
+  const [right, setRight] = useState('');
+  const [state, setState] = useState('loading');
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    if (!userId) return;
+    setState('loading'); setAssets([]); setLeft(''); setRight('');
+    rootRequest('/api/assets').then(data => { if (active) { setAssets(data.assets || []); setState('ready'); } }).catch(() => { if (active) setState('error'); });
+    return () => { active = false; };
+  }, [userId, attempt]);
+  const ready = assets.filter(item => item.lessonStudyStatus === 'confirmed' && !item.lessonStudyStale);
+  const selected = ready.find(item => item.draftId === left);
+  const peers = selected ? ready.filter(item => item.draftId !== left && normalizeLessonIdentity(item.lessonKey || item.title) === normalizeLessonIdentity(selected.lessonKey || selected.title)) : [];
+  return <section className="panel lesson-picker"><header><span>同课异构</span><h1>选两次课堂，比较同一个问题</h1><p>使用同一篇目、已确认的一课一研记录，保留两次课堂各自的事实。</p></header>{state === 'loading' ? <p role="status">正在读取课堂记录…</p> : state === 'error' ? <div role="alert"><p>课堂记录暂时无法读取。</p><button type="button" onClick={() => setAttempt(value => value + 1)}>重新读取</button></div> : <><label className="lesson-picker-search"><span>第一次课堂</span><select value={left} onChange={event => { setLeft(event.target.value); setRight(''); }}><option value="">选择已确认的课堂</option>{ready.map(item => <option value={item.draftId} key={item.draftId}>{item.title}</option>)}</select></label><label className="lesson-picker-search"><span>第二次同篇目课堂</span><select disabled={!left || !peers.length} value={right} onChange={event => setRight(event.target.value)}><option value="">{left && !peers.length ? '还需要另一份同篇目课堂记录' : '选择另一份课堂记录'}</option>{peers.map(item => <option value={item.draftId} key={item.draftId}>{item.title}</option>)}</select></label>{left && right && <a className="primary" href={`/compare/?left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`}>开始同课对照 <ArrowRight/></a>}{!ready.length && <p>还没有确认过的一课一研。先整理一节课的教学设想、课堂事实与下一次尝试。</p>}</>}<footer><a href="/study/">整理一课一研 <ArrowRight/></a><a href="/assets/">查看所有教研资产</a></footer></section>;
+}
+
 export function SameLessonComparisonPage() {
   const params = useMemo(() => queryParams(), []);
   const session = useAuthSession();
@@ -167,7 +186,7 @@ export function SameLessonComparisonPage() {
       if (session === null) location.href = `/login/?next=${encodeURIComponent(location.pathname + location.search)}`;
       return;
     }
-    if (!leftId || !rightId) { setError('还没有选定两次同篇目实践。请从教研资产库选择一组课堂记录。'); setBusy(false); return; }
+    if (!leftId || !rightId) { setBusy(false); return; }
     rootRequest(`/api/assets/${encodeURIComponent(leftId)}/compare/${encodeURIComponent(rightId)}`).then(data => {
       const serverValue = normalizeSameLessonComparison(data.comparison || {});
       let recovered = null;
@@ -208,6 +227,7 @@ export function SameLessonComparisonPage() {
     } finally { setWorking(''); }
   };
 
+  if (!leftId || !rightId) return <ComparisonPicker userId={userId}/>;
   return <div className="view-stack same-lesson-page">
     <section className="hero compact-hero comparison-hero"><div><Badge tone="gold"><GitCompareArrows/> 同课异构</Badge><h1>不评哪节课更好，<br/><em>只判断什么能够迁移</em></h1><p>把同一篇目的两次课堂事实并列呈现。系统负责保持材料边界，教师负责解释差异、写清适用条件，并决定下一次怎样验证。</p><div className="hero-actions"><a href="/assets/"><Archive/>重新选择课堂</a>{comparison.left?.draftId && <a href={`/study/?draftId=${encodeURIComponent(comparison.left.draftId)}`}><Microscope/>回到一课一研</a>}</div></div><div className="comparison-seal"><strong>A<small>×</small>B</strong><span>两次真实课堂</span><em>{confirmed ? '教师已确认' : comparison.sourceKey ? '等待形成共识' : '等待选择'}</em></div></section>
     {error && <section className="cards-alert" role="alert"><div className="cards-alert-icon"><CircleAlert/></div><div className="cards-alert-copy"><b>本次同课对照暂时没有完成</b><p>{error}</p></div><div className="cards-alert-actions"><a href="/assets/">返回教研资产</a></div></section>}
@@ -340,8 +360,8 @@ export function TeachingSlidesPage() {
       <section className="slides-toolbar panel"><div><span>查看方式</span><div className="slides-mode-switch"><button type="button" className={mode === 'student' ? 'active' : ''} onClick={() => setMode('student')}><Eye/>学生画布</button><button type="button" className={mode === 'teacher' ? 'active' : ''} onClick={() => setMode('teacher')}><FileCheck2/>教师备课</button></div></div><div className="slides-status"><Badge tone={readOnly ? 'green' : dirty ? 'orange' : 'gold'}>{readOnly ? '课件已定稿' : dirty ? `${dirtySlideIds.size} 页未保存` : '可继续编辑'}</Badge><small>{mode === 'student' ? '双击文字编辑，拖动调整版式' : '教师提示只在备课视图显示'}</small></div><div className="slides-save-actions">{readOnly ? <button type="button" className="primary" onClick={createRevision} disabled={Boolean(working)}>{working === 'revise' ? '正在创建…' : '创建修订版'}</button> : <><button type="button" onClick={() => persist(false)} disabled={!dirty || Boolean(working)}>{working === 'save' ? '正在保存…' : '保存画布'}</button><button type="button" className="primary" onClick={() => persist(true)} disabled={dirty || Boolean(working)}>{working === 'confirm' ? '正在定稿…' : '确认课件定稿'}</button></>}<button type="button" onClick={downloadPptx} disabled={Boolean(working)}><Download/>可编辑 PPTX</button><button type="button" onClick={downloadProjector} disabled={Boolean(working)}><Download/>投屏稿</button></div></section>
       <section className="slides-workbench openmaic-workbench">
         <nav className="slides-thumbnails openmaic-thumbnails" aria-label="课件页面">{deck.slides.map((slide, index) => <button type="button" className={active === index ? 'active' : ''} onClick={() => setActive(index)} key={slide.id} aria-label={`第 ${index + 1} 页：${slide.title}`}><span>{String(index + 1).padStart(2, '0')}</span><div className="slides-thumbnail-preview"><Suspense fallback={<div className="openmaic-thumbnail-loading">加载画布…</div>}><TeachingSlideThumbnail slide={slide}/></Suspense></div><b>{slide.title}</b></button>)}</nav>
-        <section className={`slides-stage openmaic-stage ${mode}`} ref={stageRef} aria-live="polite"><div className="slides-stage-counter">{String(active + 1).padStart(2, '0')} / {String(deck.slides.length).padStart(2, '0')}</div>{current && <Suspense fallback={<div className="openmaic-loading"><Activity/>正在加载 OpenMAIC 画布编辑器…</div>}><TeachingSlideCanvas key={`${current.id}-${draftVersion}-${mode}`} slide={current} readOnly={readOnly || mode === 'teacher' || presenting} onChange={updateCanvas} textbookPages={textbookPages}/></Suspense>}<div className="slides-stage-nav"><button type="button" onClick={() => setActive(index => Math.max(0, index - 1))} disabled={active === 0}><ArrowLeft/>上一页</button><button type="button" onClick={() => setActive(index => Math.min(deck.slides.length - 1, index + 1))} disabled={active === deck.slides.length - 1}>下一页<ArrowRight/></button></div></section>
-        <aside className="slides-editor"><header><span>{mode === 'student' ? 'OpenMAIC 画布编辑' : '教师备课提示'}</span><h2>第 {active + 1} 页</h2><p>{readOnly ? '课件已经定稿；画布保持只读。' : mode === 'student' ? '使用画布上方工具插入文字、图片、表格、线条或公式。' : '教师提示与学生画布分开保存。'}</p></header>{mode === 'student' ? <div className="slides-editor-guide"><b>当前开放的元素</b><span>文字 · 图片 · 表格 · 线条 · 公式</span><p>本地图片会自动压缩并随课件保存；音视频、图表和代码暂不开放。</p></div> : <div className="slides-editor-fields"><label><span>教师提示（不会进入投屏文件）</span><textarea rows="10" value={(current?.metadata?.teacherNotes || []).join('\n')} disabled={readOnly} onChange={event => updateTeacherNotes(event.target.value)}/></label><div className="slides-teacher-sources"><b>教师用书核验页</b>{(current?.metadata?.teacherCitationIds || []).map(refText).filter(Boolean).length ? current.metadata.teacherCitationIds.map(refText).filter(Boolean).map(item => <span key={item}>{item}</span>) : <p>本页没有绑定教师用书页面，不会伪造参考答案。</p>}</div></div>}<footer><ShieldCheck/><p><b>学生投屏隔离</b>离线文件只嵌入七张学生画布 PNG，不包含教师提示或教师用书元数据。</p></footer></aside>
+        <section className={`slides-stage openmaic-stage ${mode}`} ref={stageRef} aria-live="polite"><div className="slides-stage-counter">{String(active + 1).padStart(2, '0')} / {String(deck.slides.length).padStart(2, '0')}</div>{current && <Suspense fallback={<div className="openmaic-loading"><Activity/>正在加载 学生课件编辑器…</div>}><TeachingSlideCanvas key={`${current.id}-${draftVersion}-${mode}`} slide={current} readOnly={readOnly || mode === 'teacher' || presenting} onChange={updateCanvas} textbookPages={textbookPages}/></Suspense>}<div className="slides-stage-nav"><button type="button" onClick={() => setActive(index => Math.max(0, index - 1))} disabled={active === 0}><ArrowLeft/>上一页</button><button type="button" onClick={() => setActive(index => Math.min(deck.slides.length - 1, index + 1))} disabled={active === deck.slides.length - 1}>下一页<ArrowRight/></button></div></section>
+        <aside className="slides-editor"><header><span>{mode === 'student' ? '学生课件编辑' : '教师备课提示'}</span><h2>第 {active + 1} 页</h2><p>{readOnly ? '课件已经定稿；画布保持只读。' : mode === 'student' ? '使用画布上方工具插入文字、图片、表格、线条或公式。' : '教师提示与学生画布分开保存。'}</p></header>{mode === 'student' ? <div className="slides-editor-guide"><b>当前开放的元素</b><span>文字 · 图片 · 表格 · 线条 · 公式</span><p>本地图片会自动压缩并随课件保存；音视频、图表和代码暂不开放。</p></div> : <div className="slides-editor-fields"><label><span>教师提示（不会进入投屏文件）</span><textarea rows="10" value={(current?.metadata?.teacherNotes || []).join('\n')} disabled={readOnly} onChange={event => updateTeacherNotes(event.target.value)}/></label><div className="slides-teacher-sources"><b>教师用书核验页</b>{(current?.metadata?.teacherCitationIds || []).map(refText).filter(Boolean).length ? current.metadata.teacherCitationIds.map(refText).filter(Boolean).map(item => <span key={item}>{item}</span>) : <p>本页没有绑定教师用书页面，不会伪造参考答案。</p>}</div></div>}<footer><ShieldCheck/><p><b>学生投屏隔离</b>离线文件只嵌入学生画布内容，不包含教师提示或教师用书元数据。</p></footer></aside>
       </section>
     </>}
   </div>;
