@@ -69,7 +69,9 @@ docker run --rm -p 8000:8000 \
 现有 `PAGEINDEX_SERVICE_API_KEY`、vendor/OCR 配置不变。前端/BFF 必须先部署本次
 `expectedRevision` 与 409 支持；旧客户端缺少版本号时拒绝覆盖并提示重新读取。
 
-`file` 仍是未配置时的本地/兼容默认值，**不是 Vercel 新材料的可靠存储**。
+`file` 仍是未配置时的默认值；本地可写，但已识别生产运行时只允许读取与检索，
+登记/构建/校正/重跑/验证/删除返回 503 `pageindex_storage_not_configured`，
+旧质检 GET 也不会隐式刷新写入。**file 不是 Vercel 新材料的可靠存储**。
 生产尚未连接数据库之前，不能把本次提交称为线上索引丢失问题已解决。
 
 ### 一致性与回退边界
@@ -95,3 +97,7 @@ docker run --rm -p 8000:8000 \
 
 回退：保留新增表和已写入记录，不删除数据；必要时暂缓新材料写入。
 把生产切回 `file` 会看不到数据库新材料，不能作为无损回退。
+
+配置入口：Vercel 团队 roy-leos-projects → pageindex-service → Settings → Environment Variables → Production。
+先部署兼容的主站/BFF，再发布此服务只读保护；补齐连接配置后重新部署服务启用持久化。
+原书读取保持可用，未配置时不能创建会丢失的新任务。

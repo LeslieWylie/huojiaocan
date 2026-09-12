@@ -87,6 +87,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         seed_runtime(repository, os.getenv("PAGEINDEX_SEED_ROOT", str(DEFAULT_SEED_ROOT)))
     else:
         raise RuntimeError("Unsupported PAGEINDEX_REPOSITORY")
+    writes_disabled = _production_runtime() and repository_mode == "file"
     service = IndexService(repository, adapter, ocr_provider=create_ocr_provider())
 
     app = FastAPI(title="Huojiaocan PDF Index Service", version="0.2.0")
@@ -119,6 +120,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             supplied = authorization.removeprefix("Bearer ").strip()
             if not supplied or not hmac.compare_digest(supplied, service_key):
                 return Response(status_code=401, content='{"detail":"unauthorized"}', media_type="application/json")
+        if (writes_disabled and request.url.path.startswith("/internal/v1/")
+                and request.method in {"POST", "PATCH", "DELETE"}
+                and request.url.path != "/internal/v1/retrieve"):
+            return JSONResponse(status_code=503, content={"detail": "pageindex_storage_not_configured"})
         return await call_next(request)
 
     @app.get("/healthz", response_model=HealthResponse)
@@ -219,7 +224,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 for question in report.questions
                 for hit in question.get("hits", [])[:1]
             )
-            if needs_refresh:
+            if needs_refresh and not writes_disabled:
                 return service.validate(
                     document_id,
                     ValidationRequest(questions=[question.get("question", "") for question in report.questions if question.get("question")]),
