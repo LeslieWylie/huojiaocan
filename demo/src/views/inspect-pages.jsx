@@ -152,112 +152,117 @@ export function questionResult(validation, question) {
 export function ValidationPage() {
   const params = useMemo(() => queryParams(), []);
   const documentId = canonicalDocumentId(params.get('documentId') || params.get('doc')) || 'teacher-guide';
+  const catalogDocument = useCatalogDocument(documentId);
+  const usesPublicExamples = ['textbook', 'teacher-guide'].includes(documentId);
   const [selected, setSelected] = useState(0);
   const [validation, setValidation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [missing, setMissing] = useState(false);
   const [error, setError] = useState('');
+  const loadRequest = useRef(0);
 
   const loadValidation = async signal => {
-    setLoading(true);
+    const requestId = ++loadRequest.current;
+    const current = () => requestId === loadRequest.current && !signal?.aborted;
+    setLoading(true); setError(''); setMissing(false); setValidation(null);
     try {
       const data = await request(`/documents/${encodeURIComponent(documentId)}/validation`, { signal });
-      setValidation(data);
-      setError('');
+      if (!current()) return null;
+      setValidation(data); setSelected(0);
       return data;
     } catch (err) {
-      if (err.name !== 'AbortError') setError('暂时无法读取教材质量检查结果，请稍后重试。');
+      if (current()) {
+        if (err.status === 404) setMissing(true);
+        else setError('暂时无法读取材料检查结果，请稍后重试。');
+      }
       return null;
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   };
 
   useEffect(() => {
     const controller = new AbortController();
     loadValidation(controller.signal);
-    return () => controller.abort();
+    return () => { controller.abort(); loadRequest.current += 1; };
   }, [documentId]);
 
   const startValidation = async () => {
     if (running) return;
-    setRunning(true);
-    setError('');
+    setRunning(true); setError('');
     try {
       await request(`/documents/${encodeURIComponent(documentId)}/validate`, {
         method: 'POST',
-        body: { questions: VALIDATION_QUESTIONS.map(([question]) => question) }
+        body: { questions: usesPublicExamples ? VALIDATION_QUESTIONS.map(([question]) => question) : [] }
       });
       await loadValidation();
     } catch (err) {
-      setError('暂时无法启动教材质量检查，请稍后重试。');
-    } finally {
-      setRunning(false);
-    }
+      setError(err.status === 409 ? '材料刚刚发生变化，请重新读取后再检查。' : '暂时无法启动材料检查，请确认材料已处理完成后再试。');
+    } finally { setRunning(false); }
   };
 
-  const localValidation = validation?.local
-    || (validation?.providerKind === 'local' ? validation : null);
-  const pageIndexValidation = validation?.pageindex
-    || validation?.shadow
-    || (validation?.providerKind === 'pageindex' ? validation : null)
-    || (validation?.provider === 'pageindex' ? validation : null)
-    // The service report is intentionally provider-neutral and exposes its
-    // question results as `questions`. Treat that production response as the
-    // active index report instead of rendering the old empty comparison state.
-    || (Array.isArray(validation?.questions) ? validation : null);
-  const activeQuestion = VALIDATION_QUESTIONS[selected][0];
-  const localResult = questionResult(localValidation, activeQuestion);
-  const pageIndexResult = questionResult(pageIndexValidation, activeQuestion);
+  const localValidation = validation?.local || (validation?.providerKind === 'local' ? validation : null);
+  const pageIndexValidation = validation?.pageindex || validation?.shadow
+    || (validation?.providerKind === 'pageindex' || validation?.provider === 'pageindex' || Array.isArray(validation?.questions) ? validation : null);
   const currentValidation = pageIndexValidation || localValidation;
   const currentQuestions = currentValidation?.questionResults || currentValidation?.questions || [];
-  const passed = currentQuestions.filter(item => item.passed).length;
-  const total = currentQuestions.length;
+  const activeQuestion = currentQuestions[selected]?.question || '';
+  const activeResult = questionResult(pageIndexValidation, activeQuestion) || questionResult(localValidation, activeQuestion);
+  const rawChecks = currentValidation?.checks || [];
+  const checks = Array.isArray(rawChecks) ? rawChecks : Object.entries(rawChecks)
+    .filter(([id]) => id !== 'standardQuestions')
+    .map(([id, value]) => ({ id, ...value }));
+  const checkLabels = { pages_locatable: '教材页码可定位', pageMapping: '教材页码可定位', retrievable_pages: '存在可检索文字', retrievablePages: '存在可检索文字', viewer_mapping: '原页定位对应', tree_range: '目录页码范围', treeRanges: '目录页码范围', exclusions: '排除页记录' };
+  const passedChecks = checks.filter(item => item.passed === true).length;
+  const passedQuestions = currentQuestions.filter(item => item.passed === true).length;
+  const title = catalogDocument?.title || (usesPublicExamples ? docName(documentId) : '当前材料');
+  const hasReport = Boolean(currentValidation && (checks.length || currentQuestions.length));
 
   return <div className="view-stack">
     <section className="hero compact-hero">
       <div>
-        <Badge tone="blue"><ClipboardCheck/> 教材质量检查</Badge>
-        <h1>确认篇目、页码与引用，<br/>让每次回答都能回到原始教材</h1>
-        <p>逐题检查教材目录的真实定位结果、教材页码和引用片段；检查未通过的页面不会被当作可靠依据。</p>
-        <button type="button" className="primary" onClick={startValidation} disabled={running}>
-          {running ? '正在检查教材…' : '重新检查教材质量'}
+        <Badge tone="blue"><ClipboardCheck/> 材料质量检查</Badge>
+        <h1>先检查页码与文字，<br/>再核验内容问题</h1>
+        <p>结构检查覆盖页码、可检索文字、原页定位和目录范围，不代表教学内容正确。本页不会自动排除问题未通过时对应的页面。</p>
+        <button type="button" className="primary" onClick={startValidation} disabled={running || loading}>
+          {running ? '正在检查材料…' : usesPublicExamples ? '检查结构与示例问题' : '检查材料结构'}
         </button>
+        {!usesPublicExamples && <p>当前材料不使用内置语文示例题；本次只检查材料结构。</p>}
       </div>
       <div className="validation-score">
-        <b>{total ? `${passed} / ${total}` : '—'}</b>
-        <span>{loading ? '正在读取检查结果' : `当前状态：${statusLabel(currentValidation?.status || 'not_run')}`}</span>
-        <small>当前文档：{docName(documentId)}</small>
+        <b>{!loading && !error && checks.length ? `${passedChecks} / ${checks.length}` : '—'}</b>
+        <span>{loading ? '正在读取检查结果' : '结构检查通过项'}</span>
+        <small>当前材料：{title}</small>
       </div>
     </section>
 
-    {error && <div className="ask-error"><CircleAlert/>{error}</div>}
+    {error && <div className="ask-error" role="alert"><CircleAlert/>{error}<button type="button" disabled={loading || running} onClick={() => loadValidation()}>重新读取</button></div>}
+    {loading ? <section className="panel index-empty"><RefreshCw/><p>正在读取当前材料的检查结果…</p></section> : !error && !hasReport ? <section className="panel index-empty"><ClipboardCheck/><h2>{missing ? '尚无可读取的检查结果' : '当前材料尚未完成检查'}</h2><p>可在材料处理完成后开始检查。</p><a href={navigationHref('jobs', `/jobs/?doc=${encodeURIComponent(documentId)}`)}>查看处理进度 <ArrowRight/></a></section> : null}
 
-    <div className="validation-layout">
-      <aside className="panel question-set">
-        <SectionHead icon={Target} eyebrow="关键问题检查" title="教材质量问题"/>
-        <div>{VALIDATION_QUESTIONS.map(([question, expected], index) => {
-          const state = questionState(questionResult(currentValidation, question));
-          return <button type="button" className={selected === index ? 'active' : ''} onClick={() => setSelected(index)} key={question}>
-            <span>{index + 1}</span>
-            <div><b>{question}</b><small>预期依据：{expected}</small></div>
-            <Badge tone={state.tone}>{state.label}</Badge>
-          </button>;
-        })}</div>
-      </aside>
-
-      <section className="compare-grid">
-        <ProviderResult
-          title="教材目录"
-          time={currentValidation?.checkedAt ? new Date(currentValidation.checkedAt).toLocaleString() : '尚未运行'}
-          tone="blue"
-          question={activeQuestion}
-          result={pageIndexResult || localResult}
-          status={currentValidation?.status || 'not_run'}
-          providerState={currentValidation ? '已运行' : '未运行'}
-        />
+    {!loading && !error && hasReport && <>
+      <section className="panel">
+        <SectionHead icon={ClipboardCheck} eyebrow="结构检查" title="本次返回的检查项目" note={currentValidation.checkedAt ? new Date(currentValidation.checkedAt).toLocaleString() : '本报告未返回检查时间'}/>
+        <div className="validation-check-list">{checks.map(item => <div className="quality-box" key={item.id}>
+          {item.passed === true ? <CheckCircle2/> : <CircleAlert/>}
+          <span><b>{checkLabels[item.id] || item.id}</b>{item.detail && <small>{item.detail}</small>}</span>
+          <Badge tone={item.passed === true ? 'green' : 'orange'}>{item.passed === true ? '通过' : item.passed === false ? '需检查' : '未返回结论'}</Badge>
+        </div>)}</div>
+        {!checks.length && <p>本次报告没有返回结构检查项目。</p>}
       </section>
-    </div>
+      {currentQuestions.length ? <div className="validation-layout">
+        <aside className="panel question-set">
+          <SectionHead icon={Target} eyebrow="本次内容问题" title={`检索结果 ${passedQuestions} / ${currentQuestions.length}`} note="检索命中不等于内容判断正确，请核对原页。"/>
+          <div>{currentQuestions.map((item, index) => {
+            const state = questionState(questionResult(currentValidation, item.question));
+            return <button type="button" className={selected === index ? 'active' : ''} onClick={() => setSelected(index)} key={`${index}-${item.question}`}>
+              <span>{index + 1}</span><div><b>{item.question}</b></div><Badge tone={state.tone}>{state.label}</Badge>
+            </button>;
+          })}</div>
+        </aside>
+        <section className="compare-grid"><ProviderResult title="问题检索结果" time={currentValidation.checkedAt ? new Date(currentValidation.checkedAt).toLocaleString() : '未返回检查时间'} tone="blue" question={activeQuestion} result={activeResult} status={currentValidation.status || 'not_run'} providerState="已运行"/></section>
+      </div> : <section className="panel"><SectionHead icon={Target} eyebrow="内容核验" title="内容问题尚未核验" note="本次没有提交内容问题；结构检查通过不代表材料内容正确。"/><a href={navigationHref('inspect', `/inspect/?doc=${encodeURIComponent(documentId)}`)}>核对材料原页 <ArrowRight/></a></section>}
+    </>}
   </div>;
 }
 
