@@ -1,3 +1,4 @@
+import { GUIDANCE_CHAPTERS, GUIDANCE_DURATION, guidanceChapterAtTime, formatGuidanceTime } from '../../shared/guidance-timeline.js';
 import { LESSON_PAGES, navigationHref } from '../navigation-context.js';
 // 应用壳：侧栏导航/布局/教学任务/引导页（从 App.jsx 迁出）
 import { useEffect, useRef, useState } from 'react';
@@ -129,25 +130,17 @@ export const GUIDANCE_STEPS = [
   ['连续追问', '围绕同一篇目继续追问，系统会保留本场对话、教材范围和已经核对过的页面。'],
   ['生成课堂材料', '把已经核对的内容整理成方案、三卡和渐进式板书，教师可以编辑、保存、锁定。']
 ];
-const GUIDANCE_CHAPTERS = [
-  { title: '选定篇目', action: '打开教材库', href: '/library/', cue: '在目录中找到课文，打开对应教材页。' },
-  { title: '核对课程标准', action: '打开课标对齐', href: '/alignment/', cue: '先核对篇目相关的课标原页；已有方案时可保存教师选择。' },
-  { title: '读教师用书', action: '查看教师用书', href: '/library/?doc=teacher-guide', cue: '查找教学目标、重点难点和活动建议。' },
-  { title: '回到学生教材', action: '核对课文原页', href: '/library/?doc=textbook', cue: '核对原文、页码和学生需要完成的任务。' },
-  { title: '连续追问', action: '进入备课问答', href: '/ask/', cue: '在同一方案中追问，修改后保存。' },
-  { title: '生成课堂材料', action: '打开一课三卡', href: '/cards/', cue: '确认方案后生成三卡，编辑并保存。' }
-];
 export function GuidancePage() {
   const video = useRef(null);
   const [chapter, setChapter] = useState(0);
   const [failed, setFailed] = useState(false);
   const seek = index => {
     setChapter(index);
-    if (video.current) { video.current.currentTime = index * 10; video.current.play().catch(() => {}); }
+    if (video.current) { video.current.currentTime = GUIDANCE_CHAPTERS[index].start; video.current.play().catch(() => {}); }
   };
   return <div className="view-stack guidance-page">
-    <header className="guidance-heading"><span>使用引导 · 1 分钟</span><h1>跟着一篇课文，走完一次备课</h1><p>六个步骤，可按章节观看，也可以直接进入页面操作。</p><a className="primary" href={navigationHref('library', '/library/')}>选择一篇课文 <ArrowRight/></a></header>
-    <section className="panel guidance-player"><div className="guidance-screen"><video ref={video} controls playsInline preload="metadata" poster="/guidance/活教参备课引导封面.jpg" onTimeUpdate={event => setChapter(Math.min(5, Math.floor(event.currentTarget.currentTime / 10)))} onError={() => setFailed(true)}><source src="/guidance/活教参备课引导.mp4?v=2" type="video/mp4"/><track kind="captions" src="/guidance/活教参备课引导.vtt?v=2" srcLang="zh-CN" label="中文字幕"/>当前浏览器无法播放视频。</video>{failed && <p role="alert">视频暂时无法播放，可以按右侧章节的文字说明继续操作。</p>}<p>页面操作演示 · 示例账号与方案用于说明流程，教学内容请以实际教材为准。</p></div><aside className="guidance-chapters" aria-label="视频章节"><h2>跟着做</h2>{GUIDANCE_CHAPTERS.map((item, index) => <button key={item.title} type="button" className={chapter === index ? 'active' : ''} aria-pressed={chapter === index} onClick={() => seek(index)}><span>0{index + 1}</span><b>{item.title}</b><small>0:{String(index * 10).padStart(2, '0')}</small></button>)}<div className="guidance-next"><p>{GUIDANCE_CHAPTERS[chapter].cue}</p><a href={navigationHref(['library','alignment','library','library','ask','cards'][chapter], GUIDANCE_CHAPTERS[chapter].href)}>{GUIDANCE_CHAPTERS[chapter].action}<ArrowRight/></a></div></aside></section>
+    <header className="guidance-heading"><span>使用引导 · {formatGuidanceTime(GUIDANCE_DURATION)}</span><h1>跟着一篇课文，走完一次备课</h1><p>六个步骤，可按章节观看，也可以直接进入页面操作。</p><a className="primary" href={navigationHref('library', '/library/')}>选择一篇课文 <ArrowRight/></a></header>
+    <section className="panel guidance-player"><div className="guidance-screen"><video ref={video} controls playsInline preload="metadata" poster="/guidance/活教参备课引导封面.jpg" onTimeUpdate={event => setChapter(guidanceChapterAtTime(event.currentTarget.currentTime))} onError={() => setFailed(true)}><source src="/guidance/活教参备课引导.mp4?v=2" type="video/mp4"/><track kind="captions" src="/guidance/活教参备课引导.vtt?v=2" srcLang="zh-CN" label="中文字幕"/>当前浏览器无法播放视频。</video>{failed && <p role="alert">视频暂时无法播放，可以按右侧章节的文字说明继续操作。</p>}<p>页面操作演示 · 示例账号与方案用于说明流程，教学内容请以实际教材为准。</p></div><aside className="guidance-chapters" aria-label="视频章节"><h2>跟着做</h2>{GUIDANCE_CHAPTERS.map((item, index) => <button key={item.title} type="button" className={chapter === index ? 'active' : ''} aria-pressed={chapter === index} onClick={() => seek(index)}><span>0{index + 1}</span><b>{item.title}</b><small>{formatGuidanceTime(item.start)}</small></button>)}<div className="guidance-next"><p>{GUIDANCE_CHAPTERS[chapter].cue}</p><a href={navigationHref(['library','alignment','library','library','ask','cards'][chapter], GUIDANCE_CHAPTERS[chapter].href)}>{GUIDANCE_CHAPTERS[chapter].action}<ArrowRight/></a></div></aside></section>
     <section className="guidance-steps panel"><header><div><h2>每一步完成后，留下什么</h2></div></header><div className="guidance-step-grid">{GUIDANCE_STEPS.map(([title, body], index) => <article key={title}><div className="guidance-step-number">0{index + 1}</div><div><h3>{title}</h3><p>{body}</p><a href={navigationHref(['library','alignment','library','library','ask','cards'][index], GUIDANCE_CHAPTERS[index].href)}>{GUIDANCE_CHAPTERS[index].action}<ArrowRight/></a></div></article>)}</div></section>
   </div>;
 }
