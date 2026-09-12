@@ -1,0 +1,13 @@
+{
+  "status": "awaiting-real-recording",
+  "lesson": "乡愁",
+  "durationSeconds": null,
+  "chapters": [
+    {"id": "select-lesson", "title": "选定篇目", "start": null, "end": null},
+    {"id": "curriculum", "title": "核对课程标准", "start": null, "end": null},
+    {"id": "teacher-interpretation", "title": "参考教师用书的意象解读", "start": null, "end": null},
+    {"id": "student-text", "title": "回到学生教材", "start": null, "end": null},
+    {"id": "generate-save", "title": "调整条件、生成并保存", "start": null, "end": null},
+    {"id": "classroom-materials", "title": "学生问题与教师备注", "start": null, "end": null}
+  ]
+}
