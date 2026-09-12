@@ -5,6 +5,7 @@ import hmac
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 
 from .models import (
     DocumentResponse,
@@ -28,6 +29,7 @@ from .pageindex_adapter import (
     VendorPageIndexAdapter,
 )
 from .repository import FileRepository
+from .durable_repository import SupabaseRepository, RepositoryUnavailable, RevisionConflict
 from .seed_runtime import seed_runtime
 from .service import IndexService
 from .ocr_provider import create_ocr_provider
@@ -76,12 +78,27 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         raise RuntimeError(
             f"Unsupported PAGEINDEX_ADAPTER={adapter_name!r}; expected 'fixture' or 'vendor'"
         )
-    repository = FileRepository(data_root or os.getenv("PDF_INDEX_DATA_DIR", str(DEFAULT_DATA_ROOT)))
-    seed_runtime(repository, os.getenv("PAGEINDEX_SEED_ROOT", str(DEFAULT_SEED_ROOT)))
+    repository_mode = os.getenv("PAGEINDEX_REPOSITORY", "file").strip().lower()
+    if repository_mode == "supabase":
+        repository = SupabaseRepository(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
+                                        os.getenv("PAGEINDEX_SEED_ROOT", str(DEFAULT_SEED_ROOT)))
+    elif repository_mode == "file":
+        repository = FileRepository(data_root or os.getenv("PDF_INDEX_DATA_DIR", str(DEFAULT_DATA_ROOT)))
+        seed_runtime(repository, os.getenv("PAGEINDEX_SEED_ROOT", str(DEFAULT_SEED_ROOT)))
+    else:
+        raise RuntimeError("Unsupported PAGEINDEX_REPOSITORY")
     service = IndexService(repository, adapter, ocr_provider=create_ocr_provider())
 
     app = FastAPI(title="Huojiaocan PDF Index Service", version="0.2.0")
     app.state.index_service = service
+
+    @app.exception_handler(RevisionConflict)
+    async def revision_conflict(request, error):
+        return JSONResponse(status_code=409, content={"detail": str(error)})
+
+    @app.exception_handler(RepositoryUnavailable)
+    async def storage_unavailable(request, error):
+        return JSONResponse(status_code=503, content={"detail": "pageindex_storage_unavailable"})
 
     # The public deployment is called by the BFF, not by browsers. Internal
     # routes must never become public merely because an environment variable

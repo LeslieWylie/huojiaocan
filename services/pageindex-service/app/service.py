@@ -10,6 +10,8 @@ import json
 from collections import Counter
 from pathlib import Path
 from typing import Iterable
+from functools import wraps
+from inspect import signature
 
 import fitz
 
@@ -38,7 +40,35 @@ from .models import (
 from .ocr_provider import OCRProvider, OCRProviderError, decode_image_base64
 from .pageindex_adapter import PageIndexAdapter
 from .repository import FileRepository
+from .durable_repository import SupabaseRepository, RepositoryUnavailable, RevisionConflict
 from .selection import select_page_text
+
+
+def aggregate_request(method):
+    """Bind one immutable snapshot to the request, and return only after CAS."""
+    method_signature = signature(method)
+    target_name = list(method_signature.parameters)[1]
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        if not isinstance(self.repository, SupabaseRepository):
+            return method(self, *args, **kwargs)
+        arguments = method_signature.bind(self, *args, **kwargs).arguments
+        target = arguments[target_name]
+        document_id = target if isinstance(target, str) else target.document_id
+        expected = None
+        if method.__name__ == 'update_page':
+            patch = arguments['patch']
+            expected = patch.expected_revision
+            if expected is None:
+                raise RevisionConflict('pageindex_revision_required')
+        unit = self.repository.snapshot(document_id, expected)
+        scoped = IndexService(unit, self.adapter, self.ocr_provider)
+        result = method(scoped, *args, **kwargs)
+        revision = unit.commit()  # Outside _run_create's extraction error handler.
+        if isinstance(result, PageResponse):
+            result.revision = revision
+        return result
+    return wrapped
 
 
 class IndexService:
@@ -103,11 +133,13 @@ class IndexService:
             updatedAt=now,
         )
 
+    @aggregate_request
     def register_document(self, command: IndexCommand) -> DocumentResponse:
         document = self._document_for_command(command)
         self.repository.save_document(document)
         return DocumentResponse(status=document.index_status, document=document)
 
+    @aggregate_request
     def start_index(self, command: IndexCommand) -> JobRef:
         existing_index = self.repository.get_index(command.document_id)
         pages: list[PageInput] = list(command.pages)
@@ -150,6 +182,7 @@ class IndexService:
         )
         return self.create_index(request, operation="build")
 
+    @aggregate_request
     def create_index(self, request: CreateIndexRequest, operation: str = "create") -> JobRef:
         job = self._new_job(request.document_id, operation, len(request.pages))
         self.repository.save_job(job)
@@ -203,6 +236,8 @@ class IndexService:
                 pdfUrl=existing.pdf_url if existing else None,
             )
             self.repository.save_document(self._document_for_command(command, index_status=job.status))
+        except (RepositoryUnavailable, RevisionConflict):
+            raise
         except Exception as exc:
             job.status = JobStatus.failed
             job.error = str(exc)
@@ -278,6 +313,7 @@ class IndexService:
             }
         )
 
+    @aggregate_request
     def ingest_pdf(self, request):
         """Read a PDF in physical page order and OCR only when required.
 
@@ -353,6 +389,7 @@ class IndexService:
             values.extend(range(start, end + 1))
         return values
 
+    @aggregate_request
     def refresh_index(self, document_id: str, request: RefreshIndexRequest) -> JobRef:
         existing = self.repository.get_index(document_id)
         if not existing:
@@ -408,6 +445,7 @@ class IndexService:
         assert final is not None
         return JobRef(jobId=job_ref.job_id, documentId=document_id, status=final.status)
 
+    @aggregate_request
     def get_document(self, document_id: str) -> DocumentResponse:
         document = self.repository.get_document(document_id)
         if not document:
@@ -434,6 +472,7 @@ class IndexService:
         separator = "&" if "#" in pdf_url else "#"
         return {"pdfUrl": f"{pdf_url}{separator}page={page_number}", "page": page_number}
 
+    @aggregate_request
     def get_page(self, document_id: str, page_number: int) -> PageResponse:
         document = self.repository.get_index(document_id)
         if not document:
@@ -443,6 +482,7 @@ class IndexService:
             raise LookupError(page_number)
         return PageResponse(documentId=document_id, page=page, viewer=self._viewer(document_id, page_number))
 
+    @aggregate_request
     def update_page(self, document_id: str, page_number: int, patch: PagePatch) -> PageResponse:
         document = self.repository.get_index(document_id)
         if not document:
@@ -480,12 +520,14 @@ class IndexService:
             self.repository.save_document(record)
         return PageResponse(documentId=document_id, page=replacement, viewer=self._viewer(document_id, page_number))
 
+    @aggregate_request
     def get_tree(self, document_id: str):
         document = self.repository.get_index(document_id)
         if not document:
             raise KeyError(document_id)
         return document.tree
 
+    @aggregate_request
     def get_text_snapshot(self, document_id: str, start_page: int | None = None, end_page: int | None = None) -> dict[str, object]:
         """Return the canonical page-delimited text used by retrieval.
 
@@ -498,8 +540,8 @@ class IndexService:
         if not index_document:
             raise KeyError(document_id)
         rows: list[dict[str, object]] = []
-        sidecar = self.repository.text_dir / f"{document_id}-pages.jsonl"
-        if sidecar.exists():
+        sidecar = self.repository.text_dir / f"{document_id}-pages.jsonl" if isinstance(self.repository, FileRepository) else None
+        if sidecar and sidecar.exists():
             for line in sidecar.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
@@ -577,7 +619,9 @@ class IndexService:
             return RetrieveResponse(query=request.query, results=[])
         allowed = set(request.document_ids or [])
         scored: list[RetrievedPage] = []
-        for index_document in self.repository.list_indexes():
+        indexes = (filter(None, (self.repository.get_index(document_id) for document_id in sorted(allowed)))
+                   if allowed else self.repository.list_indexes())
+        for index_document in indexes:
             if allowed and index_document.document_id not in allowed:
                 continue
             for page in index_document.pages:
@@ -629,6 +673,7 @@ class IndexService:
         scored.sort(key=lambda item: (-item.score, item.document_id, item.pdf_page))
         return RetrieveResponse(query=request.query, results=scored[: request.top_k])
 
+    @aggregate_request
     def validate(self, document_id: str, request: ValidationRequest) -> ValidationReport:
         index_document = self.repository.get_index(document_id)
         if not index_document:
@@ -702,11 +747,13 @@ class IndexService:
             self.repository.save_document(record)
         return report
 
+    @aggregate_request
     def get_validation(self, document_id: str) -> ValidationReport:
         report = self.repository.get_validation(document_id)
         if not report:
             raise KeyError(document_id)
         return report
 
+    @aggregate_request
     def delete_document(self, document_id: str) -> bool:
         return self.repository.delete_document(document_id)

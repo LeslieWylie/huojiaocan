@@ -149,6 +149,7 @@ class RefreshIndexRequest(ApiModel):
 
 
 class PagePatch(ApiModel):
+    expected_revision: int | None = Field(default=None, alias="expectedRevision", ge=0)
     printed_page: str | None = Field(default=None, validation_alias=AliasChoices("printedPage", "printedPageLabel"), serialization_alias="printedPage")
     page_title: str | None = Field(default=None, validation_alias=AliasChoices("pageTitle", "title"), serialization_alias="pageTitle")
     section_path: list[str] | None = Field(default=None, alias="sectionPath")
@@ -222,6 +223,7 @@ class DocumentResponse(ApiModel):
 
 
 class PageResponse(ApiModel):
+    revision: int | None = None
     document_id: str = Field(alias="documentId")
     page: SelectedPage
     viewer: dict[str, Any] = Field(default_factory=dict)

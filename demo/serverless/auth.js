@@ -181,7 +181,7 @@ export function safeAuthResponse(res, error) {
     'gateway_invalid_response', 'gateway_request_failed',
     'pageindex_unavailable', 'pageindex_unauthorized', 'pageindex_forbidden', 'pageindex_rate_limited',
     'pageindex_timeout', 'pageindex_invalid_request', 'pageindex_invalid_response', 'pageindex_request_failed',
-    'pageindex_not_found', 'pageindex_method_not_allowed', 'evidence_insufficient', 'card_generation_failed',
+    'pageindex_not_found', 'pageindex_method_not_allowed', 'pageindex_revision_conflict', 'evidence_insufficient', 'card_generation_failed',
     'draft_not_found', 'draft_not_owned', 'card_not_found', 'card_locked', 'index_write_forbidden',
     'edit_conflict', 'version_required', 'plan_incomplete', 'plan_confirmation_required',
     'teaching_slides_page_limit', 'teaching_slides_duplicate_id', 'teaching_slides_notes_limit',

@@ -80,7 +80,8 @@ export function InspectPage() {
   const canEdit = !loading && loadedPageKey === pageKey && Boolean(record);
   const catalogInfo=useCatalogDocument(doc);
   const info=catalogInfo||{short:docName(doc),tone:'green',pdfUrl:''};
-  const applyPage=data=>{const next=data?.page||data;setRecord(next);setSource(next?.selectedTextSource||next?.textSource||'retrieval');setRetrievalText(pageText(next,'retrieval'));setIncluded(next?.includeInIndex!==false);setTitle(next?.pageTitle||next?.title||'');setPrintedPage(String(next?.printedPageLabel??next?.printedPage??''));setSectionPath(Array.isArray(next?.sectionPath)?next.sectionPath.join(' › '):String(next?.sectionPath||''));};
+  const [revision,setRevision]=useState(null);
+  const applyPage=data=>{setRevision(data?.revision??null);const next=data?.page||data;setRecord(next);setSource(next?.selectedTextSource||next?.textSource||'retrieval');setRetrievalText(pageText(next,'retrieval'));setIncluded(next?.includeInIndex!==false);setTitle(next?.pageTitle||next?.title||'');setPrintedPage(String(next?.printedPageLabel??next?.printedPage??''));setSectionPath(Array.isArray(next?.sectionPath)?next.sectionPath.join(' › '):String(next?.sectionPath||''));};
   const loadPage=async(target=page,signal)=>{
     const key=`${doc}:${target}`, sequence=++readRequest.current;
     const current=()=>!signal?.aborted && sequence===readRequest.current && currentPageKey.current===key;
@@ -94,7 +95,7 @@ export function InspectPage() {
     finally { if(current())setLoading(false); }
   };
   useEffect(()=>{const controller=new AbortController();setNotice('');setRerunJobId('');replaceWorkspaceUrl(navigationHref('inspect', `/inspect/?doc=${encodeURIComponent(doc)}&page=${page}`));loadPage(page,controller.signal);return()=>controller.abort()},[doc,page]);
-  const save=async()=>{if(saving||!canEdit||currentPageKey.current!==loadedPageKey)return;setSaving(true);setError('');setNotice('');try{const data=await request(`/documents/${encodeURIComponent(doc)}/pages/${page}`,{method:'PATCH',body:{pageTitle:title,printedPageLabel:printedPage,sectionPath:sectionPath.split(/\s*[›>/]\s*/).filter(Boolean),retrievalText,includeInIndex:included}});if(currentPageKey.current!==pageKey||!inspectedPageMatches(data,doc,page))throw new Error('page_identity_mismatch');applyPage(data);setNotice('页面调整已保存；原始教材和教材页码保持不变。')}catch(err){setError('暂时无法保存页面调整，请稍后重试。')}finally{setSaving(false)}};
+  const save=async()=>{if(saving||!canEdit||currentPageKey.current!==loadedPageKey)return;setSaving(true);setError('');setNotice('');try{const data=await request(`/documents/${encodeURIComponent(doc)}/pages/${page}`,{method:'PATCH',body:{...(revision!==null?{expectedRevision:revision}:{}),pageTitle:title,printedPageLabel:printedPage,sectionPath:sectionPath.split(/\s*[›>/]\s*/).filter(Boolean),retrievalText,includeInIndex:included}});if(currentPageKey.current!==pageKey||!inspectedPageMatches(data,doc,page))throw new Error('page_identity_mismatch');applyPage(data);setNotice('页面调整已保存；原始教材和教材页码保持不变。')}catch(err){setError(err.status===409||err.code==='pageindex_revision_conflict'?'本材料已有较新的修改；你的输入仍保留。请先复制需要保留的内容，再重新加载本页。':'暂时无法保存页面调整，请稍后重试。')}finally{setSaving(false)}};
   const rerun=async()=>{if(rerunning)return;setRerunning(true);setError('');setNotice('');try{const result=await request(`/documents/${encodeURIComponent(doc)}/pages/rerun`,{method:'POST',body:{pages:[page],extractionPolicy:'auto'}});setRerunJobId(result.jobId||result.id||'');setNotice('已提交当前页重新读取；尚未确认处理完成，请查看任务进度。')}catch(err){setError('暂时无法重新读取当前页，请稍后重试。')}finally{setRerunning(false)}};
   const shownText=source==='retrieval'?retrievalText:pageText(record,source);
   const activeSource=record?.selectedTextSource||record?.textSource||source;

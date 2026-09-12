@@ -1233,6 +1233,7 @@ function pageIndexErrorForStatus(status) {
   if (status === 401) return pageIndexError('pageindex_unauthorized', { status });
   if (status === 403) return pageIndexError('pageindex_forbidden', { status });
   if (status === 404) return pageIndexError('pageindex_not_found', { status });
+  if (status === 409) return pageIndexError('pageindex_revision_conflict', { status });
   if (status === 405) return pageIndexError('pageindex_method_not_allowed', { status });
   if (status === 408 || status === 504) return pageIndexError('pageindex_timeout', { status, retryable: true });
   if (status === 422) return pageIndexError('pageindex_invalid_request', { status });

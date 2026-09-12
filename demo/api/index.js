@@ -47,7 +47,7 @@ const publicErrorCodes = new Set([
   'document_not_found', 'page_not_found', 'job_not_found', 'question_required', 'query_required', 'pages_required',
   'pageindex_unavailable', 'pageindex_unauthorized', 'pageindex_forbidden', 'pageindex_rate_limited',
   'pageindex_timeout', 'pageindex_invalid_request', 'pageindex_invalid_response', 'pageindex_request_failed',
-  'pageindex_not_found', 'pageindex_method_not_allowed',
+  'pageindex_not_found', 'pageindex_method_not_allowed', 'pageindex_revision_conflict',
   'gateway_not_configured', 'gateway_invalid_url', 'gateway_invalid_request', 'gateway_unauthorized',
   'gateway_forbidden', 'gateway_rate_limited', 'gateway_timeout', 'gateway_unavailable',
   'gateway_invalid_response', 'gateway_request_failed',
@@ -439,6 +439,7 @@ function errorResponse(res, error) {
   const code = safeErrorCode(error);
   const status = code.includes('not_found') ? 404
     : code.includes('required') ? 400
+    : code === 'pageindex_revision_conflict' ? 409
     : code === 'pageindex_invalid_request' || code === 'pageindex_method_not_allowed' ? 400
     : code.includes('unavailable') || code.includes('timeout') || code.includes('rate_limited') ? 503
         : code === 'operation_not_supported_for_fixture_document' ? 409 : 500;
