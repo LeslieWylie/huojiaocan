@@ -54,7 +54,7 @@ docker run --rm -p 8000:8000 \
 `ocr_provider_not_configured`，不会把没有识别结果的页面伪装成已完成；普通原生文字索引不受影响。
 `POST /internal/v1/ingest` 只接受 `pdfBase64` 或 `PDF_INPUT_ROOT` 下的 `pdfPath`，不接受任意远程 URL。
 
-## 持久化索引（2026-09-13，待生产连接配置）
+## 持久化索引（2026-09-13，生产已连接，完整交互验收待完成）
 
 新增 `supabase/migrations/202609130001_pageindex_persistence.sql`，独立保存文档、完整索引、
 质检与任务。该迁移已应用到现有项目；没有迁移或重新处理内置教材。
@@ -101,3 +101,8 @@ docker run --rm -p 8000:8000 \
 配置入口：Vercel 团队 roy-leos-projects → pageindex-service → Settings → Environment Variables → Production。
 先部署兼容的主站/BFF，再发布此服务只读保护；补齐连接配置后重新部署服务启用持久化。
 原书读取保持可用，未配置时不能创建会丢失的新任务。
+
+2026-09-13 配置续记：已通过现有已登录项目安全复用服务端凭据，Production 已启用
+`PAGEINDEX_REPOSITORY=supabase`；没有购买或新建 PageIndex 官方 key。受限临时凭据已移除。
+服务部署 `pageindex-service-ajyg8ewxx-roy-leos-projects.vercel.app` Ready；主站读取学生教材第 1 页
+返回 200、`revision: 0`，原书 seed 读取正常。两页样本的恢复、页面保存与重新部署后读回仍待实际交互验收。

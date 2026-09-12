@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, CheckCircle2, CircleAlert, ExternalLink, History, Library, Network, Route, ShieldCheck } from 'lucide-react';
 import { Badge, SectionHead } from '../ui-kit.jsx';
 import { CARD_EDIT_GUIDANCE, currentPageReturn, normalizeTree, queryParams, request, rootRequest, useAuthSession } from '../app-core.js';
+import { replaceWorkspaceUrl } from '../navigation-context.js';
 import { buildReaderHref } from '../reader-target.js';
 import { buildUnitTrack, stableNodeId, unitNodes, unitTrackInsights } from '../unit-planning.js';
 
@@ -57,13 +58,13 @@ export function Unit() {
     setSelectedUnitId(String(selectedUnit.id));
     const url = new URL(location.href);
     url.searchParams.set('unit', String(selectedUnit.id));
-    globalThis.history?.replaceState?.(null, '', url);
+    replaceWorkspaceUrl(url);
   }, [selectedUnit?.id, selectedUnitId]);
 
   const selectUnit = id => {
     const url = new URL(location.href);
     url.searchParams.set('unit', id);
-    globalThis.history?.replaceState?.(null, '', url);
+    replaceWorkspaceUrl(url);
     setSelectedUnitId(id);
   };
   const unitRefQuery = (unit, lesson) => new URLSearchParams({
