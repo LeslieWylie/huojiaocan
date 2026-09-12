@@ -1,3 +1,4 @@
+import { normalizeTeachingSlideNotes, separateLegacyQuestionRoles, separateSavedQuestionRoles } from './teaching-slides-roles.js';
 import { paginateTemplateSlides } from './teaching-slides-pagination.js';
 import { normalizeSlide, validateScene } from '@openmaic/dsl';
 import { applyEditorTransaction, isValidEditorElement } from '@openmaic/editor/core';
@@ -123,6 +124,13 @@ function validateContent(content, slideId = 'slide') {
 
 export function teachingSlideDeckV1ToV2(value = {}) {
   const legacy = normalizeTeachingSlideDeck(value);
+  // V1 has 260-character body / five-note limits. In the V2 question path,
+  // read the full input before those lossy legacy limits can hide a response.
+  legacy.slides = legacy.slides.map(slide => {
+    if (slide.kind !== 'questions') return slide;
+    const source = value.slides?.find(item => item.id === slide.id) || slide;
+    return separateLegacyQuestionRoles({ ...slide, body: Array.isArray(source.body) ? source.body.map(String) : slide.body, teacherNotes: source.teacherNotes || slide.teacherNotes });
+  });
   const referenceMap = new Map(legacy.references.map(item => [String(item.id), item]));
   return normalizeTeachingSlideDeckV2({
     version: TEACHING_SLIDES_V2_VERSION,
@@ -153,7 +161,17 @@ export function teachingSlideDeckV1ToV2(value = {}) {
 }
 
 export function buildTeachingSlideDeckV2(draft = {}) {
-  return teachingSlideDeckV1ToV2(buildTeachingSlideDeck(draft));
+  const legacy = buildTeachingSlideDeck(draft);
+  const card = (draft.cards || []).find(item => item?.type === 'question');
+  const items = Array.isArray(card?.items) ? card.items : Array.isArray(card?.content) ? card.content : [];
+  const questions = legacy.slides.find(slide => slide.kind === 'questions');
+  if (questions && items.length) {
+    questions.body = items.map(item => String(typeof item === 'string' ? item : item?.text || item?.content || '').trim()).filter(Boolean);
+    const ids = new Set(items.flatMap(item => Array.isArray(item?.citationIds) ? item.citationIds.map(String) : []));
+    questions.citationIds = legacy.references.filter(ref => ids.has(ref.id) && ref.documentId === 'textbook').map(ref => ref.id);
+    questions.teacherCitationIds = legacy.references.filter(ref => ids.has(ref.id) && ref.documentId === 'teacher-guide').map(ref => ref.id);
+  }
+  return teachingSlideDeckV1ToV2(legacy);
 }
 
 export function normalizeTeachingSlideDeckV2(value = {}) {
@@ -172,7 +190,7 @@ export function normalizeTeachingSlideDeckV2(value = {}) {
     metadata: {
       citationIds: normalizeStringList(item?.metadata?.citationIds, 8, 100),
       teacherCitationIds: normalizeStringList(item?.metadata?.teacherCitationIds, 8, 100),
-      teacherNotes: normalizeStringList(item?.metadata?.teacherNotes, 5, 360)
+      teacherNotes: normalizeTeachingSlideNotes(item?.metadata?.teacherNotes)
     }
   }));
   validateDeckImageBudget(slides);
@@ -215,7 +233,7 @@ export function updateTeachingSlideDeckV2(baseValue, { slideId, transaction, met
     }
   }
   if (index >= 0 && metadataPatch) {
-    slides[index].metadata.teacherNotes = normalizeStringList(metadataPatch.teacherNotes ?? slides[index].metadata.teacherNotes, 5, 360);
+    slides[index].metadata.teacherNotes = normalizeTeachingSlideNotes(metadataPatch.teacherNotes ?? slides[index].metadata.teacherNotes);
   }
   validateDeckImageBudget(slides);
   if (confirm && slides.some(item => !item.content.canvas.elements.some(element => element.type === 'text' && plainText(element.content)))) {
@@ -243,6 +261,16 @@ export function teachingSlideDeckV2Html(value = {}, imageDataUrls = []) {
 export function paginateTeachingSlideDeckV2(value) {
   const base = normalizeTeachingSlideDeckV2(value);
   const { slides, report } = paginateTemplateSlides(base.slides);
+  const deck = normalizeTeachingSlideDeckV2({ ...base, slides, status: 'draft', updatedAt: new Date().toISOString(), confirmedAt: null, confirmedBy: null });
+  return { deck, report };
+}
+
+export function separateTeachingSlideQuestionRolesV2(value, histories = []) {
+  const base = normalizeTeachingSlideDeckV2(value);
+  const validHistories = histories.flatMap(history => {
+    try { return [normalizeTeachingSlideDeckV2(history)]; } catch { return []; }
+  });
+  const { slides, report } = separateSavedQuestionRoles(base, validHistories);
   const deck = normalizeTeachingSlideDeckV2({ ...base, slides, status: 'draft', updatedAt: new Date().toISOString(), confirmedAt: null, confirmedBy: null });
   return { deck, report };
 }

@@ -23,7 +23,7 @@ function replaceText(element, textLines) {
   // Body/footer recognition requires one flat div, so preserve its exact style.
   return element.content.replace(/^(<div\b[^>]*>)[\s\S]*(<\/div>)$/u, (_, start, end) => `${start}${textLines.map(escape).join('<br>')}${end}`);
 }
-function recognizable(slide) {
+export function isTeachingSlideTemplate(slide) {
   const canvas = slide.content.canvas, elements = canvas.elements;
   if (canvas.viewportSize !== 1000 || canvas.viewportRatio !== 0.5625) return false;
   const title = elements.find(e => e.id === `${slide.id}-title`), kind = elements.find(e => e.id === `${slide.id}-kind`);
@@ -44,7 +44,7 @@ function recognizable(slide) {
 export function paginateTemplateSlides(inputSlides, { generated = false } = {}) {
   const used = new Set(inputSlides.map(s => s.id)), protectedPages = [], changedPages = [], slides = [];
   for (const [originalIndex, slide] of inputSlides.entries()) {
-    if (!recognizable(slide)) { slides.push(copy(slide)); protectedPages.push({ page: originalIndex + 1, title: slide.title, reason: '含自定义元素、版式或复杂格式，原样保留' }); continue; }
+    if (!isTeachingSlideTemplate(slide)) { slides.push(copy(slide)); protectedPages.push({ page: originalIndex + 1, title: slide.title, reason: '含自定义元素、版式或复杂格式，原样保留' }); continue; }
     const canvas = slide.content.canvas, title = canvas.elements.find(e => e.id === `${slide.id}-title`), kind = canvas.elements.find(e => e.id === `${slide.id}-kind`);
     const refs = canvas.elements.find(e => e.id === `${slide.id}-references`);
     const titleHeight = lines(slideText(title.content), fontSize(title), 856).length * fontSize(title) * 1.35 + 24;

@@ -12,7 +12,7 @@ import { buildPreClassPulse, mergePreClassPulse, preClassPulseIsStale } from '..
 import { mergeTeachingDeliberation, teachingDeliberationIsStale } from '../shared/teaching-deliberation.js';
 import { buildLessonStudy, lessonStudyIsStale, mergeLessonStudy } from '../shared/lesson-study.js';
 import { normalizeTeachingSlideDeck, teachingSlideDeckIsStale } from '../shared/teaching-slides.js';
-import { buildTeachingSlideDeckV2, paginateTeachingSlideDeckV2, createTeachingSlideDeckV2Revision, normalizeTeachingSlideDeckV2, teachingSlideDeckV1ToV2, teachingSlideDeckV2IsStale, updateTeachingSlideDeckV2 } from '../shared/teaching-slides-v2.js';
+import { buildTeachingSlideDeckV2, paginateTeachingSlideDeckV2, separateTeachingSlideQuestionRolesV2, createTeachingSlideDeckV2Revision, normalizeTeachingSlideDeckV2, teachingSlideDeckV1ToV2, teachingSlideDeckV2IsStale, updateTeachingSlideDeckV2 } from '../shared/teaching-slides-v2.js';
 import { buildLayeredHomework, layeredHomeworkIsStale, mergeLayeredHomework, normalizeLayeredHomework } from '../shared/layered-homework.js';
 import { homeworkReviewContext, homeworkReviewIsStale, mergeHomeworkReview, normalizeHomeworkReview } from '../shared/homework-review.js';
 import { deriveTeachingTasks } from '../shared/teaching-task-flow.js';
@@ -957,7 +957,7 @@ export default async function handler(req, res) {
           ? teachingSlideDeckV1ToV2(storedV1)
           : buildTeachingSlideDeckV2(current);
       const answer = clone(current.answer || {});
-      const pagination = body.paginate === true ? paginateTeachingSlideDeckV2(base) : null;
+      const pagination = body.studentQuestions === true ? separateTeachingSlideQuestionRolesV2(base, answer.teachingSlidesV2History || []) : body.paginate === true ? paginateTeachingSlideDeckV2(base) : null;
       if (pagination && body.preview === true) return json(res, 200, { ...pagination, draftVersion: Number(current.version || 1) });
       const deck = pagination ? pagination.deck : body.revise === true
         ? createTeachingSlideDeckV2Revision(base)

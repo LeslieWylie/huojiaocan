@@ -184,7 +184,7 @@ export function safeAuthResponse(res, error) {
     'pageindex_not_found', 'pageindex_method_not_allowed', 'evidence_insufficient', 'card_generation_failed',
     'draft_not_found', 'draft_not_owned', 'card_not_found', 'card_locked', 'index_write_forbidden',
     'edit_conflict', 'version_required', 'plan_incomplete', 'plan_confirmation_required',
-    'teaching_slides_page_limit', 'teaching_slides_duplicate_id',
+    'teaching_slides_page_limit', 'teaching_slides_duplicate_id', 'teaching_slides_notes_limit',
     'revision_not_found', 'asset_not_found', 'asset_not_owned', 'unit_lesson_not_found', 'unit_lesson_not_next',
     'unit_context_required', 'lesson_reflection_required', 'operation_id_required',
     'share_not_found', 'share_token_invalid', 'share_service_not_configured',
