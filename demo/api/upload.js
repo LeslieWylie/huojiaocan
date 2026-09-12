@@ -203,7 +203,6 @@ export function createUploadHandler({ env = process.env, storage, providerResolv
         const provider = resolved?.provider || resolved;
         if (!provider || typeof provider.createDocument !== 'function') throw new Error('provider_unavailable');
         const providerRegistration = await provider.createDocument({
-          id: documentId,
           documentId,
           title: metadata.title,
           documentType: metadata.documentType,
@@ -213,9 +212,8 @@ export function createUploadHandler({ env = process.env, storage, providerResolv
           sha256,
           mimeType,
           pageCount: 0,
-          pdfUrl: stored.pdfUrl || ''
-          ,ownerId
-          ,visibility: ownerId ? 'private' : 'public'
+          pdfUrl: stored.pdfUrl || '',
+          metadata: { ownerId, visibility: ownerId ? 'private' : 'public' }
         });
         registration = safeRegistration(providerRegistration);
 

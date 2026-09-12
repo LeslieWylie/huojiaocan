@@ -1,3 +1,4 @@
+import { navigationHref, replaceWorkspaceUrl } from '../navigation-context.js';
 // 教材库页（Tree + LibraryPage + 其私有助手，从 App.jsx 迁出）
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowRight, BookOpen, ChevronRight, CircleAlert, ExternalLink, FileSearch, FileText, Library, Search } from 'lucide-react';
@@ -74,7 +75,7 @@ export function LibraryPage() {
     }).catch(() => {});
     return () => { active = false; };
   }, [returnDraftId]);
-  const [doc,setDoc]=useState(canonicalDocumentId(params.get('doc')) || '');
+  const [doc,setDoc]=useState(canonicalDocumentId(params.get('documentId') || params.get('doc')) || '');
   const [docs,setDocs]=useState([]); const [docsError,setDocsError]=useState(''); const [tree,setTree]=useState([]); const [treeError,setTreeError]=useState(''); const [treeBusy,setTreeBusy]=useState(false); const [treeDocumentId,setTreeDocumentId]=useState(''); const [selectedNode,setSelectedNode]=useState(params.get('node')||''); const [selectedLessonTitle,setSelectedLessonTitle]=useState(params.get('lesson') || ''); const [page,setPage]=useState(null); const [pageNo,setPageNo]=useState(Number(params.get('page'))||1); const [pageInput,setPageInput]=useState(String(Number(params.get('page'))||1)); const [pageBusy,setPageBusy]=useState(false); const [pageError,setPageError]=useState(''); const [pageRetry,setPageRetry]=useState(0); const [pdfError,setPdfError]=useState(false); const [query,setQuery]=useState(params.get('q')||''); const rawRequestedScope=params.get('scope'); const requestedScope=canonicalDocumentId(rawRequestedScope); const [scope,setScope]=useState(rawRequestedScope==='all'||rawRequestedScope==='both'?rawRequestedScope:requestedScope==='teacher-guide'||requestedScope==='textbook'||requestedScope==='curriculum-standard'?requestedScope:'both'); const [results,setResults]=useState([]); const [visibleResults,setVisibleResults]=useState(6); const [searched,setSearched]=useState(Boolean(params.get('q'))); const [searchError,setSearchError]=useState(''); const [busy,setBusy]=useState(false); const initialSearch=useRef(Boolean(params.get('q')));
   const treeRequestRef = useRef(0);
   const initialAddressCorrected = useRef({});
@@ -204,7 +205,7 @@ export function LibraryPage() {
       }
     }
   }, [tree, pageNo, selectedNode, selectedLessonTitle, doc, treeDocumentId]);
-  const updateUrl = ({documentId, pageNumber, nodeId = '', lessonTitle = selectedLessonTitle, keepSearch = true}) => { const url=new URL(location.href); url.pathname='/library/'; url.search=new URLSearchParams({doc:documentId,page:String(pageNumber),...(returnDraftId?{returnDraftId}:{}),...(keepSearch&&query?{q:query}:{}),...(scope?{scope}:{}),...(nodeId?{node:nodeId}:{}),...(lessonTitle?{lesson:lessonTitle}:{})}).toString(); globalThis.history?.replaceState?.(null,'',url); };
+  const updateUrl = ({documentId, pageNumber, nodeId = '', lessonTitle = selectedLessonTitle, keepSearch = true}) => { const url=new URL(location.href); url.pathname='/library/'; url.search=new URLSearchParams({doc:documentId,page:String(pageNumber),...(returnDraftId?{returnDraftId}:{}),...(keepSearch&&query?{q:query}:{}),...(scope?{scope}:{}),...(nodeId?{node:nodeId}:{}),...(lessonTitle?{lesson:lessonTitle}:{})}).toString(); const next=new URL(navigationHref('library', url.pathname + url.search), location.origin); if(!nodeId)next.searchParams.delete('node'); if(!lessonTitle)next.searchParams.delete('lesson'); replaceWorkspaceUrl(next.pathname + next.search); };
   useEffect(() => {
     const syncFromUrl = () => {
       const next = new URLSearchParams(location.search);

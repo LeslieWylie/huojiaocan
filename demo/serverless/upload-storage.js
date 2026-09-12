@@ -101,6 +101,14 @@ function supabaseHeaders(serviceKey, extra = {}) {
 async function remoteObjectExists({ endpoint, headers, expectedSize, fetchImpl }) {
   const response = await fetchImpl(endpoint, { method: 'HEAD', headers });
   if (response.status === 404) return false;
+  if (response.status === 400) {
+    // Storage's missing-object HEAD can be 400 and has no body. Distinguish
+    // NoSuchKey through the read-only info endpoint; bucket/auth/service errors
+    // must still fail closed rather than being treated as a missing PDF.
+    const info = await fetchImpl(endpoint.replace('/storage/v1/object/', '/storage/v1/object/info/'), { method: 'GET', headers });
+    const detail = await info.json().catch(() => ({}));
+    if ([400, 404].includes(info.status) && detail.code === 'NoSuchKey') return false;
+  }
   if (!response.ok) throw new UploadStorageError('storage_remote_unavailable', 503);
   const length = Number(response.headers.get('content-length'));
   if (Number.isFinite(length) && length !== expectedSize) throw new UploadStorageError('immutable_object_conflict', 409);
