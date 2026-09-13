@@ -510,7 +510,16 @@ class IndexService:
                 updates["quality_flags"] = list(dict.fromkeys([*page.quality_flags, "retrieval_text_cleared"]))
         replacement = page.model_copy(update=updates)
         document.pages = [replacement if item.pdf_page_number == page_number else item for item in document.pages]
-        document.tree = self.adapter.build_tree(document.document_id, document.document_title, document.pages)
+        if all(not item.include_in_index for item in document.pages):
+            # Explicitly excluding every page is a valid correction, not a
+            # successful empty import. Keep original page bounds and no hits.
+            document.tree = document.tree.model_copy(update={
+                'start_pdf_page': min(item.pdf_page_number for item in document.pages),
+                'end_pdf_page': max(item.pdf_page_number for item in document.pages),
+                'children': [],
+            })
+        else:
+            document.tree = self.adapter.build_tree(document.document_id, document.document_title, document.pages)
         document.updated_at = utc_now()
         self.repository.save_index(document)
         record = self.repository.get_document(document_id)
