@@ -1,3 +1,4 @@
+import materialOriginalHandler from '../serverless/material-original.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -73,6 +74,7 @@ async function serveChunkedPdf(req, res, name, spec) {
 }
 
 export default async function handler(req, res) {
+  if (req.query?.documentId !== undefined) return materialOriginalHandler(req, res);
   const name = decodeURIComponent(String(req.query?.file || '').replace(/^\/+/, ''));
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.setHeader('Allow', 'GET, HEAD'); return res.status(405).json({ ok: false, error: 'method_not_allowed' }); }
   if (!allowed.has(name)) return res.status(404).json({ ok: false, error: 'material_not_found' });

@@ -176,3 +176,27 @@ export function selectUploadStorage({ env = process.env, fetchImpl = global.fetc
   if (productionLike) throw new UploadStorageError('storage_not_configured', 503);
   return input => storeLocalImmutablePdf({ ...input, env });
 }
+
+// Only called after document ownership has been checked. Never accept a client path.
+export async function signOriginalPdf({ objectKey, env = process.env, fetchImpl = globalThis.fetch }) {
+  if (!/^originals\/[a-f0-9]{64}\.pdf$/.test(objectKey)) throw new UploadStorageError('original_not_found', 404);
+  const config = supabaseConfiguration(env);
+  if (!config) throw new UploadStorageError('storage_not_configured', 503);
+  const objectPath = encodeObjectPath(config.bucket, objectKey);
+  const expiresIn = 300;
+  let response;
+  try {
+    response = await fetchImpl(`${config.url}/storage/v1/object/sign/${objectPath}`, {
+      method: 'POST', headers: supabaseHeaders(config.serviceKey, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ expiresIn }), signal: AbortSignal.timeout(15000)
+    });
+  } catch { throw new UploadStorageError('original_unavailable', 503); }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 404 || data.code === 'NoSuchKey' || data.error === 'Object not found') throw new UploadStorageError('original_not_found', 404);
+    throw new UploadStorageError('original_unavailable', 503);
+  }
+  const expectedPath = `/object/sign/${objectPath}`;
+  if (typeof data.signedURL !== 'string' || !data.signedURL.startsWith(`${expectedPath}?`)) throw new UploadStorageError('original_unavailable', 503);
+  return { url: `${config.url}/storage/v1${data.signedURL}`, expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString() };
+}

@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import askHandler from '../serverless/ask-handler.js';
+import materialsHandler from '../api/materials.js';
 import indexHandler from '../api/index.js';
 import uploadHandler from '../api/upload.js';
 import aiHandler from '../api/ai.js';
@@ -29,6 +30,7 @@ app.use((req, res, next) => {
 });
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'live-teacher-guide' }));
 app.get('/api/config', configHandler);
+app.all('/api/materials', materialsHandler);
 app.all('/api/auth', authProxy);
 app.post('/api/ask', askHandler);
 app.all('/api/me', meHandler);
