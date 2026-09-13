@@ -270,7 +270,20 @@ export function createUploadHandler({ env = process.env, storage, providerResolv
 
       if (ownerId) {
         try {
-          await supabaseRest('document_access', { env, authToken: ownerToken, method: 'POST', body: { document_id: documentId, owner_id: ownerId, visibility: 'private', object_key: stored.objectKey } });
+          const readOwnedAccess = () => supabaseRest('document_access', {
+            env, authToken: ownerToken,
+            query: { document_id: `eq.${documentId}`, owner_id: `eq.${ownerId}`, select: 'document_id', limit: '1' }
+          });
+          const ownsDocument = rows => Array.isArray(rows) && rows.some(row => row.document_id === documentId);
+          if (!ownsDocument(await readOwnedAccess())) {
+            try {
+              await supabaseRest('document_access', { env, authToken: ownerToken, method: 'POST', body: { document_id: documentId, owner_id: ownerId, visibility: 'private', object_key: stored.objectKey } });
+            } catch (error) {
+              // A concurrent retry may have registered this same owner's file.
+              // Never overwrite ownership or treat an unreadable row as success.
+              if (!ownsDocument(await readOwnedAccess())) throw error;
+            }
+          }
         } catch {
           return json(res, 503, { ok: false, error: 'document_access_registration_failed' });
         }
