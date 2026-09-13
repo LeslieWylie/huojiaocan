@@ -220,6 +220,43 @@ async function request(path, { method = 'GET', body, headers = { authorization: 
   return res;
 }
 
+test('private material owner can correct and validate without gaining maintainer rights', { concurrency: false }, async t => {
+  t.after(restoreEnvironment);
+  process.env.DOCUMENT_INDEX_PROVIDER = 'pageindex';
+  process.env.PAGEINDEX_BASE_URL = 'https://pageindex.test';
+  process.env.PAGEINDEX_API_KEY = 'test-provider';
+  process.env.SUPABASE_URL = 'https://supabase.test';
+  process.env.SUPABASE_ANON_KEY = 'test-anon';
+  process.env.INDEX_MAINTAINER_EMAILS = '';
+  const forwarded = [];
+  global.fetch = async (target, options = {}) => {
+    const url = new URL(target);
+    if (url.pathname === '/auth/v1/user') return Response.json({ id: 'owner-1', email: 'teacher@example.test' });
+    if (url.pathname === '/rest/v1/document_access') {
+      assert.equal(url.searchParams.get('owner_id'), 'eq.owner-1');
+      assert.equal(url.searchParams.get('visibility'), 'eq.private');
+      return Response.json(url.searchParams.get('document_id') === 'eq.private-owned' ? [{ document_id: 'private-owned' }] : []);
+    }
+    if (url.origin === 'https://pageindex.test') {
+      forwarded.push({ path: url.pathname, body: JSON.parse(options.body || '{}') });
+      return Response.json({ ok: true });
+    }
+    throw new Error(`Unexpected test request: ${url.pathname}`);
+  };
+  for (const [suffix, method] of [['pages/1', 'PATCH'], ['build', 'POST'], ['pages/rerun', 'POST'], ['validate', 'POST']]) {
+    const result = await request(`/documents/private-owned/${suffix}`, { method, body: { expectedRevision: 2 } });
+    assert.ok([200, 202].includes(result.statusCode));
+  }
+  assert.equal(forwarded.length, 4);
+  assert.equal(forwarded[0].body.expectedRevision, 2);
+  for (const documentId of ['private-other', 'textbook']) {
+    const result = await request(`/documents/${documentId}/pages/1`, { method: 'PATCH', body: {} });
+    assert.equal(result.statusCode, 403);
+  }
+  assert.equal((await request('/documents/private-owned', { method: 'DELETE' })).statusCode, 403);
+  assert.equal(forwarded.length, 4);
+});
+
 test('index API contract', { concurrency: false }, async t => {
   t.after(restoreEnvironment);
   process.env.DOCUMENT_INDEX_PROVIDER = 'local';

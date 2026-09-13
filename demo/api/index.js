@@ -26,8 +26,16 @@ async function requireIndexMaintainer(req, env = process.env) {
   return user;
 }
 
-async function protectIndexWrite(req, res) {
+async function protectIndexWrite(req, res, documentId = '') {
   try {
+    if (documentId && !publicDocumentIds.has(documentId)) {
+      const user = await requireUser(req);
+      const rows = await supabaseRest('document_access', {
+        authToken: user.token,
+        query: { select: 'document_id', document_id: `eq.${documentId}`, owner_id: `eq.${user.id}`, visibility: 'eq.private', limit: '1' }
+      });
+      if (Array.isArray(rows) && rows.some(row => row.document_id === documentId)) return true;
+    }
     await requireIndexMaintainer(req);
     return true;
   } catch (error) {
@@ -548,7 +556,7 @@ export default async function handler(req, res) {
         return json(res, 200, await provider.getPage(documentId, page));
       }
       if (req.method === 'PATCH') {
-        if (!await protectIndexWrite(req, res)) return;
+        if (!await protectIndexWrite(req, res, documentId)) return;
         return json(res, 200, await provider.updatePage(documentId, page, await readJson(req)));
       }
       res.setHeader('Allow', 'GET, PATCH');
@@ -557,19 +565,19 @@ export default async function handler(req, res) {
     const buildMatch = path.match(/^\/documents\/([^/]+)\/build$/);
     if (buildMatch) {
       if (!allowMethod(req, res, 'POST')) return;
-      if (!await protectIndexWrite(req, res)) return;
+      if (!await protectIndexWrite(req, res, decodeURIComponent(buildMatch[1]))) return;
       return json(res, 202, await provider.startIndex(decodeURIComponent(buildMatch[1]), await readJson(req)));
     }
     const rerunMatch = path.match(/^\/documents\/([^/]+)\/pages\/rerun$/);
     if (rerunMatch) {
       if (!allowMethod(req, res, 'POST')) return;
-      if (!await protectIndexWrite(req, res)) return;
+      if (!await protectIndexWrite(req, res, decodeURIComponent(rerunMatch[1]))) return;
       return json(res, 202, await provider.rerunPages(decodeURIComponent(rerunMatch[1]), await readJson(req)));
     }
     const validateMatch = path.match(/^\/documents\/([^/]+)\/validate$/);
     if (validateMatch) {
       if (!allowMethod(req, res, 'POST')) return;
-      if (!await protectIndexWrite(req, res)) return;
+      if (!await protectIndexWrite(req, res, decodeURIComponent(validateMatch[1]))) return;
       return json(res, 202, await provider.validate(decodeURIComponent(validateMatch[1]), await readJson(req)));
     }
     const validationMatch = path.match(/^\/documents\/([^/]+)\/validation$/);
